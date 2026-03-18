@@ -1,12 +1,25 @@
 import { useEffect, useRef } from "react";
+import { getGameRuntime } from "./game/runtime";
 
 type GameCanvasProps = {
   width: number;
   height: number;
+  message?: string;
 };
 
-export function GameCanvas({ width, height }: GameCanvasProps) {
+export function GameCanvas({ width, height, message = "hello, world!" }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const runtimeRef = useRef(getGameRuntime());
+
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    runtime.setViewport(width, height);
+  }, [height, width]);
+
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    runtime.setMessage(message);
+  }, [message]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -19,71 +32,28 @@ export function GameCanvas({ width, height }: GameCanvasProps) {
       return;
     }
 
-    const text = "hello, world!";
-    const fontSize = 32;
-    const font = `${fontSize}px monospace`;
-    let x = 80;
-    let y = 120;
-    let dx = 280;
-    let dy = 200;
+    const runtime = runtimeRef.current;
+    runtime.setViewport(width, height);
+    runtime.setMessage(message);
+
     let frame = 0;
     let lastTime = performance.now();
-
-    const update = (deltaSeconds: number): void => {
-      context.font = font;
-      const textWidth = context.measureText(text).width;
-      const textHeight = fontSize;
-
-      x += dx * deltaSeconds;
-      y += dy * deltaSeconds;
-
-      if (x <= 0) {
-        x = 0;
-        dx = Math.abs(dx);
-      }
-
-      if (x + textWidth >= width) {
-        x = width - textWidth;
-        dx = -Math.abs(dx);
-      }
-
-      if (y - textHeight <= 0) {
-        y = textHeight;
-        dy = Math.abs(dy);
-      }
-
-      if (y >= height) {
-        y = height;
-        dy = -Math.abs(dy);
-      }
-    };
-
-    const render = (): void => {
-      context.fillStyle = "#0a0a2e";
-      context.fillRect(0, 0, width, height);
-
-      context.font = font;
-      context.fillStyle = "#00ff88";
-      context.textBaseline = "alphabetic";
-      context.fillText(text, x, y);
-    };
 
     const loop = (time: number): void => {
       const deltaSeconds = Math.min((time - lastTime) / 1000, 0.05);
       lastTime = time;
 
-      update(deltaSeconds);
-      render();
+      runtime.step(context, deltaSeconds);
       frame = window.requestAnimationFrame(loop);
     };
 
-    render();
+    runtime.step(context, 0);
     frame = window.requestAnimationFrame(loop);
 
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [height, width]);
+  }, []);
 
   return <canvas ref={canvasRef} className="game-canvas" width={width} height={height} />;
 }
