@@ -16,7 +16,9 @@ Detailed implementation plan for the architecture in `architecture.md` and rules
 
 ## Phase Status
 - Phase 1: Completed.
-- Phase 2-6: Not started.
+- Phase 2: Completed.
+- Phase 3: Not started.
+- Phase 4-6: Not started.
 
 ## Phase 1 - Core Shell (State + Map + Phase Machine)
 Goal:
@@ -57,10 +59,12 @@ Scope:
   - end phase
 
 Deliverables:
-- Typed command dispatcher in runtime API.
-- Event queue + reducer-based state mutation.
-- Illegal actions return structured errors (not silent fail).
-- Unit movement budgets and attack budgets tracked per turn.
+- [x] Typed command dispatcher in runtime API.
+- [x] Event queue + reducer-based state mutation scaffold.
+- [x] First unit selection + movement command path through command/event/reducer flow.
+- [x] Illegal actions return structured errors (initial validator coverage).
+- [x] Unit movement budgets and attack budgets tracked per turn (reset-on-turn + budget consumption).
+- [x] Placeholder attack outcomes (defender HP decrement + base-destruction winner assignment).
 
 Acceptance criteria:
 - No direct UI mutation of canonical state.
@@ -180,8 +184,12 @@ Acceptance criteria:
 - Add debug HUD toggles for IDs, ranges, ownership, and carry state.
 
 ## Immediate Next Tasks
-1. Start Phase 2 scaffolding:
-   - create `actions/commands.ts`, `actions/events.ts`, `actions/reducers.ts`
-   - add runtime `dispatch(command)` API
-2. Add unit tests for phase machine and basic reducer determinism.
-3. Add first unit selection + movement command path through command/event/reducer flow.
+1. Start Phase 3 stack shell:
+   - add `PASS_PRIORITY` and `RESPOND_STACK` command types
+   - add explicit both-pass tracking in turn state
+2. Add stack runtime scaffolding:
+   - create `turn/stack.ts` with push/pop/resolve shell and deterministic event logging
+   - wire no-op stack resolver into command/event loop behind feature-safe defaults
+3. Improve tactical input UX:
+   - add click-to-select units on canvas
+   - add hovered hex + target preview feedback

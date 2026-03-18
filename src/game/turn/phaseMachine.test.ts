@@ -1,0 +1,68 @@
+import { describe, expect, it } from "vitest";
+import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { createInitialGameState } from "../model/state";
+import { advancePhase } from "./phaseMachine";
+
+describe("phaseMachine", () => {
+  it("advances through all phases in order", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+
+    expect(state.phase).toBe("start");
+    advancePhase(state);
+    expect(state.phase).toBe("economy");
+    advancePhase(state);
+    expect(state.phase).toBe("main");
+    advancePhase(state);
+    expect(state.phase).toBe("tactical");
+    advancePhase(state);
+    expect(state.phase).toBe("end");
+  });
+
+  it("rolls to next turn and swaps active player after end phase", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+
+    expect(state.turn).toBe(1);
+    expect(state.activePlayerId).toBe("player_1");
+
+    advancePhase(state); // economy
+    advancePhase(state); // main
+    advancePhase(state); // tactical
+    advancePhase(state); // end
+    advancePhase(state); // start, next turn
+
+    expect(state.phase).toBe("start");
+    expect(state.turn).toBe(2);
+    expect(state.activePlayerId).toBe("player_2");
+    expect(state.priorityPlayerId).toBe("player_2");
+  });
+
+  it("resets unit move/attack budgets for new active player on turn handoff", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const unitId = "unit_player_2_scout";
+    const unit = state.entities[unitId];
+    expect(unit?.kind).toBe("unit");
+    if (!unit || unit.kind !== "unit") {
+      throw new Error("Expected player 2 unit.");
+    }
+
+    unit.movesRemaining = 0;
+    unit.attacksRemaining = 0;
+    unit.hasSummoningSickness = true;
+
+    advancePhase(state); // economy
+    advancePhase(state); // main
+    advancePhase(state); // tactical
+    advancePhase(state); // end
+    advancePhase(state); // start, next turn
+
+    const updated = state.entities[unitId];
+    expect(updated?.kind).toBe("unit");
+    if (!updated || updated.kind !== "unit") {
+      throw new Error("Expected player 2 unit after turn handoff.");
+    }
+
+    expect(updated.movesRemaining).toBe(updated.moveRange);
+    expect(updated.attacksRemaining).toBe(updated.attackActionsPerTurn);
+    expect(updated.hasSummoningSickness).toBe(false);
+  });
+});

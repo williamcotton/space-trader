@@ -1,7 +1,9 @@
+import type { GameCommand } from "./actions/commands";
+import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
+import { hexDistance } from "./model/hex";
 import { createInitialGameState } from "./model/state";
 import { renderGame, updateGame } from "./systems";
-import { advancePhase } from "./turn/phaseMachine";
 import type { GameState } from "./model/state";
 import type { GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
 
@@ -25,8 +27,86 @@ class GameRuntime {
     this.viewport.height = height;
   }
 
+  dispatch(command: GameCommand): DispatchResult {
+    return dispatchCommand(this.state, command);
+  }
+
   debugAdvancePhase(): void {
-    advancePhase(this.state);
+    void this.dispatch({
+      type: "END_PHASE",
+      playerId: this.state.activePlayerId,
+    });
+  }
+
+  debugSelectFirstActiveUnit(): void {
+    const activePlayerId = this.state.activePlayerId;
+    const firstUnit = Object.values(this.state.entities).find(
+      (entity) => entity.kind === "unit" && entity.ownerId === activePlayerId
+    );
+
+    if (!firstUnit) {
+      return;
+    }
+
+    void this.dispatch({
+      type: "SELECT_ENTITY",
+      playerId: activePlayerId,
+      entityId: firstUnit.id,
+    });
+  }
+
+  debugMoveSelectedUnit(deltaQ: number, deltaR: number): void {
+    const activePlayerId = this.state.activePlayerId;
+    const selectedId = this.state.selectedEntityId;
+    if (!selectedId) {
+      return;
+    }
+
+    const selected = this.state.entities[selectedId];
+    if (!selected || selected.kind !== "unit") {
+      return;
+    }
+
+    void this.dispatch({
+      type: "MOVE_UNIT",
+      playerId: activePlayerId,
+      entityId: selected.id,
+      to: {
+        q: selected.coord.q + deltaQ,
+        r: selected.coord.r + deltaR,
+      },
+    });
+  }
+
+  debugAttackFirstTargetInRange(): void {
+    const activePlayerId = this.state.activePlayerId;
+    const selectedId = this.state.selectedEntityId;
+    if (!selectedId) {
+      return;
+    }
+
+    const attacker = this.state.entities[selectedId];
+    if (!attacker || attacker.kind !== "unit") {
+      return;
+    }
+
+    const target = Object.values(this.state.entities).find((entity) => {
+      if (entity.ownerId === activePlayerId) {
+        return false;
+      }
+      return hexDistance(attacker.coord, entity.coord) <= attacker.attackRange;
+    });
+
+    if (!target) {
+      return;
+    }
+
+    void this.dispatch({
+      type: "ATTACK_UNIT",
+      playerId: activePlayerId,
+      attackerId: attacker.id,
+      targetId: target.id,
+    });
   }
 
   replaceSystems(update: UpdateSystem, render: RenderSystem): void {

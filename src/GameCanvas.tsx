@@ -51,8 +51,39 @@ export function GameCanvas({ width, height }: GameCanvasProps) {
   useEffect(() => {
     const runtime = runtimeRef.current;
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key.toLowerCase() === "n") {
+      const key = event.key.toLowerCase();
+      if (key === "n") {
         runtime.debugAdvancePhase();
+        return;
+      }
+
+      if (key === "u") {
+        runtime.debugSelectFirstActiveUnit();
+        return;
+      }
+
+      if (key === "a") {
+        runtime.debugAttackFirstTargetInRange();
+        return;
+      }
+
+      if (event.key === "ArrowRight") {
+        runtime.debugMoveSelectedUnit(1, 0);
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        runtime.debugMoveSelectedUnit(-1, 0);
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        runtime.debugMoveSelectedUnit(0, -1);
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        runtime.debugMoveSelectedUnit(0, 1);
       }
     };
 

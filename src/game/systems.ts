@@ -1,6 +1,7 @@
 import type { GameFrame } from "./types";
+import { areSameHex, getMapAxialBounds, hexDistance, isWithinMapBounds } from "./model/hex";
 import type { PlayerId } from "./model/ids";
-import type { EntityState, GameState, HexCoord, MapState } from "./model/state";
+import type { EntityState, GameState, HexCoord, UnitEntity } from "./model/state";
 
 const MAP_ORIGIN_Y_OFFSET = 30;
 const HEX_SIZE = 34;
@@ -30,17 +31,6 @@ function axialToPixel(coord: HexCoord, originX: number, originY: number): { x: n
   return { x, y };
 }
 
-function getMapAxialBounds(map: MapState): { qMin: number; qMax: number; rMin: number; rMax: number } {
-  const qRadius = Math.floor(map.width / 2);
-  const rRadius = Math.floor(map.height / 2);
-  return {
-    qMin: -qRadius,
-    qMax: qRadius,
-    rMin: -rRadius,
-    rMax: rRadius,
-  };
-}
-
 function drawHexOutline(context: CanvasRenderingContext2D, x: number, y: number, size: number): void {
   context.beginPath();
   for (let side = 0; side < 6; side += 1) {
@@ -66,6 +56,61 @@ function drawHexGrid(state: GameState, context: CanvasRenderingContext2D, origin
     for (let q = qMin; q <= qMax; q += 1) {
       const { x, y } = axialToPixel({ q, r }, originX, originY);
       drawHexOutline(context, x, y, HEX_SIZE - 1);
+      context.stroke();
+    }
+  }
+}
+
+function getSelectedUnit(state: GameState): UnitEntity | null {
+  if (!state.selectedEntityId) {
+    return null;
+  }
+
+  const selected = state.entities[state.selectedEntityId];
+  if (!selected || selected.kind !== "unit") {
+    return null;
+  }
+
+  return selected;
+}
+
+function hasEntityAtCoord(state: GameState, coord: HexCoord, ignoreEntityId?: string): boolean {
+  return Object.values(state.entities).some((entity) => {
+    if (ignoreEntityId && entity.id === ignoreEntityId) {
+      return false;
+    }
+    return areSameHex(entity.coord, coord);
+  });
+}
+
+function drawMoveRangeOverlay(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number): void {
+  const selected = getSelectedUnit(state);
+  if (!selected || selected.ownerId !== state.activePlayerId) {
+    return;
+  }
+
+  const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
+  for (let r = rMin; r <= rMax; r += 1) {
+    for (let q = qMin; q <= qMax; q += 1) {
+      const coord = { q, r };
+      if (!isWithinMapBounds(coord, state.map)) {
+        continue;
+      }
+
+      const distance = hexDistance(selected.coord, coord);
+      if (distance === 0 || distance > selected.movesRemaining) {
+        continue;
+      }
+
+      const occupied = hasEntityAtCoord(state, coord, selected.id);
+      const { x, y } = axialToPixel(coord, originX, originY);
+
+      drawHexOutline(context, x, y, HEX_SIZE - 2);
+      context.fillStyle = occupied ? "rgba(255, 110, 110, 0.14)" : "rgba(88, 247, 170, 0.14)";
+      context.fill();
+
+      context.strokeStyle = occupied ? "rgba(255, 130, 130, 0.3)" : "rgba(88, 247, 170, 0.35)";
+      context.lineWidth = 1;
       context.stroke();
     }
   }
@@ -107,9 +152,31 @@ function drawBase(entity: EntityState, context: CanvasRenderingContext2D, origin
   context.fillText(String(entity.hp), x, y);
 }
 
+function drawUnit(state: GameState, entity: EntityState, context: CanvasRenderingContext2D, originX: number, originY: number): void {
+  if (entity.kind !== "unit") {
+    return;
+  }
+
+  const { x, y } = axialToPixel(entity.coord, originX, originY);
+  context.fillStyle = getPlayerColor(entity.ownerId);
+  context.beginPath();
+  context.arc(x, y, 10, 0, Math.PI * 2);
+  context.fill();
+
+  context.lineWidth = 2;
+  context.strokeStyle = state.selectedEntityId === entity.id ? "#ffffff" : "#171a2d";
+  context.stroke();
+
+  context.fillStyle = "#0c0f23";
+  context.font = "11px monospace";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(entity.role[0].toUpperCase(), x, y);
+}
+
 function drawHud(state: GameState, context: CanvasRenderingContext2D, viewport: { width: number; height: number }): void {
   context.fillStyle = "rgba(6, 8, 24, 0.82)";
-  context.fillRect(12, 12, 430, 146);
+  context.fillRect(12, 12, 560, 232);
 
   context.fillStyle = "#d5e6ff";
   context.font = "16px monospace";
@@ -121,6 +188,8 @@ function drawHud(state: GameState, context: CanvasRenderingContext2D, viewport: 
   context.fillText(`Active: ${state.activePlayerId}`, 24, 90);
   context.fillText(`Stack: ${state.stack.length}`, 24, 112);
   context.fillText(`State Version: ${state.stateVersion}`, 24, 134);
+  context.fillText(`Selected: ${state.selectedEntityId ?? "none"}`, 24, 156);
+  context.fillText(`Winner: ${state.winner ?? "none"}`, 24, 178);
 
   const p1 = state.players.player_1.resources;
   const p2 = state.players.player_2.resources;
@@ -132,10 +201,52 @@ function drawHud(state: GameState, context: CanvasRenderingContext2D, viewport: 
   context.fillText(`P2 C:${p2.credits} A:${p2.alloy} F:${p2.flux} B:${p2.biomass}`, 230, 90);
 
   context.fillStyle = "#9ca7d6";
-  context.fillText("Press N to advance phase", 230, 134);
+  context.fillText("N: End phase, U: Select first unit", 230, 112);
+  context.fillText("Arrow Keys: Move selected (tactical phase)", 230, 134);
+  context.fillText("A: Attack first target in range", 230, 156);
+
+  if (state.lastRejectedReason) {
+    context.fillStyle = "#ff9f92";
+    context.fillText(`Last Reject: ${state.lastRejectedReason}`, 24, 200);
+  }
 
   context.strokeStyle = "#1f2a58";
   context.strokeRect(0.5, 0.5, viewport.width - 1, viewport.height - 1);
+}
+
+function drawSelectedUnitPanel(state: GameState, context: CanvasRenderingContext2D, viewport: { width: number; height: number }): void {
+  const selected = getSelectedUnit(state);
+  if (!selected) {
+    return;
+  }
+
+  const panelWidth = 250;
+  const panelHeight = 172;
+  const x = viewport.width - panelWidth - 16;
+  const y = 16;
+
+  context.fillStyle = "rgba(7, 11, 30, 0.88)";
+  context.fillRect(x, y, panelWidth, panelHeight);
+
+  context.strokeStyle = "#274084";
+  context.lineWidth = 1;
+  context.strokeRect(x + 0.5, y + 0.5, panelWidth - 1, panelHeight - 1);
+
+  context.fillStyle = getPlayerColor(selected.ownerId);
+  context.font = "15px monospace";
+  context.textAlign = "left";
+  context.textBaseline = "top";
+  context.fillText("Selected Unit", x + 12, y + 10);
+
+  context.fillStyle = "#d5e6ff";
+  context.font = "13px monospace";
+  context.fillText(`ID: ${selected.id}`, x + 12, y + 34);
+  context.fillText(`Role: ${selected.role}`, x + 12, y + 54);
+  context.fillText(`HP: ${selected.hp}  Armor: ${selected.armor}`, x + 12, y + 74);
+  context.fillText(`Attack: ${selected.attackDamage}  Range: ${selected.attackRange}`, x + 12, y + 94);
+  context.fillText(`Move: ${selected.movesRemaining}/${selected.moveRange}`, x + 12, y + 114);
+  context.fillText(`Attacks: ${selected.attacksRemaining}/${selected.attackActionsPerTurn}`, x + 12, y + 134);
+  context.fillText(`Sickness: ${selected.hasSummoningSickness ? "yes" : "no"}`, x + 12, y + 154);
 }
 
 export function updateGame(state: GameState, frame: GameFrame): void {
@@ -152,11 +263,14 @@ export function renderGame(state: GameState, frame: GameFrame): void {
   context.fillRect(0, 0, viewport.width, viewport.height);
 
   drawHexGrid(state, context, originX, originY);
+  drawMoveRangeOverlay(state, context, originX, originY);
   drawResourceNodes(state, context, originX, originY);
 
   for (const entity of Object.values(state.entities)) {
     drawBase(entity, context, originX, originY);
+    drawUnit(state, entity, context, originX, originY);
   }
 
   drawHud(state, context, viewport);
+  drawSelectedUnitPanel(state, context, viewport);
 }

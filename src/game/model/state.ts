@@ -48,6 +48,12 @@ export type UnitEntity = {
   kind: "unit";
   ownerId: PlayerId;
   role: UnitRole;
+  hp: number;
+  attackDamage: number;
+  armor: number;
+  moveRange: number;
+  attackRange: number;
+  attackActionsPerTurn: number;
   coord: HexCoord;
   carries: ResourceType | null;
   hasSummoningSickness: boolean;
@@ -75,12 +81,15 @@ export type GameState = {
   phase: GamePhase;
   activePlayerId: PlayerId;
   priorityPlayerId: PlayerId | null;
+  consecutivePriorityPasses: number;
+  selectedEntityId: EntityId | null;
   map: MapState;
   players: Record<PlayerId, PlayerState>;
   entities: Record<EntityId, EntityState>;
   stack: StackItem[];
   log: MatchLogEntry[];
   winner: PlayerId | null;
+  lastRejectedReason: string | null;
 };
 
 type CreateInitialGameStateOptions = {
@@ -115,6 +124,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   const map = cloneMap(options.map);
   const baseOneId: EntityId = "base_player_1";
   const baseTwoId: EntityId = "base_player_2";
+  const unitOneId: EntityId = "unit_player_1_scout";
+  const unitTwoId: EntityId = "unit_player_2_scout";
 
   const entities: Record<EntityId, EntityState> = {
     [baseOneId]: {
@@ -131,6 +142,46 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       hp: 100,
       coord: { ...map.spawnPoints.player_2 },
     },
+    [unitOneId]: {
+      id: unitOneId,
+      kind: "unit",
+      ownerId: PLAYER_ONE,
+      role: "combat",
+      hp: 6,
+      attackDamage: 2,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: {
+        q: map.spawnPoints.player_1.q + 1,
+        r: map.spawnPoints.player_1.r,
+      },
+      carries: null,
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+    },
+    [unitTwoId]: {
+      id: unitTwoId,
+      kind: "unit",
+      ownerId: PLAYER_TWO,
+      role: "combat",
+      hp: 6,
+      attackDamage: 2,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: {
+        q: map.spawnPoints.player_2.q - 1,
+        r: map.spawnPoints.player_2.r,
+      },
+      carries: null,
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+    },
   };
 
   return {
@@ -140,6 +191,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     phase: "start",
     activePlayerId: PLAYER_ONE,
     priorityPlayerId: PLAYER_ONE,
+    consecutivePriorityPasses: 0,
+    selectedEntityId: null,
     map,
     players: {
       player_1: {
@@ -170,5 +223,6 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       },
     ],
     winner: null,
+    lastRejectedReason: null,
   };
 }
