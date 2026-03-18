@@ -218,13 +218,8 @@ Phase transitions should be implemented in a strict state machine; avoid ad hoc 
 - Content validation tests:
   - card/deck/map schema constraints.
 
-## Incremental Build Plan
-- Phase 1: Replace bouncing-text state with canonical `GameState`, map model, and phase machine shell.
-- Phase 2: Implement command/event pipeline + basic movement and attacks.
-- Phase 3: Implement stack/priority + instant cards.
-- Phase 4: Implement node capture + harvester cargo + deposit at base-adjacent tiles.
-- Phase 5: Load first premade decks + Frontier Belt content.
-- Phase 6: Add MVP AI + UX for stack prompts and action legality feedback.
+## Delivery Plan
+Detailed phase-by-phase implementation work has been moved to `todos.md`.
 
 ## Risks and Mitigations
 - Risk: stack complexity slows progress.

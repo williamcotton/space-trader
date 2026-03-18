@@ -4,10 +4,9 @@ import { getGameRuntime } from "./game/runtime";
 type GameCanvasProps = {
   width: number;
   height: number;
-  message?: string;
 };
 
-export function GameCanvas({ width, height, message = "hello, world!" }: GameCanvasProps) {
+export function GameCanvas({ width, height }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const runtimeRef = useRef(getGameRuntime());
 
@@ -15,11 +14,6 @@ export function GameCanvas({ width, height, message = "hello, world!" }: GameCan
     const runtime = runtimeRef.current;
     runtime.setViewport(width, height);
   }, [height, width]);
-
-  useEffect(() => {
-    const runtime = runtimeRef.current;
-    runtime.setMessage(message);
-  }, [message]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -34,7 +28,6 @@ export function GameCanvas({ width, height, message = "hello, world!" }: GameCan
 
     const runtime = runtimeRef.current;
     runtime.setViewport(width, height);
-    runtime.setMessage(message);
 
     let frame = 0;
     let lastTime = performance.now();
@@ -52,6 +45,20 @@ export function GameCanvas({ width, height, message = "hello, world!" }: GameCan
 
     return () => {
       window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key.toLowerCase() === "n") {
+        runtime.debugAdvancePhase();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, []);
 

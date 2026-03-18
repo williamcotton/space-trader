@@ -1,24 +1,14 @@
+import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
+import { createInitialGameState } from "./model/state";
 import { renderGame, updateGame } from "./systems";
-import type { GameFrame, GameState, GameViewport, RenderSystem, UpdateSystem } from "./types";
+import { advancePhase } from "./turn/phaseMachine";
+import type { GameState } from "./model/state";
+import type { GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
 
 const INITIAL_VIEWPORT: GameViewport = {
   width: 1024,
   height: 768,
 };
-
-function createInitialGameState(): GameState {
-  return {
-    message: "hello, world!",
-    x: 80,
-    y: 120,
-    dx: 280,
-    dy: 200,
-    fontSize: 32,
-    fontFamily: "monospace",
-    backgroundColor: "#0a0a2e",
-    textColor: "#00ff88",
-  };
-}
 
 class GameRuntime {
   private viewport: GameViewport = { ...INITIAL_VIEWPORT };
@@ -26,7 +16,7 @@ class GameRuntime {
   private renderSystem: RenderSystem = renderGame;
   readonly state: GameState;
 
-  constructor(state: GameState = createInitialGameState()) {
+  constructor(state: GameState = createInitialGameState({ map: FRONTIER_BELT_MAP })) {
     this.state = state;
   }
 
@@ -35,8 +25,8 @@ class GameRuntime {
     this.viewport.height = height;
   }
 
-  setMessage(message: string): void {
-    this.state.message = message;
+  debugAdvancePhase(): void {
+    advancePhase(this.state);
   }
 
   replaceSystems(update: UpdateSystem, render: RenderSystem): void {
