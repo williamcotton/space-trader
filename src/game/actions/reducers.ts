@@ -7,6 +7,8 @@ import { validateCommand } from "../rules/validators";
 import type { PlayerId } from "../model/ids";
 import type { GameState } from "../model/state";
 import { hexDistance } from "../model/hex";
+import { getResourceNodeById, resolveEconomyDeposits } from "../systems/harvesting";
+import { resolveEndPhaseNodeControl } from "../systems/nodeControl";
 
 export type DispatchResult =
   | {
@@ -256,6 +258,26 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
       };
       return [event];
     }
+    case "HARVEST_NODE": {
+      const entity = state.entities[command.entityId];
+      if (!entity || entity.kind !== "unit") {
+        return [];
+      }
+      const node = getResourceNodeById(state, command.nodeId);
+      if (!node) {
+        return [];
+      }
+
+      return [
+        {
+          type: "UNIT_HARVESTED_NODE",
+          playerId: command.playerId,
+          entityId: command.entityId,
+          nodeId: node.id,
+          resourceType: node.resourceType,
+        },
+      ];
+    }
     default:
       return [];
   }
@@ -263,9 +285,18 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
 
 function reduceEvent(state: GameState, event: GameEvent): void {
   switch (event.type) {
-    case "PHASE_ADVANCED":
+    case "PHASE_ADVANCED": {
+      const previousPhase = state.phase;
+      const previousActivePlayer = state.activePlayerId;
+      if (previousPhase === "start") {
+        resolveEconomyDeposits(state, previousActivePlayer);
+      }
+      if (previousPhase === "end") {
+        resolveEndPhaseNodeControl(state, previousActivePlayer);
+      }
       advancePhase(state);
       return;
+    }
     case "ENTITY_SELECTED":
       state.selectedEntityId = event.entityId;
       state.log.push({
@@ -346,6 +377,12 @@ function reduceEvent(state: GameState, event: GameEvent): void {
       }
 
       if (event.targetDestroyed && target?.kind === "unit") {
+        if (target.carries) {
+          state.log.push({
+            turn: state.turn,
+            text: `${target.id} was destroyed and cargo lost (${target.carries}).`,
+          });
+        }
         if (state.selectedEntityId === target.id) {
           state.selectedEntityId = null;
         }
@@ -372,6 +409,19 @@ function reduceEvent(state: GameState, event: GameEvent): void {
           text: `${event.winnerPlayerId} wins by destroying the enemy base.`,
         });
       }
+      return;
+    }
+    case "UNIT_HARVESTED_NODE": {
+      const entity = state.entities[event.entityId];
+      if (!entity || entity.kind !== "unit") {
+        return;
+      }
+
+      entity.carries = event.resourceType;
+      state.log.push({
+        turn: state.turn,
+        text: `${event.playerId} harvested ${event.resourceType} at ${event.nodeId} with ${event.entityId}.`,
+      });
       return;
     }
     default:

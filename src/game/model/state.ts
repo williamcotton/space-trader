@@ -134,6 +134,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   const baseTwoId: EntityId = "base_player_2";
   const unitOneId: EntityId = "unit_player_1_scout";
   const unitTwoId: EntityId = "unit_player_2_scout";
+  const harvesterOneId: EntityId = "unit_player_1_harvester";
+  const harvesterTwoId: EntityId = "unit_player_2_harvester";
 
   const entities: Record<EntityId, EntityState> = {
     [baseOneId]: {
@@ -190,10 +192,50 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       movesRemaining: 2,
       attacksRemaining: 1,
     },
+    [harvesterOneId]: {
+      id: harvesterOneId,
+      kind: "unit",
+      ownerId: PLAYER_ONE,
+      role: "resource",
+      hp: 5,
+      attackDamage: 1,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: {
+        q: map.spawnPoints.player_1.q,
+        r: map.spawnPoints.player_1.r + 1,
+      },
+      carries: null,
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+    },
+    [harvesterTwoId]: {
+      id: harvesterTwoId,
+      kind: "unit",
+      ownerId: PLAYER_TWO,
+      role: "resource",
+      hp: 5,
+      attackDamage: 1,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: {
+        q: map.spawnPoints.player_2.q,
+        r: map.spawnPoints.player_2.r - 1,
+      },
+      carries: null,
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+    },
   };
 
   return {
-    stateVersion: 6,
+    stateVersion: 7,
     matchId: options.matchId ?? "match_frontier_belt",
     turn: 1,
     phase: "start",

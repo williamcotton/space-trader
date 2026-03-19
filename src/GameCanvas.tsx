@@ -67,6 +67,11 @@ export function GameCanvas({ width, height }: GameCanvasProps) {
         return;
       }
 
+      if (key === "h") {
+        runtime.debugHarvestSelectedUnit();
+        return;
+      }
+
       if (key === "p") {
         runtime.debugPassPriority();
         return;

@@ -1,4 +1,4 @@
-import type { EntityId, PlayerId } from "../model/ids";
+import type { EntityId, NodeId, PlayerId } from "../model/ids";
 import type { GamePhase, ResourceType } from "../model/enums";
 import type { HexCoord } from "../model/state";
 
@@ -41,6 +41,14 @@ export type UnitAttackDeclaredEvent = {
   targetHpRemaining: number;
   targetDestroyed: boolean;
   winnerPlayerId: PlayerId | null;
+};
+
+export type UnitHarvestedNodeEvent = {
+  type: "UNIT_HARVESTED_NODE";
+  playerId: PlayerId;
+  entityId: EntityId;
+  nodeId: NodeId;
+  resourceType: ResourceType;
 };
 
 export type PriorityPassedEvent = {
@@ -92,6 +100,7 @@ export type GameEvent =
   | SelectionClearedEvent
   | UnitMovedEvent
   | UnitAttackDeclaredEvent
+  | UnitHarvestedNodeEvent
   | PriorityPassedEvent
   | StackItemPushedEvent
   | StackItemResolvedEvent;

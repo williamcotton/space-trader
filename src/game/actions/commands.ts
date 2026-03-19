@@ -1,4 +1,4 @@
-import type { EntityId, PlayerId } from "../model/ids";
+import type { EntityId, NodeId, PlayerId } from "../model/ids";
 import type { HexCoord } from "../model/state";
 
 export type AdvancePhaseCommand = {
@@ -50,6 +50,13 @@ export type AttackUnitCommand = {
   targetId: EntityId;
 };
 
+export type HarvestNodeCommand = {
+  type: "HARVEST_NODE";
+  playerId: PlayerId;
+  entityId: EntityId;
+  nodeId: NodeId;
+};
+
 export type GameCommand =
   | AdvancePhaseCommand
   | EndPhaseCommand
@@ -58,4 +65,5 @@ export type GameCommand =
   | SelectEntityCommand
   | ClearSelectionCommand
   | MoveUnitCommand
-  | AttackUnitCommand;
+  | AttackUnitCommand
+  | HarvestNodeCommand;

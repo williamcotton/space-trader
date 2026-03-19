@@ -1,6 +1,6 @@
 # Space Trader MVP Todos
 
-Last updated: March 18, 2026
+Last updated: March 19, 2026
 
 ## Purpose
 Detailed implementation plan for the architecture in `architecture.md` and rules in `game-design.md`.
@@ -18,7 +18,8 @@ Detailed implementation plan for the architecture in `architecture.md` and rules
 - Phase 1: Completed.
 - Phase 2: Completed.
 - Phase 3: Completed.
-- Phase 4-6: Not started.
+- Phase 4: Completed.
+- Phase 5-6: Not started.
 
 ## Phase 1 - Core Shell (State + Map + Phase Machine)
 Goal:
@@ -113,18 +114,18 @@ Scope:
 - Deposit resolution in Economy Phase only.
 
 Deliverables:
-- End-phase occupancy node capture.
-- Resource unit `carries` lifecycle (`null -> resource -> deposited/lost`).
-- Base-adjacent deposit zone check.
-- UI indicators:
+- [x] End-phase occupancy node capture.
+- [x] Resource unit `carries` lifecycle (`null -> resource -> deposited/lost`).
+- [x] Base-adjacent deposit zone check.
+- [x] UI indicators:
   - node ownership
   - loaded harvester marker
   - deposit event feedback
 
 Acceptance criteria:
-- No passive income from mere node ownership.
-- Destroyed loaded harvester loses cargo.
-- Economy totals update only on valid deposit.
+- [x] No passive income from mere node ownership.
+- [x] Destroyed loaded harvester loses cargo.
+- [x] Economy totals update only on valid deposit.
 
 ## Phase 5 - Cards, Zones, Decks, and Hand UI
 Goal:
@@ -194,12 +195,12 @@ Acceptance criteria:
 - Add debug HUD toggles for IDs, ranges, ownership, and carry state.
 
 ## Immediate Next Tasks
-1. Start Phase 4 node control shell:
-   - define end-phase occupancy capture event path
-   - render node ownership clearly on map
-2. Start Phase 4 harvesting shell:
-   - add harvest command/event for resource units
-   - track cargo load state changes (`null -> resource -> null`)
-3. Start Phase 4 deposit rules:
-   - enforce base-adjacent deposit in Economy phase
-   - add deterministic tests for successful and rejected deposits
+1. Start Phase 5 zone model shell:
+   - add explicit deck/hand/discard zone state structures per player
+   - introduce zone-safe card instance IDs (data-driven, no giant card unions)
+2. Start Phase 5 draw flow:
+   - implement opening hand setup (7 cards) from premade deck content
+   - implement Start Phase draw 1 card (satellite download flavor log + deterministic tests)
+3. Start Phase 5 hand UI shell:
+   - add `HandTray` React overlay with card placeholders and playability affordance
+   - wire click-to-play command stub from hand to stack for one tactic card path

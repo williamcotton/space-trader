@@ -90,6 +90,21 @@ function getEntityAtCoord(state: GameState, coord: HexCoord, ignoreEntityId?: st
   );
 }
 
+function getLatestEconomyFeedback(state: GameState): string | null {
+  for (let index = state.log.length - 1; index >= 0; index -= 1) {
+    const entry = state.log[index];
+    if (
+      entry.text.includes("deposited") ||
+      entry.text.includes("cargo lost") ||
+      entry.text.includes("captured") ||
+      entry.text.includes("seized")
+    ) {
+      return entry.text;
+    }
+  }
+  return null;
+}
+
 function drawMoveRangeOverlay(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number): void {
   const selected = getSelectedUnit(state);
   if (!selected || selected.ownerId !== state.activePlayerId) {
@@ -179,11 +194,21 @@ function drawUnit(state: GameState, entity: EntityState, context: CanvasRenderin
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.fillText(entity.role[0].toUpperCase(), x, y);
+
+  if (entity.carries) {
+    context.beginPath();
+    context.fillStyle = getResourceColor(entity.carries);
+    context.arc(x + 10, y - 9, 4, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = "#0b1028";
+    context.lineWidth = 1;
+    context.stroke();
+  }
 }
 
 function drawHud(state: GameState, context: CanvasRenderingContext2D, viewport: { width: number; height: number }): void {
   context.fillStyle = "rgba(6, 8, 24, 0.82)";
-  context.fillRect(12, 12, 560, 286);
+  context.fillRect(12, 12, 560, 328);
 
   context.fillStyle = "#d5e6ff";
   context.font = "16px monospace";
@@ -205,6 +230,12 @@ function drawHud(state: GameState, context: CanvasRenderingContext2D, viewport: 
   );
   context.fillText(`Winner: ${state.winner ?? "none"}`, 24, 244);
 
+  const latestEconomyFeedback = getLatestEconomyFeedback(state);
+  if (latestEconomyFeedback) {
+    context.fillStyle = "#8dffcf";
+    context.fillText(`Economy: ${latestEconomyFeedback}`, 24, 266);
+  }
+
   const p1 = state.players.player_1.resources;
   const p2 = state.players.player_2.resources;
 
@@ -218,12 +249,13 @@ function drawHud(state: GameState, context: CanvasRenderingContext2D, viewport: 
   context.fillText("Click unit: select/deselect (active player)", 230, 112);
   context.fillText("Arrow Keys: Move selected (tactical phase)", 230, 134);
   context.fillText("A: Attack first target in range", 230, 156);
-  context.fillText("P: Pass priority, R/T/C: No-op/Ping/Counter", 230, 178);
-  context.fillText("N: End phase, U: Select first unit", 230, 200);
+  context.fillText("H: Harvest with selected resource unit", 230, 178);
+  context.fillText("P: Pass priority, R/T/C: No-op/Ping/Counter", 230, 200);
+  context.fillText("N: End phase, U: Select first unit", 230, 222);
 
   if (state.lastRejectedReason) {
     context.fillStyle = "#ff9f92";
-    context.fillText(`Last Reject: ${state.lastRejectedReason}`, 24, 266);
+    context.fillText(`Last Reject: ${state.lastRejectedReason}`, 24, 288);
   }
 
   context.strokeStyle = "#1f2a58";
@@ -270,7 +302,7 @@ function drawHoverHexAndTargetPreview(state: GameState, context: CanvasRendering
   context.fillText(
     `Target ${hoveredEntity.id}: ${distance}/${selected.attackRange}, Dmg ${projectedDamage}, HP ${hoveredEntity.hp}->${projectedHp}, KO ${isProjectedKill ? "yes" : "no"}`,
     24,
-    294
+    324
   );
 }
 
@@ -281,7 +313,7 @@ function drawSelectedUnitPanel(state: GameState, context: CanvasRenderingContext
   }
 
   const panelWidth = 250;
-  const panelHeight = 172;
+  const panelHeight = 192;
   const x = viewport.width - panelWidth - 16;
   const y = 16;
 
@@ -307,6 +339,7 @@ function drawSelectedUnitPanel(state: GameState, context: CanvasRenderingContext
   context.fillText(`Move: ${selected.movesRemaining}/${selected.moveRange}`, x + 12, y + 114);
   context.fillText(`Attacks: ${selected.attacksRemaining}/${selected.attackActionsPerTurn}`, x + 12, y + 134);
   context.fillText(`Sickness: ${selected.hasSummoningSickness ? "yes" : "no"}`, x + 12, y + 154);
+  context.fillText(`Cargo: ${selected.carries ?? "none"}`, x + 12, y + 174);
 }
 
 export function updateGame(state: GameState, frame: GameFrame): void {

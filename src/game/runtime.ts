@@ -14,7 +14,54 @@ const INITIAL_VIEWPORT: GameViewport = {
   height: 768,
 };
 
-const CURRENT_STATE_VERSION = 6;
+const CURRENT_STATE_VERSION = 7;
+
+function migratePhaseFourHarvesters(state: GameState): void {
+  const playerOneHarvesterId = "unit_player_1_harvester";
+  const playerTwoHarvesterId = "unit_player_2_harvester";
+
+  if (!state.entities[playerOneHarvesterId]) {
+    const spawn = state.map.spawnPoints.player_1;
+    state.entities[playerOneHarvesterId] = {
+      id: playerOneHarvesterId,
+      kind: "unit",
+      ownerId: "player_1",
+      role: "resource",
+      hp: 5,
+      attackDamage: 1,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: spawn.q, r: spawn.r + 1 },
+      carries: null,
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+    };
+  }
+
+  if (!state.entities[playerTwoHarvesterId]) {
+    const spawn = state.map.spawnPoints.player_2;
+    state.entities[playerTwoHarvesterId] = {
+      id: playerTwoHarvesterId,
+      kind: "unit",
+      ownerId: "player_2",
+      role: "resource",
+      hp: 5,
+      attackDamage: 1,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: spawn.q, r: spawn.r - 1 },
+      carries: null,
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+    };
+  }
+}
 
 function migrateRuntimeState(state: GameState): void {
   if (typeof state.consecutivePriorityPasses !== "number") {
@@ -54,6 +101,17 @@ function migrateRuntimeState(state: GameState): void {
     }
   }
 
+  for (const entity of Object.values(state.entities)) {
+    if (entity.kind !== "unit") {
+      continue;
+    }
+    if (typeof entity.carries === "undefined") {
+      entity.carries = null;
+    }
+  }
+
+  migratePhaseFourHarvesters(state);
+
   if (typeof state.stateVersion !== "number") {
     state.stateVersion = 0;
   }
@@ -62,7 +120,7 @@ function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v6 (data-driven stack effects).",
+      text: "State migrated to v7 (Phase 4 economy systems).",
     });
   }
 }
@@ -89,6 +147,10 @@ class GameRuntime {
 
   private findEntityAtHex(coord: { q: number; r: number }): GameState["entities"][string] | undefined {
     return Object.values(this.state.entities).find((entity) => areSameHex(entity.coord, coord));
+  }
+
+  private findResourceNodeAtHex(coord: { q: number; r: number }): GameState["map"]["resourceNodes"][number] | undefined {
+    return this.state.map.resourceNodes.find((node) => areSameHex(node.coord, coord));
   }
 
   private getHexAtScreenPoint(pixelX: number, pixelY: number): { q: number; r: number } | null {
@@ -226,6 +288,31 @@ class GameRuntime {
       playerId: activePlayerId,
       attackerId: attacker.id,
       targetId: target.id,
+    });
+  }
+
+  debugHarvestSelectedUnit(): void {
+    const activePlayerId = this.state.activePlayerId;
+    const selectedId = this.state.selectedEntityId;
+    if (!selectedId) {
+      return;
+    }
+
+    const selected = this.state.entities[selectedId];
+    if (!selected || selected.kind !== "unit" || selected.ownerId !== activePlayerId || selected.role !== "resource") {
+      return;
+    }
+
+    const node = this.findResourceNodeAtHex(selected.coord);
+    if (!node) {
+      return;
+    }
+
+    void this.dispatch({
+      type: "HARVEST_NODE",
+      playerId: activePlayerId,
+      entityId: selected.id,
+      nodeId: node.id,
     });
   }
 

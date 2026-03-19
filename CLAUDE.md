@@ -14,6 +14,8 @@
 - `src/GameCanvas.tsx`: Canvas mount + RAF loop driver. Uses `getGameRuntime()` and does not own gameplay state.
 - `src/game/runtime.ts`: Persistent runtime singleton returned by `getGameRuntime()`. Holds mutable game state and hot-swappable systems.
 - `src/game/systems.ts`: `updateGame` and `renderGame` systems. Primary gameplay logic surface for HMR iteration.
+- `src/game/systems/nodeControl.ts`: End-phase node occupancy capture logic.
+- `src/game/systems/harvesting.ts`: Harvest cargo validation helpers + economy-phase deposit resolution.
 - `src/game/model/*`: Canonical game enums, IDs, state, and hex helpers.
 - `src/game/content/maps/frontierBelt.ts`: MVP map data and resource nodes.
 - `src/game/actions/*`: Command/event/reducer pipeline for authoritative state changes.
@@ -46,9 +48,14 @@
 - Canvas interaction supports click-to-select and hovered-hex target preview overlays.
 - Selection clear transitions also go through command/event (`CLEAR_SELECTION`) for deterministic logging.
 - A small React debug overlay exposes stack controls (pass/no-op/ping/counter) in addition to keyboard shortcuts.
+- Phase 4 economy loop is active:
+  - end-phase node capture by occupancy
+  - tactical-phase harvest command for resource units
+  - economy-phase base-adjacent deposit only
+  - loaded harvester cargo is lost on destruction
 - `src/game/runtime.ts` accepts HMR updates from `src/game/systems.ts` via `import.meta.hot.accept` and swaps logic in place.
 - `src/game/runtime.ts` persists runtime instance through `import.meta.hot.dispose(data.runtime = runtime)`.
-- Runtime applies lightweight schema migration on hot-restored state (currently state version 6).
+- Runtime applies lightweight schema migration on hot-restored state (currently state version 7).
 - Electron runs with `contextIsolation: true` and `nodeIntegration: false`.
 
 ## `getGameRuntime` Contract
@@ -69,7 +76,6 @@
   - `dispose(...)` for state retention
 
 ## Next Extension Points
-- Expand stack rules from no-op shell to true instant/counter resolution.
-- Add node control + harvesting systems (Phase 4).
+- Expand stack target rules beyond top-of-stack-only counters.
 - Add deck/hand/discard zones and React `HandTray` overlay (Phase 5).
 - Add persistence (save/load) via preload-exposed APIs and IPC once gameplay loop stabilizes.

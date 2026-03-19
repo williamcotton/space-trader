@@ -8,10 +8,16 @@ function setupState() {
   return createInitialGameState({ map: FRONTIER_BELT_MAP });
 }
 
+function advanceToPhase(state: ReturnType<typeof setupState>, phase: ReturnType<typeof setupState>["phase"]): void {
+  let guard = 0;
+  while (state.phase !== phase && guard < 12) {
+    dispatchCommand(state, { type: "END_PHASE", playerId: state.activePlayerId });
+    guard += 1;
+  }
+}
+
 function advanceToTactical(state: ReturnType<typeof setupState>): void {
-  dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // economy
-  dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // main
-  dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // tactical
+  advanceToPhase(state, "tactical");
 }
 
 function expectRejected(result: ReturnType<typeof dispatchCommand>): string {
@@ -351,6 +357,233 @@ describe("dispatchCommand", () => {
       targetId,
     });
     expect(expectRejected(summoningSickness)).toContain("summoning sickness");
+  });
+
+  it("captures nodes by occupancy at end phase handoff", () => {
+    const state = setupState();
+    const node = state.map.resourceNodes.find((entry) => entry.id === "frontier_alloy_west");
+    const scout = state.entities.unit_player_1_scout;
+    expect(node).toBeDefined();
+    expect(scout?.kind).toBe("unit");
+    if (!node || !scout || scout.kind !== "unit") {
+      throw new Error("Expected node and player 1 scout.");
+    }
+
+    scout.coord = { ...node.coord };
+    expect(node.controlledBy).toBeNull();
+
+    advanceToPhase(state, "end");
+    const handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(handoff.ok).toBe(true);
+    expect(state.phase).toBe("start");
+    expect(state.activePlayerId).toBe("player_2");
+    expect(node.controlledBy).toBe("player_1");
+  });
+
+  it("does not grant passive income from node ownership", () => {
+    const state = setupState();
+    const node = state.map.resourceNodes.find((entry) => entry.id === "frontier_credits_center");
+    expect(node).toBeDefined();
+    if (!node) {
+      throw new Error("Expected center credits node.");
+    }
+    node.controlledBy = "player_1";
+
+    const before = { ...state.players.player_1.resources };
+    const toEconomy = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(toEconomy.ok).toBe(true);
+    expect(state.phase).toBe("economy");
+    expect(state.players.player_1.resources).toEqual(before);
+  });
+
+  it("harvests from a controlled node into harvester cargo and rejects invalid repeats", () => {
+    const state = setupState();
+    const harvesterId = "unit_player_1_harvester";
+    const nodeId = "frontier_alloy_west";
+    const harvester = state.entities[harvesterId];
+    const node = state.map.resourceNodes.find((entry) => entry.id === nodeId);
+    expect(harvester?.kind).toBe("unit");
+    expect(node).toBeDefined();
+    if (!harvester || harvester.kind !== "unit" || !node) {
+      throw new Error("Expected harvester and node.");
+    }
+
+    harvester.coord = { ...node.coord };
+    node.controlledBy = "player_1";
+
+    advanceToTactical(state);
+    dispatchCommand(state, {
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: harvesterId,
+    });
+
+    const harvest = dispatchCommand(state, {
+      type: "HARVEST_NODE",
+      playerId: "player_1",
+      entityId: harvesterId,
+      nodeId,
+    });
+    expect(harvest.ok).toBe(true);
+    const updated = state.entities[harvesterId];
+    expect(updated?.kind).toBe("unit");
+    if (!updated || updated.kind !== "unit") {
+      throw new Error("Expected updated harvester.");
+    }
+    expect(updated.carries).toBe("alloy");
+
+    const duplicateHarvest = dispatchCommand(state, {
+      type: "HARVEST_NODE",
+      playerId: "player_1",
+      entityId: harvesterId,
+      nodeId,
+    });
+    expect(expectRejected(duplicateHarvest)).toContain("already carrying cargo");
+  });
+
+  it("enforces harvest legality (phase, ownership, role, control, occupancy)", () => {
+    const state = setupState();
+    const nodeId = "frontier_alloy_west";
+    const node = state.map.resourceNodes.find((entry) => entry.id === nodeId);
+    const harvesterId = "unit_player_1_harvester";
+    const harvester = state.entities[harvesterId];
+    const scoutId = "unit_player_1_scout";
+    expect(node).toBeDefined();
+    expect(harvester?.kind).toBe("unit");
+    if (!node || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected node and harvester.");
+    }
+
+    harvester.coord = { ...node.coord };
+
+    const badPhase = dispatchCommand(state, {
+      type: "HARVEST_NODE",
+      playerId: "player_1",
+      entityId: harvesterId,
+      nodeId,
+    });
+    expect(expectRejected(badPhase)).toContain("tactical phase");
+
+    advanceToTactical(state);
+    dispatchCommand(state, {
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: harvesterId,
+    });
+
+    const uncontrolledNode = dispatchCommand(state, {
+      type: "HARVEST_NODE",
+      playerId: "player_1",
+      entityId: harvesterId,
+      nodeId,
+    });
+    expect(expectRejected(uncontrolledNode)).toContain("controlled");
+
+    node.controlledBy = "player_1";
+    const wrongRole = dispatchCommand(state, {
+      type: "HARVEST_NODE",
+      playerId: "player_1",
+      entityId: scoutId,
+      nodeId,
+    });
+    expect(expectRejected(wrongRole)).toContain("resource units");
+
+    const wrongOccupancy = dispatchCommand(state, {
+      type: "HARVEST_NODE",
+      playerId: "player_1",
+      entityId: harvesterId,
+      nodeId: "frontier_flux_north",
+    });
+    expect(expectRejected(wrongOccupancy)).toContain("occupy");
+  });
+
+  it("deposits only from base-adjacent loaded harvesters when entering economy", () => {
+    const state = setupState();
+    const harvesterId = "unit_player_1_harvester";
+    const harvester = state.entities[harvesterId];
+    expect(harvester?.kind).toBe("unit");
+    if (!harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 harvester.");
+    }
+
+    harvester.carries = "alloy";
+    harvester.coord = { q: -3, r: 0 };
+
+    const economyStep = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(economyStep.ok).toBe(true);
+    expect(state.phase).toBe("economy");
+    expect(state.players.player_1.resources.alloy).toBe(1);
+    const afterDeposit = state.entities[harvesterId];
+    expect(afterDeposit?.kind).toBe("unit");
+    if (!afterDeposit || afterDeposit.kind !== "unit") {
+      throw new Error("Expected harvester after deposit.");
+    }
+    expect(afterDeposit.carries).toBeNull();
+
+    const stateFar = setupState();
+    const farHarvester = stateFar.entities[harvesterId];
+    expect(farHarvester?.kind).toBe("unit");
+    if (!farHarvester || farHarvester.kind !== "unit") {
+      throw new Error("Expected far harvester.");
+    }
+    farHarvester.carries = "flux";
+    farHarvester.coord = { q: -1, r: 0 };
+
+    const farEconomyStep = dispatchCommand(stateFar, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(farEconomyStep.ok).toBe(true);
+    expect(stateFar.players.player_1.resources.flux).toBe(0);
+    const stillLoaded = stateFar.entities[harvesterId];
+    expect(stillLoaded?.kind).toBe("unit");
+    if (!stillLoaded || stillLoaded.kind !== "unit") {
+      throw new Error("Expected still-loaded harvester.");
+    }
+    expect(stillLoaded.carries).toBe("flux");
+  });
+
+  it("loses cargo when a loaded harvester is destroyed", () => {
+    const state = setupState();
+    const attacker = state.entities.unit_player_1_scout;
+    const target = state.entities.unit_player_2_harvester;
+    expect(attacker?.kind).toBe("unit");
+    expect(target?.kind).toBe("unit");
+    if (!attacker || attacker.kind !== "unit" || !target || target.kind !== "unit") {
+      throw new Error("Expected attacker and loaded target harvester.");
+    }
+
+    attacker.coord = { q: 0, r: 0 };
+    attacker.attackDamage = 10;
+    target.coord = { q: 1, r: 0 };
+    target.hp = 2;
+    target.carries = "biomass";
+
+    advanceToTactical(state);
+    dispatchCommand(state, {
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: attacker.id,
+    });
+
+    const attack = dispatchCommand(state, {
+      type: "ATTACK_UNIT",
+      playerId: "player_1",
+      attackerId: attacker.id,
+      targetId: target.id,
+    });
+    expect(attack.ok).toBe(true);
+    expect(state.entities[target.id]).toBeUndefined();
+    expect(state.log.some((entry) => entry.text.includes("cargo lost"))).toBe(true);
   });
 
   it("rejects END_PHASE from non-active player", () => {

@@ -2,6 +2,7 @@ import type { GameCommand } from "../actions/commands";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import type { EntityState, GameState } from "../model/state";
+import { canUnitHarvestNode, getResourceNodeById } from "../systems/harvesting";
 
 export type CommandValidationResult = {
   ok: boolean;
@@ -221,6 +222,50 @@ function validateAttackUnit(state: GameState, command: Extract<GameCommand, { ty
   return { ok: true };
 }
 
+function validateHarvestNode(state: GameState, command: Extract<GameCommand, { type: "HARVEST_NODE" }>): CommandValidationResult {
+  if (state.activePlayerId !== command.playerId) {
+    return { ok: false, reason: "Only the active player can harvest." };
+  }
+
+  if (state.phase !== "tactical") {
+    return { ok: false, reason: "Harvesting can only occur during tactical phase." };
+  }
+
+  const entity = getEntity(state, command.entityId);
+  if (!entity || entity.kind !== "unit") {
+    return { ok: false, reason: "Harvester must be a valid unit." };
+  }
+
+  if (!canUnitHarvestNode(entity, command.playerId)) {
+    if (entity.ownerId !== command.playerId) {
+      return { ok: false, reason: "Cannot harvest with opponent unit." };
+    }
+    if (entity.role !== "resource") {
+      return { ok: false, reason: "Only resource units can harvest." };
+    }
+    return { ok: false, reason: "Unit is already carrying cargo." };
+  }
+
+  if (state.selectedEntityId !== command.entityId) {
+    return { ok: false, reason: "Harvester must be selected before harvesting." };
+  }
+
+  const node = getResourceNodeById(state, command.nodeId);
+  if (!node) {
+    return { ok: false, reason: "Resource node does not exist." };
+  }
+
+  if (!areSameHex(entity.coord, node.coord)) {
+    return { ok: false, reason: "Harvester must occupy the target node tile." };
+  }
+
+  if (node.controlledBy !== command.playerId) {
+    return { ok: false, reason: "Node must be controlled before harvesting." };
+  }
+
+  return { ok: true };
+}
+
 export function validateCommand(state: GameState, command: GameCommand): CommandValidationResult {
   if (state.winner) {
     return { ok: false, reason: "Match is already over." };
@@ -243,6 +288,8 @@ export function validateCommand(state: GameState, command: GameCommand): Command
       return validateMoveUnit(state, command);
     case "ATTACK_UNIT":
       return validateAttackUnit(state, command);
+    case "HARVEST_NODE":
+      return validateHarvestNode(state, command);
     default:
       return { ok: false, reason: "Unknown command type." };
   }
