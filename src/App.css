@@ -169,6 +169,26 @@ body {
   font-size: 12px;
 }
 
+.debug-bot-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.debug-bot-buttons button {
+  border: 1px solid #3559a6;
+  background: #0d1738;
+  color: #d7e6ff;
+  padding: 6px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.debug-bot-buttons button:hover {
+  background: #14214f;
+}
+
 .debug-stack-list {
   margin: 0;
   padding: 0;

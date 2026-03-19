@@ -25,6 +25,8 @@ You play on a turn/phase system with:
 - `R`: Add debug no-op stack item.
 - `T`: Add debug damage stack item.
 - `C`: Add debug counter stack item.
+- `B`: Toggle bot autopilot for player 2.
+- `Shift+B`: Toggle bot autopilot for player 1.
 - Mouse click on unit: select/deselect active-player unit.
 - Mouse move: hover/target preview.
 - Click card in hand tray: play card from hand (if legal).
@@ -42,6 +44,11 @@ You play on a turn/phase system with:
    - Node ownership updates by occupancy.
 
 Press `N` to move through phases.
+
+Default bot behavior:
+- `player_2` bot autopilot starts enabled.
+- `player_1` bot autopilot starts disabled.
+- You can toggle either at runtime (`B` / `Shift+B` or debug panel buttons).
 
 ## Cards and Costs
 Card costs are shown like:

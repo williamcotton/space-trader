@@ -41,7 +41,6 @@ export type UnitAttackDeclaredEvent = {
   damageDealt: number;
   targetHpRemaining: number;
   targetDestroyed: boolean;
-  winnerPlayerId: PlayerId | null;
 };
 
 export type UnitHarvestedNodeEvent = {

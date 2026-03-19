@@ -226,6 +226,24 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       attackActionsPerTurn: 1,
     },
   },
+  expedition_harvester_card: {
+    id: "expedition_harvester_card",
+    name: "Expedition Harvester",
+    faction: "neutral",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 1 },
+    text: "Deploy a light resource unit near your base.",
+    unit: {
+      role: "resource",
+      hp: 4,
+      attackDamage: 1,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+    },
+  },
 };
 
 export function getCardDefinition(cardId: string): CardDefinition | undefined {

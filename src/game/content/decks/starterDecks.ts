@@ -12,7 +12,7 @@ function expandToSixty(uniqueCardIds: string[]): string[] {
 const ALLOY_STARTER_UNIQUE: string[] = [
   "frontline_scout_card",
   "alloy_guard_card",
-  "support_drone_card",
+  "expedition_harvester_card",
   "slag_barrage",
   "patchwork_barrier",
   "jammer_cloud",
@@ -29,7 +29,7 @@ const ALLOY_STARTER_UNIQUE: string[] = [
 
 const FLUX_STARTER_UNIQUE: string[] = [
   "flux_runner_card",
-  "support_drone_card",
+  "expedition_harvester_card",
   "frontline_scout_card",
   "orbital_ping",
   "counter_pulse",
@@ -47,7 +47,7 @@ const FLUX_STARTER_UNIQUE: string[] = [
 
 const BIOMASS_STARTER_UNIQUE: string[] = [
   "swarm_harvester_card",
-  "support_drone_card",
+  "expedition_harvester_card",
   "frontline_scout_card",
   "spore_burst",
   "neural_echo",

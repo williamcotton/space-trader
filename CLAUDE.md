@@ -14,8 +14,11 @@
 - `src/GameCanvas.tsx`: Canvas mount + RAF loop driver. Uses `getGameRuntime()` and does not own gameplay state.
 - `src/game/runtime.ts`: Persistent runtime singleton returned by `getGameRuntime()`. Holds mutable game state and hot-swappable systems.
 - `src/game/systems.ts`: `updateGame` and `renderGame` systems. Primary gameplay logic surface for HMR iteration.
+- `src/game/systems/combat.ts`: Locked combat resolver formula and modifier hooks.
 - `src/game/systems/nodeControl.ts`: End-phase node occupancy capture logic.
 - `src/game/systems/harvesting.ts`: Harvest cargo validation helpers + economy-phase deposit resolution.
+- `src/game/systems/victory.ts`: Base HP win-resolution helper.
+- `src/game/ai/mvpBot.ts`: Deterministic MVP bot command policy.
 - `src/game/model/*`: Canonical game enums, IDs, state, and hex helpers.
 - `src/game/content/cards/catalog.ts`: Card definitions (data-driven IDs, costs, speed, and payloads).
 - `src/game/content/decks/starterDecks.ts`: Premade 60-card starter deck lists + validation.
@@ -46,9 +49,11 @@
 - Gameplay mutations flow through typed commands -> events -> reducers.
 - `GameState` is canonical and includes phase/turn/priority/stack data for deterministic simulation.
 - Priority/stack shell is active with debug commands (`P` pass, `R` no-op, `T` damage, `C` counter).
+- Bot controls are available with `B` (toggle `player_2`) and `Shift+B` (toggle `player_1`), plus debug panel toggles.
 - Stack responses support explicit target metadata (currently used by `counter_top_item`).
 - Stack effects are data-driven content IDs (`string`) validated at command time; resolver behavior stays typed via `StackResolutionRules`.
 - Canvas interaction supports click-to-select and hovered-hex target preview overlays.
+- Hover combat preview now uses the same combat resolver as authoritative attack events.
 - Selection clear transitions also go through command/event (`CLEAR_SELECTION`) for deterministic logging.
 - A small React debug overlay exposes stack controls (pass/no-op/ping/counter) in addition to keyboard shortcuts.
 - Phase 4 economy loop is active:
@@ -65,6 +70,11 @@
   - one-shot tactics move to discard on resolve/counter destination
   - hand/deck counters are derived from zones and re-synced after command processing
   - hand tray follows active player by default and displays `Hand X | Deck Y`
+- Phase 6 loop is active:
+  - unit attacks resolve through `systems/combat.ts` (locked formula)
+  - base-destruction winner resolution runs through `systems/victory.ts`
+  - deterministic bot policy drives optional autopilot for `player_2`
+  - runtime bot policy is hot-swappable during HMR (`accept("./ai/mvpBot", ...)`)
 - `src/game/runtime.ts` accepts HMR updates from `src/game/systems.ts` via `import.meta.hot.accept` and swaps logic in place.
 - `src/game/runtime.ts` persists runtime instance through `import.meta.hot.dispose(data.runtime = runtime)`.
 - Runtime applies lightweight schema migration on hot-restored state (currently state version 8).
@@ -85,10 +95,11 @@
 - Edit `src/game/types.ts` and `src/game/runtime.ts` when introducing new persistent state.
 - Keep HMR handlers in runtime when refactoring:
   - `accept("./systems", ...)` for system replacement
+  - `accept("./ai/mvpBot", ...)` for bot policy replacement
   - `dispose(...)` for state retention
 
 ## Next Extension Points
 - Expand stack target rules beyond top-of-stack-only counters.
-- Extract combat + victory into dedicated Phase 6 systems modules.
-- Add MVP bot behavior loop for player 2.
+- Add concrete non-zero terrain/tile/faction combat modifiers.
+- Replace keyboard-only phase advance with explicit UI actions.
 - Add persistence (save/load) via preload-exposed APIs and IPC once gameplay loop stabilizes.

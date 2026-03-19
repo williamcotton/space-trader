@@ -8,8 +8,10 @@ import { validateCommand } from "../rules/validators";
 import type { PlayerId } from "../model/ids";
 import { syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../model/state";
 import { hexDistance, isWithinMapBounds } from "../model/hex";
+import { resolveCombatAttack } from "../systems/combat";
 import { getResourceNodeById, resolveEconomyDeposits } from "../systems/harvesting";
 import { resolveEndPhaseNodeControl } from "../systems/nodeControl";
+import { resolveBaseHpVictory } from "../systems/victory";
 
 export type DispatchResult =
   | {
@@ -21,10 +23,6 @@ export type DispatchResult =
       reason: string;
       events: [];
     };
-
-function getAttackDamage(attackerDamage: number, defenderArmor: number): number {
-  return Math.max(1, attackerDamage - defenderArmor);
-}
 
 function getStackEffectMagnitude(effectId: string): number {
   const definition = getStackEffectDefinition(effectId);
@@ -171,14 +169,6 @@ function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["sta
         turn: state.turn,
         text: `Resolved ${resolvedItem.label}: dealt ${damage} to ${enemyPlayerId} base (${beforeHp} -> ${targetBase.hp}).`,
       });
-
-      if (targetBase.hp === 0) {
-        state.winner = resolvedItem.controllerId;
-        state.log.push({
-          turn: state.turn,
-          text: `${resolvedItem.controllerId} wins by stack damage to enemy base.`,
-        });
-      }
       return;
     }
     case "counter": {
@@ -341,11 +331,7 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
         return [];
       }
 
-      const targetArmor = target.kind === "unit" ? target.armor : 0;
-      const damageDealt = getAttackDamage(attacker.attackDamage, targetArmor);
-      const targetHpRemaining = Math.max(0, target.hp - damageDealt);
-      const targetDestroyed = targetHpRemaining === 0;
-      const winnerPlayerId = target.kind === "base" && targetDestroyed ? command.playerId : null;
+      const resolution = resolveCombatAttack(state, attacker, target);
 
       const event: UnitAttackDeclaredEvent = {
         type: "UNIT_ATTACK_DECLARED",
@@ -353,10 +339,9 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
         attackerId: command.attackerId,
         targetId: command.targetId,
         attacksRemaining: Math.max(0, attacker.attacksRemaining - 1),
-        damageDealt,
-        targetHpRemaining,
-        targetDestroyed,
-        winnerPlayerId,
+        damageDealt: resolution.finalDamage,
+        targetHpRemaining: resolution.targetHpAfter,
+        targetDestroyed: resolution.targetDestroyed,
       };
       return [event];
     }
@@ -618,10 +603,6 @@ function reduceEvent(state: GameState, event: GameEvent): void {
         delete state.entities[target.id];
       }
 
-      if (event.winnerPlayerId) {
-        state.winner = event.winnerPlayerId;
-      }
-
       state.log.push({
         turn: state.turn,
         text: `${event.playerId} attacked ${event.targetId} with ${event.attackerId} for ${event.damageDealt} damage.`,
@@ -630,12 +611,6 @@ function reduceEvent(state: GameState, event: GameEvent): void {
         state.log.push({
           turn: state.turn,
           text: `${event.targetId} was destroyed.`,
-        });
-      }
-      if (event.winnerPlayerId) {
-        state.log.push({
-          turn: state.turn,
-          text: `${event.winnerPlayerId} wins by destroying the enemy base.`,
         });
       }
       return;
@@ -678,6 +653,7 @@ export function dispatchCommand(state: GameState, command: GameCommand): Dispatc
   for (const event of events) {
     reduceEvent(state, event);
   }
+  resolveBaseHpVictory(state);
   syncPlayerZoneCounts(state);
   state.lastRejectedReason = null;
 

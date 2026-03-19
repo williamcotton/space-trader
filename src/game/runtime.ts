@@ -1,9 +1,11 @@
 import type { GameCommand } from "./actions/commands";
 import { dispatchCommand, type DispatchResult } from "./actions/reducers";
+import { decideMvpBotCommand } from "./ai/mvpBot";
 import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
 import { getStackEffectDefinition } from "./content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
 import { createInitialGameState, createInitialZonesForPlayer } from "./model/state";
+import type { PlayerId } from "./model/ids";
 import { HEX_SIZE, getMapOrigin } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
 import type { GameState } from "./model/state";
@@ -15,6 +17,9 @@ const INITIAL_VIEWPORT: GameViewport = {
 };
 
 const CURRENT_STATE_VERSION = 8;
+const BOT_ACTION_INTERVAL_SECONDS = 0.16;
+
+type BotDecisionSystem = typeof decideMvpBotCommand;
 
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
@@ -166,6 +171,12 @@ class GameRuntime {
   private viewport: GameViewport = { ...INITIAL_VIEWPORT };
   private updateSystem: UpdateSystem = updateGame;
   private renderSystem: RenderSystem = renderGame;
+  private botDecisionSystem: BotDecisionSystem = decideMvpBotCommand;
+  private botActionCooldownSeconds = 0;
+  private botAutoplayEnabled: Record<PlayerId, boolean> = {
+    player_1: false,
+    player_2: true,
+  };
   readonly state: GameState;
 
   constructor(state: GameState = createInitialGameState({ map: FRONTIER_BELT_MAP })) {
@@ -180,6 +191,24 @@ class GameRuntime {
 
   dispatch(command: GameCommand): DispatchResult {
     return dispatchCommand(this.state, command);
+  }
+
+  isBotAutoplayEnabled(playerId: PlayerId): boolean {
+    return this.botAutoplayEnabled[playerId];
+  }
+
+  setBotAutoplayEnabled(playerId: PlayerId, enabled: boolean): void {
+    this.botAutoplayEnabled[playerId] = enabled;
+    this.state.log.push({
+      turn: this.state.turn,
+      text: `${playerId} bot autopilot ${enabled ? "enabled" : "disabled"}.`,
+    });
+  }
+
+  toggleBotAutoplay(playerId: PlayerId): boolean {
+    const next = !this.botAutoplayEnabled[playerId];
+    this.setBotAutoplayEnabled(playerId, next);
+    return next;
   }
 
   private findEntityAtHex(coord: { q: number; r: number }): GameState["entities"][string] | undefined {
@@ -425,7 +454,36 @@ class GameRuntime {
     this.renderSystem = render;
   }
 
+  replaceBotDecisionSystem(system: BotDecisionSystem): void {
+    this.botDecisionSystem = system;
+  }
+
+  private stepBotAutoplay(deltaSeconds: number): void {
+    this.botActionCooldownSeconds = Math.max(0, this.botActionCooldownSeconds - deltaSeconds);
+    if (this.botActionCooldownSeconds > 0 || this.state.winner) {
+      return;
+    }
+
+    const priorityPlayerId = this.state.priorityPlayerId;
+    if (!priorityPlayerId || !this.botAutoplayEnabled[priorityPlayerId]) {
+      return;
+    }
+
+    const command = this.botDecisionSystem(this.state, priorityPlayerId);
+    if (!command) {
+      return;
+    }
+
+    const result = this.dispatch(command);
+    this.botActionCooldownSeconds = BOT_ACTION_INTERVAL_SECONDS;
+    if (!result.ok) {
+      this.botActionCooldownSeconds = BOT_ACTION_INTERVAL_SECONDS * 2;
+    }
+  }
+
   step(context: CanvasRenderingContext2D, deltaSeconds: number): void {
+    this.stepBotAutoplay(deltaSeconds);
+
     const frame: GameFrame = {
       context,
       viewport: this.viewport,
@@ -458,6 +516,14 @@ if (import.meta.hot) {
       return;
     }
     runtime.replaceSystems(next.updateGame, next.renderGame);
+  });
+
+  import.meta.hot.accept("./ai/mvpBot", (module) => {
+    const next = module as typeof import("./ai/mvpBot") | undefined;
+    if (!next) {
+      return;
+    }
+    runtime.replaceBotDecisionSystem(next.decideMvpBotCommand);
   });
 
   import.meta.hot.dispose((data: RuntimeHotData) => {

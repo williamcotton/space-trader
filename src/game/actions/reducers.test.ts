@@ -268,6 +268,47 @@ describe("dispatchCommand", () => {
     expect(afterAttacker.attacksRemaining).toBe(beforeAttacks - 1);
   });
 
+  it("applies supply-penalty combat math through reducer attack events", () => {
+    const state = setupState();
+    const attackerId = "unit_player_1_scout";
+    const targetId = "unit_player_2_scout";
+    const attacker = state.entities[attackerId];
+    const target = state.entities[targetId];
+    expect(attacker?.kind).toBe("unit");
+    expect(target?.kind).toBe("unit");
+    if (!attacker || attacker.kind !== "unit" || !target || target.kind !== "unit") {
+      throw new Error("Expected units for supply-penalty test.");
+    }
+
+    attacker.attackDamage = 4;
+    attacker.coord = { q: 4, r: 0 }; // distance 8 from player_1 base => supply penalty 1
+    target.armor = 0;
+    target.coord = { q: 5, r: 0 };
+    target.hp = 6;
+
+    advanceToTactical(state);
+    dispatchCommand(state, {
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: attackerId,
+    });
+
+    const result = dispatchCommand(state, {
+      type: "ATTACK_UNIT",
+      playerId: "player_1",
+      attackerId,
+      targetId,
+    });
+    expect(result.ok).toBe(true);
+
+    const updatedTarget = state.entities[targetId];
+    expect(updatedTarget?.kind).toBe("unit");
+    if (!updatedTarget || updatedTarget.kind !== "unit") {
+      throw new Error("Expected target unit after attack.");
+    }
+    expect(updatedTarget.hp).toBe(3);
+  });
+
   it("ends the match when a base reaches zero HP", () => {
     const state = setupState();
     const attackerId = "unit_player_1_scout";

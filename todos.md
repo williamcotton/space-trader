@@ -20,7 +20,7 @@ Detailed implementation plan for the architecture in `architecture.md` and rules
 - Phase 3: Completed.
 - Phase 4: Completed.
 - Phase 5: Completed.
-- Phase 6: Not started.
+- Phase 6: Completed.
 
 ## Phase 1 - Core Shell (State + Map + Phase Machine)
 Goal:
@@ -172,18 +172,21 @@ Scope:
 - UX prompts for stack/priority and legal action feedback.
 
 Deliverables:
-- Base HP attrition from combat-tagged units.
-- Combat modifiers (terrain/tile/base-distance/faction) applied in locked order.
-- AI behavior priorities:
+- [x] Base HP attrition from combat-tagged units.
+- [x] Combat resolver extracted (`systems/combat.ts`) with locked formula and modifier hooks.
+- [x] Base HP victory resolver extracted (`systems/victory.ts`) and invoked after event resolution.
+- [x] AI behavior priorities implemented in deterministic MVP bot policy:
   - defend base
   - capture needed resources
   - favorable attacks
   - hold key instant responses
+- [x] Optional bot autopilot wired in runtime for `player_2` (and toggleable for both players).
+- [x] Combat/victory/bot deterministic tests added.
 
 Acceptance criteria:
-- Full match can complete to win/loss without manual debug shortcuts.
-- Core systems are test-covered and deterministic.
-- HMR still preserves live match state through normal logic edits.
+- [x] Full match can complete to win/loss with no debug-only mechanics required.
+- [x] Core systems are test-covered and deterministic.
+- [x] HMR still preserves live match state through normal logic edits.
 
 ## Cross-Cutting Work Items
 - Add replay tooling from command log.
@@ -196,12 +199,12 @@ Acceptance criteria:
 - Add debug HUD toggles for IDs, ranges, ownership, and carry state.
 
 ## Immediate Next Tasks
-1. Start Phase 6 combat resolver extraction:
-   - move attack resolution formula into dedicated `systems/combat.ts`
-   - add terrain/tile/base-distance modifier hooks in locked order
-2. Start Phase 6 victory flow:
-   - add `systems/victory.ts` winner checks for base HP and command lockout
-   - add deterministic scenario tests for combat-to-win transitions
-3. Start Phase 6 MVP bot shell:
-   - add `ai/mvpBot.ts` turn policy (defend/capture/attack/respond)
-   - wire optional bot autopilot for `player_2` with deterministic command sequencing
+1. Start Phase 7 content depth:
+   - add first non-placeholder combat modifiers (terrain/tile/faction) with map content tags
+   - extend card effects beyond base ping/counter (unit buffs/removal/tempo plays)
+2. Add replay + save baseline:
+   - command-log export/import
+   - deterministic replay harness test
+3. Improve player UX:
+   - replace keyboard-only phase advance with explicit in-UI controls
+   - add clearer priority prompts and stack action affordances

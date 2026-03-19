@@ -24,4 +24,12 @@ describe("starter decks", () => {
     expect(errors.some((entry) => entry.includes("unknown card id"))).toBe(true);
     expect(errors.some((entry) => entry.includes("copy limit"))).toBe(true);
   });
+
+  it("includes cheap resource harvester access in each starter deck", () => {
+    for (const faction of ["alloy_clan", "flux_collective", "biomass_swarm"] as const) {
+      const cards = getStarterDeckCardIds(faction);
+      const expeditionHarvesters = cards.filter((cardId) => cardId === "expedition_harvester_card");
+      expect(expeditionHarvesters).toHaveLength(4);
+    }
+  });
 });

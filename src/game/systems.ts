@@ -3,6 +3,7 @@ import { areSameHex, axialToPixel, getMapAxialBounds, hexDistance, isWithinMapBo
 import type { PlayerId } from "./model/ids";
 import type { EntityState, GameState, HexCoord, UnitEntity } from "./model/state";
 import { HEX_SIZE, getMapOrigin } from "./render/layout";
+import { resolveCombatAttack } from "./systems/combat";
 
 function getPlayerColor(playerId: PlayerId): string {
   return playerId === "player_1" ? "#5cd1ff" : "#ff8a5b";
@@ -208,7 +209,7 @@ function drawUnit(state: GameState, entity: EntityState, context: CanvasRenderin
 
 function drawHud(state: GameState, context: CanvasRenderingContext2D, viewport: { width: number; height: number }): void {
   context.fillStyle = "rgba(6, 8, 24, 0.82)";
-  context.fillRect(12, 12, 560, 328);
+  context.fillRect(12, 12, 560, 352);
 
   context.fillStyle = "#d5e6ff";
   context.font = "16px monospace";
@@ -231,10 +232,6 @@ function drawHud(state: GameState, context: CanvasRenderingContext2D, viewport: 
   context.fillText(`Winner: ${state.winner ?? "none"}`, 24, 244);
 
   const latestEconomyFeedback = getLatestEconomyFeedback(state);
-  if (latestEconomyFeedback) {
-    context.fillStyle = "#8dffcf";
-    context.fillText(`Economy: ${latestEconomyFeedback}`, 24, 266);
-  }
 
   const p1 = state.players.player_1.resources;
   const p2 = state.players.player_2.resources;
@@ -253,10 +250,16 @@ function drawHud(state: GameState, context: CanvasRenderingContext2D, viewport: 
   context.fillText("Click hand cards to cast/deploy (bottom tray)", 230, 200);
   context.fillText("P: Pass priority, R/T/C: No-op/Ping/Counter", 230, 222);
   context.fillText("N: End phase, U: Select first unit", 230, 244);
+  context.fillText("B: Toggle P2 bot (Shift+B toggles P1 bot)", 230, 266);
 
   if (state.lastRejectedReason) {
     context.fillStyle = "#ff9f92";
-    context.fillText(`Last Reject: ${state.lastRejectedReason}`, 24, 288);
+    context.fillText(`Last Reject: ${state.lastRejectedReason}`, 24, 332);
+  }
+
+  if (latestEconomyFeedback) {
+    context.fillStyle = "#8dffcf";
+    context.fillText(`Economy: ${latestEconomyFeedback}`, 24, 310);
   }
 
   context.strokeStyle = "#1f2a58";
@@ -284,10 +287,10 @@ function drawHoverHexAndTargetPreview(state: GameState, context: CanvasRendering
   const targetPos = toPixel(hoveredEntity.coord, originX, originY);
   const distance = hexDistance(selected.coord, hoveredEntity.coord);
   const canAttackNow = state.phase === "tactical" && selected.attacksRemaining > 0 && distance <= selected.attackRange;
-  const targetArmor = hoveredEntity.kind === "unit" ? hoveredEntity.armor : 0;
-  const projectedDamage = Math.max(1, selected.attackDamage - targetArmor);
-  const projectedHp = Math.max(0, hoveredEntity.hp - projectedDamage);
-  const isProjectedKill = projectedHp === 0;
+  const combatPreview = resolveCombatAttack(state, selected, hoveredEntity);
+  const projectedDamage = combatPreview.finalDamage;
+  const projectedHp = combatPreview.targetHpAfter;
+  const isProjectedKill = combatPreview.targetDestroyed;
 
   context.beginPath();
   context.moveTo(selectedPos.x, selectedPos.y);
@@ -304,6 +307,11 @@ function drawHoverHexAndTargetPreview(state: GameState, context: CanvasRendering
     `Target ${hoveredEntity.id}: ${distance}/${selected.attackRange}, Dmg ${projectedDamage}, HP ${hoveredEntity.hp}->${projectedHp}, KO ${isProjectedKill ? "yes" : "no"}`,
     24,
     324
+  );
+  context.fillText(
+    `Combat: raw ${combatPreview.rawAttack} - def ${combatPreview.defense} - supply ${combatPreview.supplyPenalty} (dist ${combatPreview.distanceFromFriendlyBase})`,
+    24,
+    344
   );
 }
 

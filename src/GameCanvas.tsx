@@ -92,6 +92,15 @@ export function GameCanvas({ width, height }: GameCanvasProps) {
         return;
       }
 
+      if (key === "b") {
+        if (event.shiftKey) {
+          runtime.toggleBotAutoplay("player_1");
+          return;
+        }
+        runtime.toggleBotAutoplay("player_2");
+        return;
+      }
+
       if (event.key === "ArrowRight") {
         runtime.debugMoveSelectedUnit(1, 0);
         return;
