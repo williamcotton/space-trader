@@ -60,8 +60,11 @@
   - per-player zones (`deck`, `hand`, `discard`, `exile`) in canonical state
   - premade faction starter decks with 60-card/max-4 validation
   - opening hand 7 + start-phase draw 1 on turn handoff
+  - opening resources are non-zero for immediate playtesting (`credits: 3` + `2` faction resource)
   - `PLAY_CARD` command supports stack tactics and base-adjacent unit deployment
   - one-shot tactics move to discard on resolve/counter destination
+  - hand/deck counters are derived from zones and re-synced after command processing
+  - hand tray follows active player by default and displays `Hand X | Deck Y`
 - `src/game/runtime.ts` accepts HMR updates from `src/game/systems.ts` via `import.meta.hot.accept` and swaps logic in place.
 - `src/game/runtime.ts` persists runtime instance through `import.meta.hot.dispose(data.runtime = runtime)`.
 - Runtime applies lightweight schema migration on hot-restored state (currently state version 8).
