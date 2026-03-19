@@ -11,10 +11,29 @@ export type EndPhaseCommand = {
   playerId: PlayerId;
 };
 
+export type PassPriorityCommand = {
+  type: "PASS_PRIORITY";
+  playerId: PlayerId;
+};
+
+export type RespondStackCommand = {
+  type: "RESPOND_STACK";
+  playerId: PlayerId;
+  label: string;
+  effectId: string;
+  targetStackItemId?: string;
+};
+
 export type SelectEntityCommand = {
   type: "SELECT_ENTITY";
   playerId: PlayerId;
   entityId: EntityId;
+};
+
+export type ClearSelectionCommand = {
+  type: "CLEAR_SELECTION";
+  playerId: PlayerId;
+  reason: "clicked_outside_map" | "clicked_empty_or_enemy_tile" | "clicked_selected_unit";
 };
 
 export type MoveUnitCommand = {
@@ -34,6 +53,9 @@ export type AttackUnitCommand = {
 export type GameCommand =
   | AdvancePhaseCommand
   | EndPhaseCommand
+  | PassPriorityCommand
+  | RespondStackCommand
   | SelectEntityCommand
+  | ClearSelectionCommand
   | MoveUnitCommand
   | AttackUnitCommand;

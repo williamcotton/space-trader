@@ -1,4 +1,5 @@
 import type { GameCommand } from "../actions/commands";
+import { getStackEffectDefinition } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import type { EntityState, GameState } from "../model/state";
 
@@ -31,6 +32,61 @@ function validateEndPhase(state: GameState, playerId: string): CommandValidation
   return { ok: true };
 }
 
+function validatePassPriority(state: GameState, playerId: string): CommandValidationResult {
+  if (!state.priorityPlayerId) {
+    return { ok: false, reason: "No player currently has priority." };
+  }
+
+  if (state.priorityPlayerId !== playerId) {
+    return { ok: false, reason: "Only the priority player can pass priority." };
+  }
+
+  return { ok: true };
+}
+
+function validateRespondStack(state: GameState, command: Extract<GameCommand, { type: "RESPOND_STACK" }>): CommandValidationResult {
+  if (!state.priorityPlayerId) {
+    return { ok: false, reason: "No player currently has priority." };
+  }
+
+  if (state.priorityPlayerId !== command.playerId) {
+    return { ok: false, reason: "Only the priority player can respond." };
+  }
+
+  if (!command.label.trim()) {
+    return { ok: false, reason: "Response label is required." };
+  }
+
+  const effect = getStackEffectDefinition(command.effectId);
+  if (!effect) {
+    return { ok: false, reason: `Unknown stack effect: ${command.effectId}` };
+  }
+
+  const isCounterEffect = effect.resolution.type === "counter";
+  if (isCounterEffect) {
+    if (!command.targetStackItemId) {
+      return { ok: false, reason: "Counter response requires a target stack item." };
+    }
+
+    const topItem = state.stack[state.stack.length - 1];
+    if (!topItem) {
+      return { ok: false, reason: "No stack item available to counter." };
+    }
+
+    if (topItem.id !== command.targetStackItemId) {
+      return { ok: false, reason: "Counter target must be the current top stack item." };
+    }
+
+    if (!topItem.counterable) {
+      return { ok: false, reason: "Target stack item is uncounterable." };
+    }
+  } else if (command.targetStackItemId) {
+    return { ok: false, reason: "This response type does not accept a stack target." };
+  }
+
+  return { ok: true };
+}
+
 function validateSelectEntity(state: GameState, command: Extract<GameCommand, { type: "SELECT_ENTITY" }>): CommandValidationResult {
   if (state.activePlayerId !== command.playerId) {
     return { ok: false, reason: "Only the active player can select entities." };
@@ -47,6 +103,18 @@ function validateSelectEntity(state: GameState, command: Extract<GameCommand, { 
 
   if (entity.kind !== "unit") {
     return { ok: false, reason: "Only units are selectable in Phase 2." };
+  }
+
+  return { ok: true };
+}
+
+function validateClearSelection(state: GameState, command: Extract<GameCommand, { type: "CLEAR_SELECTION" }>): CommandValidationResult {
+  if (state.activePlayerId !== command.playerId) {
+    return { ok: false, reason: "Only the active player can clear selection." };
+  }
+
+  if (!state.selectedEntityId) {
+    return { ok: false, reason: "No selected entity to clear." };
   }
 
   return { ok: true };
@@ -163,8 +231,14 @@ export function validateCommand(state: GameState, command: GameCommand): Command
       return validateAdvancePhase(state, command.playerId);
     case "END_PHASE":
       return validateEndPhase(state, command.playerId);
+    case "PASS_PRIORITY":
+      return validatePassPriority(state, command.playerId);
+    case "RESPOND_STACK":
+      return validateRespondStack(state, command);
     case "SELECT_ENTITY":
       return validateSelectEntity(state, command);
+    case "CLEAR_SELECTION":
+      return validateClearSelection(state, command);
     case "MOVE_UNIT":
       return validateMoveUnit(state, command);
     case "ATTACK_UNIT":

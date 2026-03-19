@@ -145,6 +145,61 @@ describe("dispatchCommand", () => {
     expect(stateA).toEqual(stateB);
   });
 
+  it("clears selection through command/event path with deterministic logging", () => {
+    const state = setupState();
+    const unitId = "unit_player_1_scout";
+
+    const select = dispatchCommand(state, {
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: unitId,
+    });
+    expect(select.ok).toBe(true);
+    expect(state.selectedEntityId).toBe(unitId);
+
+    const clear = dispatchCommand(state, {
+      type: "CLEAR_SELECTION",
+      playerId: "player_1",
+      reason: "clicked_empty_or_enemy_tile",
+    });
+    expect(clear.ok).toBe(true);
+    expect(state.selectedEntityId).toBeNull();
+    expect(state.log[state.log.length - 1]?.text).toContain("cleared selection");
+    expect(state.log[state.log.length - 1]?.text).toContain(unitId);
+  });
+
+  it("rejects clear selection for non-active player or when nothing is selected", () => {
+    const state = setupState();
+    const unitId = "unit_player_1_scout";
+
+    dispatchCommand(state, {
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: unitId,
+    });
+
+    const wrongPlayer = dispatchCommand(state, {
+      type: "CLEAR_SELECTION",
+      playerId: "player_2",
+      reason: "clicked_empty_or_enemy_tile",
+    });
+    expect(expectRejected(wrongPlayer)).toContain("active player");
+
+    dispatchCommand(state, {
+      type: "CLEAR_SELECTION",
+      playerId: "player_1",
+      reason: "clicked_empty_or_enemy_tile",
+    });
+    expect(state.selectedEntityId).toBeNull();
+
+    const noneSelected = dispatchCommand(state, {
+      type: "CLEAR_SELECTION",
+      playerId: "player_1",
+      reason: "clicked_empty_or_enemy_tile",
+    });
+    expect(expectRejected(noneSelected)).toContain("No selected entity");
+  });
+
   it("resolves attack by reducing target HP and consuming attack budget", () => {
     const state = setupState();
     const attackerId = "unit_player_1_scout";
@@ -306,5 +361,275 @@ describe("dispatchCommand", () => {
     });
 
     expect(expectRejected(result)).toContain("active player");
+  });
+
+  it("tracks priority passing and resolves top stack item after both players pass", () => {
+    const state = setupState();
+
+    const pushResult = dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_1",
+      label: "Debug stack effect",
+      effectId: "noop_log",
+    });
+    expect(pushResult.ok).toBe(true);
+    expect(state.stack.length).toBe(1);
+    expect(state.priorityPlayerId).toBe("player_2");
+    expect(state.consecutivePriorityPasses).toBe(0);
+
+    const passOne = dispatchCommand(state, {
+      type: "PASS_PRIORITY",
+      playerId: "player_2",
+    });
+    expect(passOne.ok).toBe(true);
+    expect(state.stack.length).toBe(1);
+    expect(state.priorityPlayerId).toBe("player_1");
+    expect(state.consecutivePriorityPasses).toBe(1);
+
+    const passTwo = dispatchCommand(state, {
+      type: "PASS_PRIORITY",
+      playerId: "player_1",
+    });
+    expect(passTwo.ok).toBe(true);
+    expect(state.stack.length).toBe(0);
+    expect(state.priorityPlayerId).toBe("player_1");
+    expect(state.consecutivePriorityPasses).toBe(0);
+  });
+
+  it("rejects pass/respond commands from non-priority player", () => {
+    const state = setupState();
+
+    const passReject = dispatchCommand(state, {
+      type: "PASS_PRIORITY",
+      playerId: "player_2",
+    });
+    expect(expectRejected(passReject)).toContain("priority player");
+
+    const respondReject = dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_2",
+      label: "Should fail",
+      effectId: "noop_log",
+    });
+    expect(expectRejected(respondReject)).toContain("priority player");
+  });
+
+  it("rejects unknown stack effect ids via runtime validation", () => {
+    const state = setupState();
+    const unknownEffect = dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_1",
+      label: "Unknown",
+      effectId: "custom.future.effect",
+    });
+
+    expect(expectRejected(unknownEffect)).toContain("Unknown stack effect");
+  });
+
+  it("resolves damage stack effect against enemy base", () => {
+    const state = setupState();
+    const targetBase = state.entities.base_player_2;
+    expect(targetBase?.kind).toBe("base");
+    if (!targetBase || targetBase.kind !== "base") {
+      throw new Error("Expected enemy base.");
+    }
+
+    const beforeHp = targetBase.hp;
+    dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_1",
+      label: "Orbital Ping",
+      effectId: "damage_enemy_base_2",
+    });
+    dispatchCommand(state, { type: "PASS_PRIORITY", playerId: "player_2" });
+    dispatchCommand(state, { type: "PASS_PRIORITY", playerId: "player_1" });
+
+    const afterBase = state.entities.base_player_2;
+    expect(afterBase?.kind).toBe("base");
+    if (!afterBase || afterBase.kind !== "base") {
+      throw new Error("Expected enemy base after stack resolve.");
+    }
+    expect(afterBase.hp).toBe(beforeHp - 2);
+  });
+
+  it("resolves counter stack effect by removing the top pending stack item", () => {
+    const state = setupState();
+
+    dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_1",
+      label: "Orbital Ping",
+      effectId: "damage_enemy_base_2",
+    });
+    const pingId = state.stack[0]?.id;
+    expect(pingId).toBeDefined();
+    dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_2",
+      label: "Counter Pulse",
+      effectId: "counter_top_item",
+      targetStackItemId: pingId,
+    });
+    expect(state.stack).toHaveLength(2);
+
+    dispatchCommand(state, { type: "PASS_PRIORITY", playerId: "player_1" });
+    dispatchCommand(state, { type: "PASS_PRIORITY", playerId: "player_2" });
+
+    expect(state.stack).toHaveLength(0);
+    const counteredTargetBase = state.entities.base_player_2;
+    expect(counteredTargetBase?.kind).toBe("base");
+    if (!counteredTargetBase || counteredTargetBase.kind !== "base") {
+      throw new Error("Expected player 2 base.");
+    }
+    expect(counteredTargetBase.hp).toBe(100);
+  });
+
+  it("rejects counter responses without a legal top-of-stack target id", () => {
+    const state = setupState();
+
+    const noTarget = dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_1",
+      label: "Counter Pulse",
+      effectId: "counter_top_item",
+    });
+    expect(expectRejected(noTarget)).toContain("requires a target");
+
+    dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_1",
+      label: "Orbital Ping",
+      effectId: "damage_enemy_base_2",
+    });
+    const topId = state.stack[0]?.id;
+    expect(topId).toBeDefined();
+
+    dispatchCommand(state, { type: "PASS_PRIORITY", playerId: "player_2" });
+    const staleTarget = dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_1",
+      label: "Counter Pulse",
+      effectId: "counter_top_item",
+      targetStackItemId: "not_real",
+    });
+    expect(expectRejected(staleTarget)).toContain("top stack item");
+
+    const wrongEffectWithTarget = dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_1",
+      label: "Ping with target",
+      effectId: "damage_enemy_base_2",
+      targetStackItemId: topId,
+    });
+    expect(expectRejected(wrongEffectWithTarget)).toContain("does not accept");
+  });
+
+  it("rejects countering uncounterable stack items", () => {
+    const state = setupState();
+
+    dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_1",
+      label: "Debug No-op",
+      effectId: "noop_log",
+    });
+    const topId = state.stack[0]?.id;
+    expect(topId).toBeDefined();
+
+    const uncounterable = dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_2",
+      label: "Counter Pulse",
+      effectId: "counter_top_item",
+      targetStackItemId: topId,
+    });
+    expect(expectRejected(uncounterable)).toContain("uncounterable");
+  });
+
+  it("stack damage can set winner and lock further commands", () => {
+    const state = setupState();
+    const targetBase = state.entities.base_player_2;
+    expect(targetBase?.kind).toBe("base");
+    if (!targetBase || targetBase.kind !== "base") {
+      throw new Error("Expected enemy base.");
+    }
+    targetBase.hp = 2;
+
+    dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_1",
+      label: "Orbital Ping",
+      effectId: "damage_enemy_base_2",
+    });
+    dispatchCommand(state, { type: "PASS_PRIORITY", playerId: "player_2" });
+    dispatchCommand(state, { type: "PASS_PRIORITY", playerId: "player_1" });
+
+    expect(state.winner).toBe("player_1");
+    const afterBase = state.entities.base_player_2;
+    expect(afterBase?.kind).toBe("base");
+    if (!afterBase || afterBase.kind !== "base") {
+      throw new Error("Expected enemy base.");
+    }
+    expect(afterBase.hp).toBe(0);
+
+    const rejectedAfterWin = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(expectRejected(rejectedAfterWin)).toContain("already over");
+  });
+
+  it("remains deterministic with mixed valid/invalid stack counter interactions", () => {
+    const runStream = () => {
+      const state = setupState();
+      dispatchCommand(state, {
+        type: "RESPOND_STACK",
+        playerId: "player_1",
+        label: "Orbital Ping",
+        effectId: "damage_enemy_base_2",
+      });
+      dispatchCommand(state, {
+        type: "RESPOND_STACK",
+        playerId: "player_1",
+        label: "Bad Counter",
+        effectId: "counter_top_item",
+      });
+
+      const targetId = state.stack[0]?.id;
+      expect(targetId).toBeDefined();
+
+      dispatchCommand(state, {
+        type: "PASS_PRIORITY",
+        playerId: "player_2",
+      });
+      dispatchCommand(state, {
+        type: "RESPOND_STACK",
+        playerId: "player_1",
+        label: "Counter Pulse",
+        effectId: "counter_top_item",
+        targetStackItemId: targetId!,
+      });
+      dispatchCommand(state, {
+        type: "PASS_PRIORITY",
+        playerId: "player_2",
+      });
+      dispatchCommand(state, {
+        type: "PASS_PRIORITY",
+        playerId: "player_1",
+      });
+      dispatchCommand(state, {
+        type: "PASS_PRIORITY",
+        playerId: "player_2",
+      });
+      dispatchCommand(state, {
+        type: "PASS_PRIORITY",
+        playerId: "player_1",
+      });
+      return state;
+    };
+
+    const stateA = runStream();
+    const stateB = runStream();
+    expect(stateA).toEqual(stateB);
   });
 });

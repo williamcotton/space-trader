@@ -67,6 +67,26 @@ export function GameCanvas({ width, height }: GameCanvasProps) {
         return;
       }
 
+      if (key === "p") {
+        runtime.debugPassPriority();
+        return;
+      }
+
+      if (key === "r") {
+        runtime.debugRespondStack();
+        return;
+      }
+
+      if (key === "t") {
+        runtime.debugRespondDamageEnemyBase();
+        return;
+      }
+
+      if (key === "c") {
+        runtime.debugRespondCounterTopItem();
+        return;
+      }
+
       if (event.key === "ArrowRight") {
         runtime.debugMoveSelectedUnit(1, 0);
         return;
@@ -90,6 +110,47 @@ export function GameCanvas({ width, height }: GameCanvasProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const runtime = runtimeRef.current;
+
+    const getCanvasPoint = (event: MouseEvent): { x: number; y: number } => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: ((event.clientX - rect.left) * canvas.width) / rect.width,
+        y: ((event.clientY - rect.top) * canvas.height) / rect.height,
+      };
+    };
+
+    const onMouseMove = (event: MouseEvent): void => {
+      const point = getCanvasPoint(event);
+      runtime.setHoveredHexFromScreenPoint(point.x, point.y);
+    };
+
+    const onMouseLeave = (): void => {
+      runtime.clearHoveredHex();
+    };
+
+    const onClick = (event: MouseEvent): void => {
+      const point = getCanvasPoint(event);
+      runtime.selectUnitFromScreenPoint(point.x, point.y);
+    };
+
+    canvas.addEventListener("mousemove", onMouseMove);
+    canvas.addEventListener("mouseleave", onMouseLeave);
+    canvas.addEventListener("click", onClick);
+
+    return () => {
+      canvas.removeEventListener("mousemove", onMouseMove);
+      canvas.removeEventListener("mouseleave", onMouseLeave);
+      canvas.removeEventListener("click", onClick);
     };
   }, []);
 

@@ -26,6 +26,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 16px;
+  position: relative;
 }
 
 .game-canvas {
@@ -33,4 +34,99 @@ body {
   max-height: 100%;
   border: 1px solid #1b2b59;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+
+.debug-stack-controls {
+  position: absolute;
+  right: 26px;
+  bottom: 26px;
+  width: 320px;
+  background: rgba(6, 10, 27, 0.9);
+  border: 1px solid #2a437f;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+  padding: 10px;
+  backdrop-filter: blur(2px);
+}
+
+.debug-stack-title {
+  margin: 0 0 8px;
+  color: #dbe8ff;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.debug-stack-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.debug-stack-buttons button {
+  border: 1px solid #3559a6;
+  background: #0d1738;
+  color: #d7e6ff;
+  padding: 6px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.debug-stack-buttons button:hover {
+  background: #14214f;
+}
+
+.debug-stack-target {
+  margin: 8px 0;
+  color: #9fc0ff;
+  font-size: 12px;
+}
+
+.debug-stack-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.debug-stack-empty {
+  color: #7f8db3;
+  font-size: 12px;
+}
+
+.debug-stack-item {
+  width: 100%;
+  border: 1px solid #2f427b;
+  background: rgba(13, 20, 49, 0.9);
+  color: #d7e6ff;
+  padding: 5px 6px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 2px 8px;
+}
+
+.debug-stack-item span:nth-child(3),
+.debug-stack-item span:nth-child(4) {
+  grid-column: 2 / -1;
+  font-size: 11px;
+  color: #95a5d0;
+}
+
+.debug-stack-item.counterable {
+  border-color: #3667b7;
+}
+
+.debug-stack-item.uncounterable {
+  border-color: #6f4a58;
+  opacity: 0.9;
+}
+
+.debug-stack-item.selected {
+  border-color: #f3da74;
+  box-shadow: inset 0 0 0 1px rgba(243, 218, 116, 0.45);
 }

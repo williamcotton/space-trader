@@ -14,23 +14,41 @@
 - `src/GameCanvas.tsx`: Canvas mount + RAF loop driver. Uses `getGameRuntime()` and does not own gameplay state.
 - `src/game/runtime.ts`: Persistent runtime singleton returned by `getGameRuntime()`. Holds mutable game state and hot-swappable systems.
 - `src/game/systems.ts`: `updateGame` and `renderGame` systems. Primary gameplay logic surface for HMR iteration.
-- `src/game/types.ts`: Shared game-state and frame type definitions.
+- `src/game/model/*`: Canonical game enums, IDs, state, and hex helpers.
+- `src/game/content/maps/frontierBelt.ts`: MVP map data and resource nodes.
+- `src/game/actions/*`: Command/event/reducer pipeline for authoritative state changes.
+- `src/game/rules/validators.ts`: Command legality checks.
+- `src/game/turn/*`: Phase machine and stack/priority helpers.
+- `src/game/types.ts`: Shared frame type definitions.
 - `src/App.css`: Full-window layout and canvas styling.
 - `vite.config.ts`: Vite + React + Electron plugin setup.
 - `game-design.md`: Living gameplay design document for ongoing brainstorming and decisions.
+- `architecture.md`: System architecture blueprint.
+- `todos.md`: Detailed phased build plan and immediate tasks.
 
 ## Commands
 - `npm run dev`: Start Vite and Electron in development mode.
 - `npm run build`: Type-check and produce production bundles.
 - `npm run preview`: Preview renderer production build.
 - `npm run typecheck`: Type-check TypeScript projects.
+- `npm test`: Run deterministic rules tests with Vitest.
+- `npm run test:watch`: Run tests in watch mode.
 
 ## Current Architecture Decisions
 - Game state lives in `src/game/runtime.ts` (singleton), not React state, so gameplay state survives Fast Refresh.
 - The loop is frame-rate independent using delta time.
 - `update()` and `render()` are separate to keep game logic composable.
+- Gameplay mutations flow through typed commands -> events -> reducers.
+- `GameState` is canonical and includes phase/turn/priority/stack data for deterministic simulation.
+- Priority/stack shell is active with debug commands (`P` pass, `R` no-op, `T` damage, `C` counter).
+- Stack responses support explicit target metadata (currently used by `counter_top_item`).
+- Stack effects are data-driven content IDs (`string`) validated at command time; resolver behavior stays typed via `StackResolutionRules`.
+- Canvas interaction supports click-to-select and hovered-hex target preview overlays.
+- Selection clear transitions also go through command/event (`CLEAR_SELECTION`) for deterministic logging.
+- A small React debug overlay exposes stack controls (pass/no-op/ping/counter) in addition to keyboard shortcuts.
 - `src/game/runtime.ts` accepts HMR updates from `src/game/systems.ts` via `import.meta.hot.accept` and swaps logic in place.
 - `src/game/runtime.ts` persists runtime instance through `import.meta.hot.dispose(data.runtime = runtime)`.
+- Runtime applies lightweight schema migration on hot-restored state (currently state version 6).
 - Electron runs with `contextIsolation: true` and `nodeIntegration: false`.
 
 ## `getGameRuntime` Contract
@@ -51,7 +69,7 @@
   - `dispose(...)` for state retention
 
 ## Next Extension Points
-- Introduce an entity model (player, ships, stations) in a game module.
-- Add input systems and scene state into `src/game/systems.ts` + runtime state.
-- Add an explicit game state manager (title, map, combat, market scenes).
-- Add persistence (save/load) via preload-exposed APIs and IPC.
+- Expand stack rules from no-op shell to true instant/counter resolution.
+- Add node control + harvesting systems (Phase 4).
+- Add deck/hand/discard zones and React `HandTray` overlay (Phase 5).
+- Add persistence (save/load) via preload-exposed APIs and IPC once gameplay loop stabilizes.

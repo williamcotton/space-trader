@@ -67,6 +67,13 @@ export type StackItem = {
   id: string;
   label: string;
   controllerId: PlayerId;
+  ownerId: PlayerId;
+  effectId: string;
+  effectMagnitude: number;
+  targetStackItemId: string | null;
+  objectKind: "spell" | "ability";
+  counterable: boolean;
+  defaultCounterDestination: "discard" | "hand" | "exile" | "none";
 };
 
 export type MatchLogEntry = {
@@ -82,6 +89,7 @@ export type GameState = {
   activePlayerId: PlayerId;
   priorityPlayerId: PlayerId | null;
   consecutivePriorityPasses: number;
+  hoveredHex: HexCoord | null;
   selectedEntityId: EntityId | null;
   map: MapState;
   players: Record<PlayerId, PlayerState>;
@@ -185,13 +193,14 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   };
 
   return {
-    stateVersion: 1,
+    stateVersion: 6,
     matchId: options.matchId ?? "match_frontier_belt",
     turn: 1,
     phase: "start",
     activePlayerId: PLAYER_ONE,
     priorityPlayerId: PLAYER_ONE,
     consecutivePriorityPasses: 0,
+    hoveredHex: null,
     selectedEntityId: null,
     map,
     players: {

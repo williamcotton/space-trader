@@ -15,6 +15,13 @@ export type EntitySelectedEvent = {
   entityId: EntityId;
 };
 
+export type SelectionClearedEvent = {
+  type: "SELECTION_CLEARED";
+  playerId: PlayerId;
+  previousEntityId: EntityId | null;
+  reason: "clicked_outside_map" | "clicked_empty_or_enemy_tile" | "clicked_selected_unit";
+};
+
 export type UnitMovedEvent = {
   type: "UNIT_MOVED";
   playerId: PlayerId;
@@ -36,10 +43,55 @@ export type UnitAttackDeclaredEvent = {
   winnerPlayerId: PlayerId | null;
 };
 
+export type PriorityPassedEvent = {
+  type: "PRIORITY_PASSED";
+  playerId: PlayerId;
+  nextPriorityPlayerId: PlayerId;
+  consecutivePasses: number;
+};
+
+export type StackItemPushedEvent = {
+  type: "STACK_ITEM_PUSHED";
+  playerId: PlayerId;
+  itemId: string;
+  label: string;
+  controllerId: PlayerId;
+  ownerId: PlayerId;
+  effectId: string;
+  effectMagnitude: number;
+  targetStackItemId: string | null;
+  objectKind: "spell" | "ability";
+  counterable: boolean;
+  defaultCounterDestination: "discard" | "hand" | "exile" | "none";
+  nextPriorityPlayerId: PlayerId;
+};
+
+export type StackItemResolvedEvent = {
+  type: "STACK_ITEM_RESOLVED";
+  itemId: string;
+  label: string;
+  controllerId: PlayerId;
+  ownerId: PlayerId;
+  effectId: string;
+  effectMagnitude: number;
+  targetStackItemId: string | null;
+  objectKind: "spell" | "ability";
+  counterable: boolean;
+  defaultCounterDestination: "discard" | "hand" | "exile" | "none";
+};
+
 export type UnitMovedEventPayload = Omit<UnitMovedEvent, "type">;
 
 export type UnitMovedEventWithCargo = UnitMovedEvent & {
   carriedCargo: ResourceType | null;
 };
 
-export type GameEvent = PhaseAdvancedEvent | EntitySelectedEvent | UnitMovedEvent | UnitAttackDeclaredEvent;
+export type GameEvent =
+  | PhaseAdvancedEvent
+  | EntitySelectedEvent
+  | SelectionClearedEvent
+  | UnitMovedEvent
+  | UnitAttackDeclaredEvent
+  | PriorityPassedEvent
+  | StackItemPushedEvent
+  | StackItemResolvedEvent;

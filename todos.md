@@ -17,7 +17,7 @@ Detailed implementation plan for the architecture in `architecture.md` and rules
 ## Phase Status
 - Phase 1: Completed.
 - Phase 2: Completed.
-- Phase 3: Not started.
+- Phase 3: Completed.
 - Phase 4-6: Not started.
 
 ## Phase 1 - Core Shell (State + Map + Phase Machine)
@@ -83,10 +83,20 @@ Scope:
   - simple damage/remove response
 
 Deliverables:
-- Priority ownership in state.
-- Pass/respond UI state exposed via runtime selectors.
-- Stack item push/pop/resolve with logging.
-- Counterable vs uncounterable legality matrix scaffold.
+- [x] Priority ownership in state.
+- [x] Pass/respond UI state exposed via runtime selectors (keyboard + React debug overlay).
+- [x] Stack item push/pop/resolve with deterministic logging.
+- [x] Minimal stack effect stubs implemented:
+  - no-op log effect
+  - damage enemy base effect
+  - counter effect
+- [x] Counter response target metadata added (`targetStackItemId`) with cast-time legality checks.
+- [x] Counterable vs uncounterable legality matrix scaffold wired in validators.
+- [x] Scenario tests added for:
+  - damage effect base HP changes
+  - counter removing a legal target
+  - uncounterable target rejection
+  - stack-based lethal damage setting winner and locking further commands
 
 Acceptance criteria:
 - Two players can exchange responses on stack in deterministic order.
@@ -184,12 +194,12 @@ Acceptance criteria:
 - Add debug HUD toggles for IDs, ranges, ownership, and carry state.
 
 ## Immediate Next Tasks
-1. Start Phase 3 stack shell:
-   - add `PASS_PRIORITY` and `RESPOND_STACK` command types
-   - add explicit both-pass tracking in turn state
-2. Add stack runtime scaffolding:
-   - create `turn/stack.ts` with push/pop/resolve shell and deterministic event logging
-   - wire no-op stack resolver into command/event loop behind feature-safe defaults
-3. Improve tactical input UX:
-   - add click-to-select units on canvas
-   - add hovered hex + target preview feedback
+1. Start Phase 4 node control shell:
+   - define end-phase occupancy capture event path
+   - render node ownership clearly on map
+2. Start Phase 4 harvesting shell:
+   - add harvest command/event for resource units
+   - track cargo load state changes (`null -> resource -> null`)
+3. Start Phase 4 deposit rules:
+   - enforce base-adjacent deposit in Economy phase
+   - add deterministic tests for successful and rejected deposits

@@ -1,7 +1,10 @@
 import type { GameCommand } from "./commands";
 import type { GameEvent, UnitAttackDeclaredEvent, UnitMovedEvent } from "./events";
+import { getStackEffectDefinition } from "../content/stackEffects";
 import { advancePhase } from "../turn/phaseMachine";
+import { createStackItemId, getOpponentPlayer, peekTopStackItem, popTopStackItem, removeStackItemById } from "../turn/stack";
 import { validateCommand } from "../rules/validators";
+import type { PlayerId } from "../model/ids";
 import type { GameState } from "../model/state";
 import { hexDistance } from "../model/hex";
 
@@ -20,6 +23,102 @@ function getAttackDamage(attackerDamage: number, defenderArmor: number): number 
   return Math.max(1, attackerDamage - defenderArmor);
 }
 
+function getStackEffectMagnitude(effectId: string): number {
+  const definition = getStackEffectDefinition(effectId);
+  if (!definition) {
+    return 0;
+  }
+  if (definition.resolution.type === "damage_enemy_base") {
+    return definition.resolution.amount;
+  }
+  return 0;
+}
+
+function getPlayerBase(state: GameState, playerId: PlayerId) {
+  const baseId = state.players[playerId].baseEntityId;
+  const base = state.entities[baseId];
+  if (!base || base.kind !== "base") {
+    return null;
+  }
+  return base;
+}
+
+function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["stack"][number]): void {
+  const definition = getStackEffectDefinition(resolvedItem.effectId);
+  if (!definition) {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${resolvedItem.label}: unknown effect id ${resolvedItem.effectId}.`,
+    });
+    return;
+  }
+
+  switch (definition.resolution.type) {
+    case "noop_log":
+      state.log.push({
+        turn: state.turn,
+        text: `Resolved stack item ${resolvedItem.label}: no-op.`,
+      });
+      return;
+    case "damage_enemy_base": {
+      const enemyPlayerId = getOpponentPlayer(resolvedItem.controllerId);
+      const targetBase = getPlayerBase(state, enemyPlayerId);
+      if (!targetBase) {
+        return;
+      }
+
+      const damage = definition.resolution.amount;
+      const beforeHp = targetBase.hp;
+      targetBase.hp = Math.max(0, targetBase.hp - damage);
+      state.log.push({
+        turn: state.turn,
+        text: `Resolved ${resolvedItem.label}: dealt ${damage} to ${enemyPlayerId} base (${beforeHp} -> ${targetBase.hp}).`,
+      });
+
+      if (targetBase.hp === 0) {
+        state.winner = resolvedItem.controllerId;
+        state.log.push({
+          turn: state.turn,
+          text: `${resolvedItem.controllerId} wins by stack damage to enemy base.`,
+        });
+      }
+      return;
+    }
+    case "counter": {
+      const targetId = resolvedItem.targetStackItemId;
+      if (!targetId) {
+        state.log.push({
+          turn: state.turn,
+          text: `Resolved ${resolvedItem.label}: no stack target configured.`,
+        });
+        return;
+      }
+
+      const countered = removeStackItemById(state.stack, targetId);
+      if (!countered) {
+        state.log.push({
+          turn: state.turn,
+          text: `Resolved ${resolvedItem.label}: target stack item not found.`,
+        });
+        return;
+      }
+
+      const destination =
+        definition.resolution.destination === "none"
+          ? countered.defaultCounterDestination
+          : definition.resolution.destination;
+
+      state.log.push({
+        turn: state.turn,
+        text: `Resolved ${resolvedItem.label}: countered ${countered.label} -> ${destination}.`,
+      });
+      return;
+    }
+    default:
+      return;
+  }
+}
+
 function createEventsFromCommand(state: GameState, command: GameCommand): GameEvent[] {
   switch (command.type) {
     case "ADVANCE_PHASE":
@@ -32,12 +131,85 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
           phase: state.phase,
         },
       ];
+    case "PASS_PRIORITY": {
+      const nextPasses = state.consecutivePriorityPasses + 1;
+      if (nextPasses < 2) {
+        return [
+          {
+            type: "PRIORITY_PASSED",
+            playerId: command.playerId,
+            nextPriorityPlayerId: getOpponentPlayer(command.playerId),
+            consecutivePasses: nextPasses,
+          },
+        ];
+      }
+
+      const events: GameEvent[] = [
+        {
+          type: "PRIORITY_PASSED",
+          playerId: command.playerId,
+          nextPriorityPlayerId: state.activePlayerId,
+          consecutivePasses: 0,
+        },
+      ];
+
+      const topItem = peekTopStackItem(state.stack);
+      if (topItem) {
+        events.push({
+          type: "STACK_ITEM_RESOLVED",
+          itemId: topItem.id,
+          label: topItem.label,
+          controllerId: topItem.controllerId,
+          ownerId: topItem.ownerId,
+          effectId: topItem.effectId,
+          effectMagnitude: topItem.effectMagnitude,
+          targetStackItemId: topItem.targetStackItemId,
+          objectKind: topItem.objectKind,
+          counterable: topItem.counterable,
+          defaultCounterDestination: topItem.defaultCounterDestination,
+        });
+      }
+
+      return events;
+    }
+    case "RESPOND_STACK": {
+      const definition = getStackEffectDefinition(command.effectId);
+      if (!definition) {
+        return [];
+      }
+      return [
+        {
+          type: "STACK_ITEM_PUSHED",
+          playerId: command.playerId,
+          itemId: createStackItemId(state.turn, state.log.length),
+          label: command.label,
+          controllerId: command.playerId,
+          ownerId: command.playerId,
+          effectId: command.effectId,
+          effectMagnitude: getStackEffectMagnitude(command.effectId),
+          targetStackItemId: command.targetStackItemId ?? null,
+          objectKind: definition.object.kind,
+          counterable: definition.object.counterable,
+          defaultCounterDestination: definition.object.defaultCounterDestination,
+          nextPriorityPlayerId: getOpponentPlayer(command.playerId),
+        },
+      ];
+    }
     case "SELECT_ENTITY":
       return [
         {
           type: "ENTITY_SELECTED",
           playerId: command.playerId,
           entityId: command.entityId,
+        },
+      ];
+    case "CLEAR_SELECTION":
+      return [
+        {
+          type: "SELECTION_CLEARED",
+          playerId: command.playerId,
+          previousEntityId: state.selectedEntityId,
+          reason: command.reason,
         },
       ];
     case "MOVE_UNIT": {
@@ -101,6 +273,52 @@ function reduceEvent(state: GameState, event: GameEvent): void {
         text: `${event.playerId} selected ${event.entityId}.`,
       });
       return;
+    case "SELECTION_CLEARED":
+      state.selectedEntityId = null;
+      state.log.push({
+        turn: state.turn,
+        text: `${event.playerId} cleared selection (${event.reason}) from ${event.previousEntityId ?? "none"}.`,
+      });
+      return;
+    case "PRIORITY_PASSED":
+      state.consecutivePriorityPasses = event.consecutivePasses;
+      state.priorityPlayerId = event.nextPriorityPlayerId;
+      state.log.push({
+        turn: state.turn,
+        text: `${event.playerId} passed priority.`,
+      });
+      return;
+    case "STACK_ITEM_PUSHED":
+      state.stack.push({
+        id: event.itemId,
+        label: event.label,
+        controllerId: event.controllerId,
+        ownerId: event.ownerId,
+        effectId: event.effectId,
+        effectMagnitude: event.effectMagnitude,
+        targetStackItemId: event.targetStackItemId,
+        objectKind: event.objectKind,
+        counterable: event.counterable,
+        defaultCounterDestination: event.defaultCounterDestination,
+      });
+      state.priorityPlayerId = event.nextPriorityPlayerId;
+      state.consecutivePriorityPasses = 0;
+      state.log.push({
+        turn: state.turn,
+        text: `${event.playerId} added stack item: ${event.label} [${event.effectId}].`,
+      });
+      return;
+    case "STACK_ITEM_RESOLVED": {
+      const resolvedItem = popTopStackItem(state.stack);
+      if (!resolvedItem) {
+        return;
+      }
+
+      state.priorityPlayerId = state.activePlayerId;
+      state.consecutivePriorityPasses = 0;
+      applyResolvedStackEffect(state, resolvedItem);
+      return;
+    }
     case "UNIT_MOVED": {
       const entity = state.entities[event.entityId];
       if (!entity || entity.kind !== "unit") {
