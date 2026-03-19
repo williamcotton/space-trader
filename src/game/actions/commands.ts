@@ -57,6 +57,13 @@ export type HarvestNodeCommand = {
   nodeId: NodeId;
 };
 
+export type PlayCardCommand = {
+  type: "PLAY_CARD";
+  playerId: PlayerId;
+  cardInstanceId: string;
+  targetStackItemId?: string;
+};
+
 export type GameCommand =
   | AdvancePhaseCommand
   | EndPhaseCommand
@@ -66,4 +73,5 @@ export type GameCommand =
   | ClearSelectionCommand
   | MoveUnitCommand
   | AttackUnitCommand
-  | HarvestNodeCommand;
+  | HarvestNodeCommand
+  | PlayCardCommand;

@@ -39,13 +39,101 @@ body {
 .debug-stack-controls {
   position: absolute;
   right: 26px;
-  bottom: 26px;
+  bottom: 208px;
   width: 320px;
   background: rgba(6, 10, 27, 0.9);
   border: 1px solid #2a437f;
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
   padding: 10px;
   backdrop-filter: blur(2px);
+}
+
+.hand-tray {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  width: min(980px, calc(100vw - 48px));
+  background: rgba(6, 10, 27, 0.94);
+  border: 1px solid #2a437f;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+  padding: 10px;
+  backdrop-filter: blur(2px);
+}
+
+.hand-tray-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: #dbe8ff;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hand-tray-cards {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(100px, 1fr);
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.hand-card {
+  border: 1px solid #2f427b;
+  background: rgba(13, 20, 49, 0.95);
+  color: #d7e6ff;
+  padding: 8px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: 126px;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  gap: 5px;
+}
+
+.hand-card.playable {
+  border-color: #3f67c0;
+}
+
+.hand-card.playable:hover {
+  background: rgba(20, 31, 74, 0.95);
+}
+
+.hand-card.blocked {
+  border-color: #5c4f67;
+  opacity: 0.66;
+}
+
+.hand-card-title {
+  font-size: 13px;
+  color: #f3f7ff;
+}
+
+.hand-card-subtitle {
+  font-size: 11px;
+  color: #99acd6;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.hand-card-cost {
+  font-size: 11px;
+  color: #8dffcf;
+}
+
+.hand-card-text {
+  font-size: 11px;
+  color: #c5d3ef;
+  align-self: end;
+}
+
+.hand-tray-empty {
+  margin: 0;
+  color: #7f8db3;
+  font-size: 12px;
 }
 
 .debug-stack-title {

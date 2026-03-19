@@ -3,7 +3,7 @@ import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
 import { getStackEffectDefinition } from "./content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
-import { createInitialGameState } from "./model/state";
+import { createInitialGameState, createInitialZonesForPlayer } from "./model/state";
 import { HEX_SIZE, getMapOrigin } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
 import type { GameState } from "./model/state";
@@ -14,7 +14,7 @@ const INITIAL_VIEWPORT: GameViewport = {
   height: 768,
 };
 
-const CURRENT_STATE_VERSION = 7;
+const CURRENT_STATE_VERSION = 8;
 
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
@@ -99,6 +99,15 @@ function migrateRuntimeState(state: GameState): void {
     if (typeof stackItem.defaultCounterDestination === "undefined") {
       stackItem.defaultCounterDestination = definition?.object.defaultCounterDestination ?? "none";
     }
+    if (typeof stackItem.sourceCardInstanceId === "undefined") {
+      stackItem.sourceCardInstanceId = null;
+    }
+    if (typeof stackItem.sourceCardId === "undefined") {
+      stackItem.sourceCardId = null;
+    }
+    if (typeof stackItem.sourceCardOwnerId === "undefined") {
+      stackItem.sourceCardOwnerId = null;
+    }
   }
 
   for (const entity of Object.values(state.entities)) {
@@ -112,6 +121,34 @@ function migrateRuntimeState(state: GameState): void {
 
   migratePhaseFourHarvesters(state);
 
+  if (typeof state.zones === "undefined") {
+    state.zones = {
+      player_1: createInitialZonesForPlayer("player_1", state.players.player_1.faction, state.players.player_1.handSize || 7),
+      player_2: createInitialZonesForPlayer("player_2", state.players.player_2.faction, state.players.player_2.handSize || 7),
+    };
+  }
+
+  for (const playerId of ["player_1", "player_2"] as const) {
+    if (!state.zones[playerId]) {
+      state.zones[playerId] = createInitialZonesForPlayer(playerId, state.players[playerId].faction, state.players[playerId].handSize || 7);
+    }
+    if (!Array.isArray(state.zones[playerId].deck)) {
+      state.zones[playerId].deck = [];
+    }
+    if (!Array.isArray(state.zones[playerId].hand)) {
+      state.zones[playerId].hand = [];
+    }
+    if (!Array.isArray(state.zones[playerId].discard)) {
+      state.zones[playerId].discard = [];
+    }
+    if (!Array.isArray(state.zones[playerId].exile)) {
+      state.zones[playerId].exile = [];
+    }
+
+    state.players[playerId].handSize = state.zones[playerId].hand.length;
+    state.players[playerId].deckSize = state.zones[playerId].deck.length;
+  }
+
   if (typeof state.stateVersion !== "number") {
     state.stateVersion = 0;
   }
@@ -120,7 +157,7 @@ function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v7 (Phase 4 economy systems).",
+      text: "State migrated to v8 (Phase 5 card zones and hand gameplay).",
     });
   }
 }
@@ -313,6 +350,16 @@ class GameRuntime {
       playerId: activePlayerId,
       entityId: selected.id,
       nodeId: node.id,
+    });
+  }
+
+  playCardFromHand(cardInstanceId: string, targetStackItemId?: string): DispatchResult {
+    const playerId = this.state.priorityPlayerId ?? this.state.activePlayerId;
+    return this.dispatch({
+      type: "PLAY_CARD",
+      playerId,
+      cardInstanceId,
+      targetStackItemId,
     });
   }
 

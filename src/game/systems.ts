@@ -250,8 +250,9 @@ function drawHud(state: GameState, context: CanvasRenderingContext2D, viewport: 
   context.fillText("Arrow Keys: Move selected (tactical phase)", 230, 134);
   context.fillText("A: Attack first target in range", 230, 156);
   context.fillText("H: Harvest with selected resource unit", 230, 178);
-  context.fillText("P: Pass priority, R/T/C: No-op/Ping/Counter", 230, 200);
-  context.fillText("N: End phase, U: Select first unit", 230, 222);
+  context.fillText("Click hand cards to cast/deploy (bottom tray)", 230, 200);
+  context.fillText("P: Pass priority, R/T/C: No-op/Ping/Counter", 230, 222);
+  context.fillText("N: End phase, U: Select first unit", 230, 244);
 
   if (state.lastRejectedReason) {
     context.fillStyle = "#ff9f92";

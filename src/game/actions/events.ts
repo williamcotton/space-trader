@@ -1,6 +1,7 @@
 import type { EntityId, NodeId, PlayerId } from "../model/ids";
 import type { GamePhase, ResourceType } from "../model/enums";
 import type { HexCoord } from "../model/state";
+import type { CardCost, UnitTemplate } from "../content/cards/catalog";
 
 export type PhaseAdvancedEvent = {
   type: "PHASE_ADVANCED";
@@ -51,6 +52,35 @@ export type UnitHarvestedNodeEvent = {
   resourceType: ResourceType;
 };
 
+export type CardPlayedToStackEvent = {
+  type: "CARD_PLAYED_TO_STACK";
+  playerId: PlayerId;
+  cardInstanceId: string;
+  cardId: string;
+  cardName: string;
+  cost: CardCost;
+  stackItemId: string;
+  effectId: string;
+  effectMagnitude: number;
+  targetStackItemId: string | null;
+  objectKind: "spell" | "ability";
+  counterable: boolean;
+  defaultCounterDestination: "discard" | "hand" | "exile" | "none";
+  nextPriorityPlayerId: PlayerId;
+};
+
+export type CardPlayedToBattlefieldEvent = {
+  type: "CARD_PLAYED_TO_BATTLEFIELD";
+  playerId: PlayerId;
+  cardInstanceId: string;
+  cardId: string;
+  cardName: string;
+  cost: CardCost;
+  unitEntityId: EntityId;
+  spawnCoord: HexCoord;
+  unit: UnitTemplate;
+};
+
 export type PriorityPassedEvent = {
   type: "PRIORITY_PASSED";
   playerId: PlayerId;
@@ -71,6 +101,9 @@ export type StackItemPushedEvent = {
   objectKind: "spell" | "ability";
   counterable: boolean;
   defaultCounterDestination: "discard" | "hand" | "exile" | "none";
+  sourceCardInstanceId: string | null;
+  sourceCardId: string | null;
+  sourceCardOwnerId: PlayerId | null;
   nextPriorityPlayerId: PlayerId;
 };
 
@@ -86,6 +119,9 @@ export type StackItemResolvedEvent = {
   objectKind: "spell" | "ability";
   counterable: boolean;
   defaultCounterDestination: "discard" | "hand" | "exile" | "none";
+  sourceCardInstanceId: string | null;
+  sourceCardId: string | null;
+  sourceCardOwnerId: PlayerId | null;
 };
 
 export type UnitMovedEventPayload = Omit<UnitMovedEvent, "type">;
@@ -101,6 +137,8 @@ export type GameEvent =
   | UnitMovedEvent
   | UnitAttackDeclaredEvent
   | UnitHarvestedNodeEvent
+  | CardPlayedToStackEvent
+  | CardPlayedToBattlefieldEvent
   | PriorityPassedEvent
   | StackItemPushedEvent
   | StackItemResolvedEvent;

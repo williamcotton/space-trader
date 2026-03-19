@@ -19,7 +19,8 @@ Detailed implementation plan for the architecture in `architecture.md` and rules
 - Phase 2: Completed.
 - Phase 3: Completed.
 - Phase 4: Completed.
-- Phase 5-6: Not started.
+- Phase 5: Completed.
+- Phase 6: Not started.
 
 ## Phase 1 - Core Shell (State + Map + Phase Machine)
 Goal:
@@ -150,15 +151,15 @@ Hand UI plan (explicit):
 - Canvas remains for battlefield visuals only.
 
 Deliverables:
-- Deck loader + validation (60 cards, max 4 copies).
-- Start with 7 cards in hand and draw 1 at Start Phase.
-- Play card command from hand into stack/battlefield as appropriate.
-- Basic discard handling for one-shot card types.
+- [x] Deck loader + validation (60 cards, max 4 copies).
+- [x] Start with 7 cards in hand and draw 1 at Start Phase.
+- [x] Play card command from hand into stack/battlefield as appropriate.
+- [x] Basic discard handling for one-shot card types.
 
 Acceptance criteria:
-- Real cards are visible in bottom hand tray.
-- Cards can be played from hand with cost checks.
-- Deck/hand state transitions are deterministic and logged.
+- [x] Real cards are visible in bottom hand tray.
+- [x] Cards can be played from hand with cost checks.
+- [x] Deck/hand state transitions are deterministic and logged.
 
 ## Phase 6 - Combat Resolution, Win Path, and MVP Bot
 Goal:
@@ -195,12 +196,12 @@ Acceptance criteria:
 - Add debug HUD toggles for IDs, ranges, ownership, and carry state.
 
 ## Immediate Next Tasks
-1. Start Phase 5 zone model shell:
-   - add explicit deck/hand/discard zone state structures per player
-   - introduce zone-safe card instance IDs (data-driven, no giant card unions)
-2. Start Phase 5 draw flow:
-   - implement opening hand setup (7 cards) from premade deck content
-   - implement Start Phase draw 1 card (satellite download flavor log + deterministic tests)
-3. Start Phase 5 hand UI shell:
-   - add `HandTray` React overlay with card placeholders and playability affordance
-   - wire click-to-play command stub from hand to stack for one tactic card path
+1. Start Phase 6 combat resolver extraction:
+   - move attack resolution formula into dedicated `systems/combat.ts`
+   - add terrain/tile/base-distance modifier hooks in locked order
+2. Start Phase 6 victory flow:
+   - add `systems/victory.ts` winner checks for base HP and command lockout
+   - add deterministic scenario tests for combat-to-win transitions
+3. Start Phase 6 MVP bot shell:
+   - add `ai/mvpBot.ts` turn policy (defend/capture/attack/respond)
+   - wire optional bot autopilot for `player_2` with deterministic command sequencing

@@ -25,6 +25,9 @@ describe("stack helpers", () => {
         objectKind: "ability",
         counterable: false,
         defaultCounterDestination: "none",
+        sourceCardInstanceId: null,
+        sourceCardId: null,
+        sourceCardOwnerId: null,
       },
       {
         id: "s2",
@@ -37,6 +40,9 @@ describe("stack helpers", () => {
         objectKind: "spell",
         counterable: true,
         defaultCounterDestination: "discard",
+        sourceCardInstanceId: null,
+        sourceCardId: null,
+        sourceCardOwnerId: null,
       },
     ];
 
@@ -62,6 +68,9 @@ describe("stack helpers", () => {
         objectKind: "ability",
         counterable: false,
         defaultCounterDestination: "none",
+        sourceCardInstanceId: null,
+        sourceCardId: null,
+        sourceCardOwnerId: null,
       },
       {
         id: "s2",
@@ -74,6 +83,9 @@ describe("stack helpers", () => {
         objectKind: "spell",
         counterable: true,
         defaultCounterDestination: "discard",
+        sourceCardInstanceId: null,
+        sourceCardId: null,
+        sourceCardOwnerId: null,
       },
     ];
 

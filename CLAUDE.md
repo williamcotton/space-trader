@@ -17,12 +17,15 @@
 - `src/game/systems/nodeControl.ts`: End-phase node occupancy capture logic.
 - `src/game/systems/harvesting.ts`: Harvest cargo validation helpers + economy-phase deposit resolution.
 - `src/game/model/*`: Canonical game enums, IDs, state, and hex helpers.
+- `src/game/content/cards/catalog.ts`: Card definitions (data-driven IDs, costs, speed, and payloads).
+- `src/game/content/decks/starterDecks.ts`: Premade 60-card starter deck lists + validation.
 - `src/game/content/maps/frontierBelt.ts`: MVP map data and resource nodes.
 - `src/game/actions/*`: Command/event/reducer pipeline for authoritative state changes.
 - `src/game/rules/validators.ts`: Command legality checks.
 - `src/game/turn/*`: Phase machine and stack/priority helpers.
 - `src/game/types.ts`: Shared frame type definitions.
 - `src/App.css`: Full-window layout and canvas styling.
+- `src/ui/HandTray.tsx`: Bottom-center hand tray overlay and click-to-play card controls.
 - `vite.config.ts`: Vite + React + Electron plugin setup.
 - `game-design.md`: Living gameplay design document for ongoing brainstorming and decisions.
 - `architecture.md`: System architecture blueprint.
@@ -53,9 +56,15 @@
   - tactical-phase harvest command for resource units
   - economy-phase base-adjacent deposit only
   - loaded harvester cargo is lost on destruction
+- Phase 5 card loop is active:
+  - per-player zones (`deck`, `hand`, `discard`, `exile`) in canonical state
+  - premade faction starter decks with 60-card/max-4 validation
+  - opening hand 7 + start-phase draw 1 on turn handoff
+  - `PLAY_CARD` command supports stack tactics and base-adjacent unit deployment
+  - one-shot tactics move to discard on resolve/counter destination
 - `src/game/runtime.ts` accepts HMR updates from `src/game/systems.ts` via `import.meta.hot.accept` and swaps logic in place.
 - `src/game/runtime.ts` persists runtime instance through `import.meta.hot.dispose(data.runtime = runtime)`.
-- Runtime applies lightweight schema migration on hot-restored state (currently state version 7).
+- Runtime applies lightweight schema migration on hot-restored state (currently state version 8).
 - Electron runs with `contextIsolation: true` and `nodeIntegration: false`.
 
 ## `getGameRuntime` Contract
@@ -77,5 +86,6 @@
 
 ## Next Extension Points
 - Expand stack target rules beyond top-of-stack-only counters.
-- Add deck/hand/discard zones and React `HandTray` overlay (Phase 5).
+- Extract combat + victory into dedicated Phase 6 systems modules.
+- Add MVP bot behavior loop for player 2.
 - Add persistence (save/load) via preload-exposed APIs and IPC once gameplay loop stabilizes.

@@ -1,5 +1,6 @@
 import type { Faction, GamePhase, ResourceType, UnitRole } from "./enums";
 import { PLAYER_ONE, PLAYER_TWO, type EntityId, type NodeId, type PlayerId } from "./ids";
+import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
 
 export type HexCoord = {
   q: number;
@@ -7,6 +8,19 @@ export type HexCoord = {
 };
 
 export type ResourcePool = Record<ResourceType, number>;
+
+export type CardInstance = {
+  instanceId: string;
+  cardId: string;
+  ownerId: PlayerId;
+};
+
+export type PlayerZones = {
+  deck: CardInstance[];
+  hand: CardInstance[];
+  discard: CardInstance[];
+  exile: CardInstance[];
+};
 
 export type MapResourceNode = {
   id: NodeId;
@@ -74,6 +88,9 @@ export type StackItem = {
   objectKind: "spell" | "ability";
   counterable: boolean;
   defaultCounterDestination: "discard" | "hand" | "exile" | "none";
+  sourceCardInstanceId: string | null;
+  sourceCardId: string | null;
+  sourceCardOwnerId: PlayerId | null;
 };
 
 export type MatchLogEntry = {
@@ -93,6 +110,7 @@ export type GameState = {
   selectedEntityId: EntityId | null;
   map: MapState;
   players: Record<PlayerId, PlayerState>;
+  zones: Record<PlayerId, PlayerZones>;
   entities: Record<EntityId, EntityState>;
   stack: StackItem[];
   log: MatchLogEntry[];
@@ -105,12 +123,12 @@ type CreateInitialGameStateOptions = {
   matchId?: string;
 };
 
-function createEmptyResources(): ResourcePool {
+function createStartingResources(faction: Faction): ResourcePool {
   return {
-    credits: 0,
-    alloy: 0,
-    flux: 0,
-    biomass: 0,
+    credits: 3,
+    alloy: faction === "alloy_clan" ? 2 : 0,
+    flux: faction === "flux_collective" ? 2 : 0,
+    biomass: faction === "biomass_swarm" ? 2 : 0,
   };
 }
 
@@ -126,6 +144,37 @@ function cloneMap(map: MapState): MapState {
       coord: { ...node.coord },
     })),
   };
+}
+
+export function createInitialZonesForPlayer(playerId: PlayerId, faction: Faction, openingHandSize = 7): PlayerZones {
+  const deckCardIds = getStarterDeckCardIds(faction);
+  const deckErrors = validateDeckCardIds(deckCardIds);
+  if (deckErrors.length > 0) {
+    throw new Error(`Invalid starter deck for ${faction}: ${deckErrors.join(" ")}`);
+  }
+
+  const allInstances: CardInstance[] = deckCardIds.map((cardId, index) => ({
+    instanceId: `${playerId}_card_${index + 1}`,
+    cardId,
+    ownerId: playerId,
+  }));
+
+  const hand = allInstances.slice(0, openingHandSize);
+  const deck = allInstances.slice(openingHandSize);
+
+  return {
+    deck,
+    hand,
+    discard: [],
+    exile: [],
+  };
+}
+
+export function syncPlayerZoneCounts(state: Pick<GameState, "players" | "zones">): void {
+  state.players.player_1.handSize = state.zones.player_1.hand.length;
+  state.players.player_1.deckSize = state.zones.player_1.deck.length;
+  state.players.player_2.handSize = state.zones.player_2.hand.length;
+  state.players.player_2.deckSize = state.zones.player_2.deck.length;
 }
 
 export function createInitialGameState(options: CreateInitialGameStateOptions): GameState {
@@ -234,8 +283,13 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     },
   };
 
+  const zones = {
+    player_1: createInitialZonesForPlayer(PLAYER_ONE, "alloy_clan"),
+    player_2: createInitialZonesForPlayer(PLAYER_TWO, "flux_collective"),
+  } satisfies Record<PlayerId, PlayerZones>;
+
   return {
-    stateVersion: 7,
+    stateVersion: 8,
     matchId: options.matchId ?? "match_frontier_belt",
     turn: 1,
     phase: "start",
@@ -250,21 +304,22 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
         id: PLAYER_ONE,
         name: "Player 1",
         faction: "alloy_clan",
-        resources: createEmptyResources(),
-        handSize: 7,
-        deckSize: 60,
+        resources: createStartingResources("alloy_clan"),
+        handSize: zones.player_1.hand.length,
+        deckSize: zones.player_1.deck.length,
         baseEntityId: baseOneId,
       },
       player_2: {
         id: PLAYER_TWO,
         name: "Player 2",
         faction: "flux_collective",
-        resources: createEmptyResources(),
-        handSize: 7,
-        deckSize: 60,
+        resources: createStartingResources("flux_collective"),
+        handSize: zones.player_2.hand.length,
+        deckSize: zones.player_2.deck.length,
         baseEntityId: baseTwoId,
       },
     },
+    zones,
     entities,
     stack: [],
     log: [

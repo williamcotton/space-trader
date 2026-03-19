@@ -28,6 +28,23 @@ function expectRejected(result: ReturnType<typeof dispatchCommand>): string {
   return result.reason;
 }
 
+function moveCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: "player_1" | "player_2", cardId: string): string {
+  const deck = state.zones[playerId].deck;
+  const index = deck.findIndex((card) => card.cardId === cardId);
+  if (index < 0) {
+    throw new Error(`Expected ${cardId} in deck for ${playerId}.`);
+  }
+
+  const [card] = deck.splice(index, 1);
+  if (!card) {
+    throw new Error(`Failed to move ${cardId} from deck for ${playerId}.`);
+  }
+  state.zones[playerId].hand.push(card);
+  state.players[playerId].handSize = state.zones[playerId].hand.length;
+  state.players[playerId].deckSize = state.zones[playerId].deck.length;
+  return card.instanceId;
+}
+
 describe("dispatchCommand", () => {
   it("supports first unit selection + movement path", () => {
     const state = setupState();
@@ -359,6 +376,150 @@ describe("dispatchCommand", () => {
     expect(expectRejected(summoningSickness)).toContain("summoning sickness");
   });
 
+  it("initializes with opening hands and validated starter decks", () => {
+    const state = setupState();
+
+    expect(state.zones.player_1.hand).toHaveLength(7);
+    expect(state.zones.player_2.hand).toHaveLength(7);
+    expect(state.zones.player_1.deck).toHaveLength(53);
+    expect(state.zones.player_2.deck).toHaveLength(53);
+    expect(state.players.player_1.handSize).toBe(7);
+    expect(state.players.player_2.handSize).toBe(7);
+    expect(state.players.player_1.deckSize).toBe(53);
+    expect(state.players.player_2.deckSize).toBe(53);
+  });
+
+  it("draws one card when a new turn enters start phase", () => {
+    const state = setupState();
+
+    advanceToPhase(state, "end");
+    const beforeHand = state.zones.player_2.hand.length;
+    const beforeDeck = state.zones.player_2.deck.length;
+    const handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+
+    expect(handoff.ok).toBe(true);
+    expect(state.phase).toBe("start");
+    expect(state.activePlayerId).toBe("player_2");
+    expect(state.zones.player_2.hand.length).toBe(beforeHand + 1);
+    expect(state.zones.player_2.deck.length).toBe(beforeDeck - 1);
+  });
+
+  it("draws for the active player each time their turn cycles back to start", () => {
+    const state = setupState();
+    const p1InitialHand = state.zones.player_1.hand.length;
+    const p1InitialDeck = state.zones.player_1.deck.length;
+
+    // End player_1 turn -> player_2 start (player_2 draws)
+    advanceToPhase(state, "end");
+    dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+
+    // End player_2 turn -> player_1 start (player_1 draws)
+    advanceToPhase(state, "end");
+    const handoffBack = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_2",
+    });
+    expect(handoffBack.ok).toBe(true);
+    expect(state.activePlayerId).toBe("player_1");
+    expect(state.phase).toBe("start");
+    expect(state.zones.player_1.hand.length).toBe(p1InitialHand + 1);
+    expect(state.zones.player_1.deck.length).toBe(p1InitialDeck - 1);
+    expect(state.players.player_1.handSize).toBe(state.zones.player_1.hand.length);
+    expect(state.players.player_1.deckSize).toBe(state.zones.player_1.deck.length);
+  });
+
+  it("plays a tactic card from hand to stack and moves it to discard on resolve", () => {
+    const state = setupState();
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "orbital_ping");
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.flux = 4;
+
+    const targetBase = state.entities.base_player_2;
+    expect(targetBase?.kind).toBe("base");
+    if (!targetBase || targetBase.kind !== "base") {
+      throw new Error("Expected enemy base.");
+    }
+    const beforeHp = targetBase.hp;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+    expect(state.stack).toHaveLength(1);
+    expect(state.zones.player_1.hand.some((card) => card.instanceId === cardInstanceId)).toBe(false);
+
+    dispatchCommand(state, { type: "PASS_PRIORITY", playerId: "player_2" });
+    dispatchCommand(state, { type: "PASS_PRIORITY", playerId: "player_1" });
+
+    expect(state.stack).toHaveLength(0);
+    expect(state.zones.player_1.discard.some((card) => card.instanceId === cardInstanceId)).toBe(true);
+    const updatedBase = state.entities.base_player_2;
+    expect(updatedBase?.kind).toBe("base");
+    if (!updatedBase || updatedBase.kind !== "base") {
+      throw new Error("Expected enemy base after resolve.");
+    }
+    expect(updatedBase.hp).toBe(beforeHp - 2);
+    expect(state.players.player_1.resources.credits).toBe(3);
+    expect(state.players.player_1.resources.flux).toBe(3);
+  });
+
+  it("plays a main-speed unit card from hand to battlefield with summoning sickness", () => {
+    const state = setupState();
+    const cardInHand = state.zones.player_1.hand.find((card) => card.cardId === "frontline_scout_card");
+    expect(cardInHand).toBeDefined();
+    if (!cardInHand) {
+      throw new Error("Expected frontline scout in opening hand.");
+    }
+
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.alloy = 3;
+    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // economy
+    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // main
+    expect(state.phase).toBe("main");
+
+    const beforeUnitCount = Object.values(state.entities).filter((entity) => entity.kind === "unit" && entity.ownerId === "player_1").length;
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId: cardInHand.instanceId,
+    });
+
+    expect(play.ok).toBe(true);
+    const afterUnits = Object.values(state.entities).filter((entity) => entity.kind === "unit" && entity.ownerId === "player_1");
+    expect(afterUnits.length).toBe(beforeUnitCount + 1);
+    const deployed = afterUnits.find((entity) => entity.id.includes("frontline_scout_card"));
+    expect(deployed?.kind).toBe("unit");
+    if (!deployed || deployed.kind !== "unit") {
+      throw new Error("Expected deployed frontline scout unit.");
+    }
+    expect(deployed.hasSummoningSickness).toBe(true);
+    expect(deployed.movesRemaining).toBe(0);
+    expect(deployed.attacksRemaining).toBe(0);
+    expect(state.zones.player_1.hand.some((card) => card.instanceId === cardInHand.instanceId)).toBe(false);
+    expect(state.players.player_1.resources.credits).toBe(2);
+    expect(state.players.player_1.resources.alloy).toBe(2);
+  });
+
+  it("rejects card play when resources are insufficient", () => {
+    const state = setupState();
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "orbital_ping");
+    const result = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+
+    expect(expectRejected(result)).toContain("Insufficient resources");
+  });
+
   it("captures nodes by occupancy at end phase handoff", () => {
     const state = setupState();
     const node = state.map.resourceNodes.find((entry) => entry.id === "frontier_alloy_west");
@@ -514,6 +675,7 @@ describe("dispatchCommand", () => {
 
     harvester.carries = "alloy";
     harvester.coord = { q: -3, r: 0 };
+    const beforeAlloy = state.players.player_1.resources.alloy;
 
     const economyStep = dispatchCommand(state, {
       type: "END_PHASE",
@@ -521,7 +683,7 @@ describe("dispatchCommand", () => {
     });
     expect(economyStep.ok).toBe(true);
     expect(state.phase).toBe("economy");
-    expect(state.players.player_1.resources.alloy).toBe(1);
+    expect(state.players.player_1.resources.alloy).toBe(beforeAlloy + 1);
     const afterDeposit = state.entities[harvesterId];
     expect(afterDeposit?.kind).toBe("unit");
     if (!afterDeposit || afterDeposit.kind !== "unit") {
