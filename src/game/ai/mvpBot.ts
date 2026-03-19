@@ -1,5 +1,5 @@
 import type { GameCommand } from "../actions/commands";
-import { getCardDefinition } from "../content/cards/catalog";
+import { getCardDefinition, type CardDefinition } from "../content/cards/catalog";
 import { isCounterResponse } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import type { Faction, ResourceType } from "../model/enums";
@@ -53,13 +53,36 @@ function canAfford(state: GameState, playerId: PlayerId, cost: Partial<Record<"c
   );
 }
 
-function getPriorityOrderForResourceSet(resources: Set<ResourceType>, primaryResource: ResourceType): ResourceType[] {
+function getHandCardDefinitions(state: GameState, botPlayerId: PlayerId): CardDefinition[] {
+  return state.zones[botPlayerId].hand
+    .map((cardInstance) => getCardDefinition(cardInstance.cardId))
+    .filter((card): card is CardDefinition => Boolean(card));
+}
+
+function getEconomyFocusCards(state: GameState, botPlayerId: PlayerId): CardDefinition[] {
+  const handCards = getHandCardDefinitions(state, botPlayerId);
+  const faction = state.players[botPlayerId].faction;
+  const coreCards = handCards.filter((card) => card.faction === faction || card.faction === "neutral");
+  return coreCards.length > 0 ? coreCards : handCards;
+}
+
+function getPriorityOrderForResourceSet(resources: Set<ResourceType>, primaryResource: ResourceType, creditsFirst: boolean): ResourceType[] {
   const ordered: ResourceType[] = [];
-  if (resources.has(primaryResource)) {
+
+  if (creditsFirst && resources.has("credits")) {
+    ordered.push("credits");
+  }
+
+  if (resources.has(primaryResource) && !ordered.includes(primaryResource)) {
     ordered.push(primaryResource);
   }
+
+  if (!creditsFirst && resources.has("credits") && !ordered.includes("credits")) {
+    ordered.push("credits");
+  }
+
   for (const resource of RESOURCE_ORDER) {
-    if (resource === primaryResource) {
+    if (ordered.includes(resource)) {
       continue;
     }
     if (resources.has(resource)) {
@@ -75,13 +98,9 @@ function getPriorityResourceOrderFromHand(state: GameState, botPlayerId: PlayerI
   const resources = state.players[botPlayerId].resources;
   const missingResources = new Set<ResourceType>();
   const requiredResources = new Set<ResourceType>();
+  const focusCards = getEconomyFocusCards(state, botPlayerId);
 
-  for (const cardInstance of state.zones[botPlayerId].hand) {
-    const card = getCardDefinition(cardInstance.cardId);
-    if (!card) {
-      continue;
-    }
-
+  for (const card of focusCards) {
     for (const resource of RESOURCE_ORDER) {
       const required = card.cost[resource] ?? 0;
       if (required > 0) {
@@ -93,17 +112,26 @@ function getPriorityResourceOrderFromHand(state: GameState, botPlayerId: PlayerI
     }
   }
 
-  const missingPriority = getPriorityOrderForResourceSet(missingResources, primaryResource);
+  const missingPriority = getPriorityOrderForResourceSet(missingResources, primaryResource, true);
   if (missingPriority.length > 0) {
     return missingPriority;
   }
 
-  const requiredPriority = getPriorityOrderForResourceSet(requiredResources, primaryResource);
+  const requiredPriority = getPriorityOrderForResourceSet(requiredResources, primaryResource, false);
   if (requiredPriority.length > 0) {
     return requiredPriority;
   }
 
-  return [primaryResource, ...RESOURCE_ORDER.filter((resource) => resource !== primaryResource)];
+  return getPriorityOrderForResourceSet(new Set<ResourceType>(RESOURCE_ORDER), primaryResource, true);
+}
+
+function shouldHarvestResourceType(state: GameState, botPlayerId: PlayerId, resourceType: ResourceType): boolean {
+  const priorityOrder = getPriorityResourceOrderFromHand(state, botPlayerId);
+  if (priorityOrder.length === 0) {
+    return true;
+  }
+
+  return new Set(priorityOrder.slice(0, 2)).has(resourceType);
 }
 
 function getFirstOpenBaseAdjacentTile(state: GameState, playerId: PlayerId): HexCoord | null {
@@ -193,11 +221,8 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
   const deployOpen = getFirstOpenBaseAdjacentTile(state, botPlayerId);
   const hand = [...state.zones[botPlayerId].hand].sort((a, b) => a.instanceId.localeCompare(b.instanceId));
   const resources = state.players[botPlayerId].resources;
-  const hasMissingResourceForHand = state.zones[botPlayerId].hand.some((cardInstance) => {
-    const card = getCardDefinition(cardInstance.cardId);
-    if (!card) {
-      return false;
-    }
+  const focusCards = getEconomyFocusCards(state, botPlayerId);
+  const hasMissingResourceForHand = focusCards.some((card) => {
     for (const resource of RESOURCE_ORDER) {
       if ((card.cost[resource] ?? 0) > resources[resource]) {
         return true;
@@ -291,6 +316,9 @@ function chooseHarvestCommand(state: GameState, botPlayerId: PlayerId, unit: Uni
   if (!node || node.controlledBy !== botPlayerId) {
     return null;
   }
+  if (!shouldHarvestResourceType(state, botPlayerId, node.resourceType)) {
+    return null;
+  }
 
   return {
     type: "HARVEST_NODE",
@@ -376,6 +404,9 @@ function chooseMoveCommand(state: GameState, botPlayerId: PlayerId, unit: UnitEn
 
   const objective = chooseObjectiveCoord(state, botPlayerId, unit);
   if (!objective) {
+    return null;
+  }
+  if (areSameHex(unit.coord, objective)) {
     return null;
   }
 

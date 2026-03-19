@@ -1,14 +1,26 @@
 import "./App.css";
 import { GameCanvas } from "./GameCanvas";
 import { DebugStackControls } from "./ui/DebugStackControls";
+import { GameHudPanels } from "./ui/GameHudPanels";
+import { GameTopBar } from "./ui/GameTopBar";
 import { HandTray } from "./ui/HandTray";
 
 function App() {
   return (
     <main className="app-shell">
-      <GameCanvas width={1024} height={768} />
-      <HandTray />
-      <DebugStackControls />
+      <GameTopBar />
+      <section className="game-workspace">
+        <div className="game-main-column">
+          <div className="game-board-shell">
+            <GameCanvas width={1024} height={768} />
+          </div>
+          <HandTray />
+        </div>
+        <aside className="game-sidebar">
+          <GameHudPanels />
+          <DebugStackControls />
+        </aside>
+      </section>
     </main>
   );
 }

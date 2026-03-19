@@ -196,4 +196,144 @@ describe("decideMvpBotCommand", () => {
 
     expect(command.to).toEqual({ q: -3, r: 0 });
   });
+
+  it("alloy bot prioritizes credits before off-faction biomass needs", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+
+    state.zones.player_1.hand = [];
+    state.zones.player_1.discard = [];
+    state.zones.player_1.exile = [];
+    moveCardFromDeckToHand(state, "player_1", "spore_burst");
+    moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
+
+    state.players.player_1.resources.credits = 0;
+    state.players.player_1.resources.alloy = 0;
+    state.players.player_1.resources.flux = 0;
+    state.players.player_1.resources.biomass = 0;
+
+    const harvester = state.entities.unit_player_1_harvester;
+    expect(harvester?.kind).toBe("unit");
+    if (!harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 harvester.");
+    }
+
+    harvester.coord = { q: -2, r: 1 };
+    harvester.movesRemaining = 2;
+    harvester.hasSummoningSickness = false;
+    state.selectedEntityId = harvester.id;
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command?.type).toBe("MOVE_UNIT");
+    if (!command || command.type !== "MOVE_UNIT") {
+      throw new Error("Expected credits-focused move command.");
+    }
+
+    expect(command.to).toEqual({ q: -2, r: 2 });
+  });
+
+  it("alloy bot skips harvesting controlled biomass when core economy needs credits", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+
+    const biomassNode = state.map.resourceNodes.find((node) => node.id === "frontier_biomass_northwest");
+    if (!biomassNode) {
+      throw new Error("Expected northwest biomass node.");
+    }
+    biomassNode.controlledBy = "player_1";
+
+    state.players.player_1.resources.credits = 0;
+    state.players.player_1.resources.alloy = 2;
+    state.players.player_1.resources.flux = 0;
+    state.players.player_1.resources.biomass = 0;
+
+    const harvester = state.entities.unit_player_1_harvester;
+    expect(harvester?.kind).toBe("unit");
+    if (!harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 harvester.");
+    }
+
+    harvester.coord = { ...biomassNode.coord };
+    harvester.movesRemaining = 2;
+    harvester.hasSummoningSickness = false;
+    harvester.carries = null;
+    state.selectedEntityId = harvester.id;
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command?.type).toBe("MOVE_UNIT");
+    if (!command || command.type !== "MOVE_UNIT") {
+      throw new Error("Expected bot to leave biomass node for credits.");
+    }
+
+    expect(command.to).toEqual({ q: -2, r: 2 });
+  });
+
+  it("holds a contested objective node instead of stepping off before end-phase capture", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+
+    state.zones.player_1.hand = [];
+    state.zones.player_1.discard = [];
+    state.zones.player_1.exile = [];
+    moveCardFromDeckToHand(state, "player_1", "alloy_guard_card");
+
+    const scout = state.entities.unit_player_1_scout;
+    const harvester = state.entities.unit_player_1_harvester;
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 units.");
+    }
+
+    scout.movesRemaining = 0;
+    scout.attacksRemaining = 0;
+    scout.hasSummoningSickness = true;
+    harvester.coord = { q: -3, r: -1 };
+    harvester.movesRemaining = 1;
+    harvester.hasSummoningSickness = false;
+    harvester.carries = null;
+    state.selectedEntityId = harvester.id;
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+  });
+
+  it("holds a base-adjacent dropoff tile when carrying cargo", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+
+    const scout = state.entities.unit_player_1_scout;
+    const harvester = state.entities.unit_player_1_harvester;
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 units.");
+    }
+
+    scout.movesRemaining = 0;
+    scout.attacksRemaining = 0;
+    scout.hasSummoningSickness = true;
+    harvester.coord = { q: -3, r: 0 };
+    harvester.movesRemaining = 1;
+    harvester.hasSummoningSickness = false;
+    harvester.carries = "alloy";
+    state.selectedEntityId = harvester.id;
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+  });
 });

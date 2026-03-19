@@ -3,7 +3,6 @@ import { areSameHex, axialToPixel, getMapAxialBounds, hexDistance, isWithinMapBo
 import type { PlayerId } from "./model/ids";
 import type { EntityState, GameState, HexCoord, UnitEntity } from "./model/state";
 import { HEX_SIZE, getMapOrigin } from "./render/layout";
-import { resolveCombatAttack } from "./systems/combat";
 
 function getPlayerColor(playerId: PlayerId): string {
   return playerId === "player_1" ? "#5cd1ff" : "#ff8a5b";
@@ -89,21 +88,6 @@ function getEntityAtCoord(state: GameState, coord: HexCoord, ignoreEntityId?: st
       return areSameHex(entity.coord, coord);
     }) ?? null
   );
-}
-
-function getLatestEconomyFeedback(state: GameState): string | null {
-  for (let index = state.log.length - 1; index >= 0; index -= 1) {
-    const entry = state.log[index];
-    if (
-      entry.text.includes("deposited") ||
-      entry.text.includes("cargo lost") ||
-      entry.text.includes("captured") ||
-      entry.text.includes("seized")
-    ) {
-      return entry.text;
-    }
-  }
-  return null;
 }
 
 function drawMoveRangeOverlay(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number): void {
@@ -207,65 +191,6 @@ function drawUnit(state: GameState, entity: EntityState, context: CanvasRenderin
   }
 }
 
-function drawHud(state: GameState, context: CanvasRenderingContext2D, viewport: { width: number; height: number }): void {
-  context.fillStyle = "rgba(6, 8, 24, 0.82)";
-  context.fillRect(12, 12, 560, 352);
-
-  context.fillStyle = "#d5e6ff";
-  context.font = "16px monospace";
-  context.textAlign = "left";
-  context.textBaseline = "top";
-  context.fillText(`Map: ${state.map.name}`, 24, 24);
-  context.fillText(`Turn: ${state.turn}`, 24, 46);
-  context.fillText(`Phase: ${state.phase}`, 24, 68);
-  context.fillText(`Active: ${state.activePlayerId}`, 24, 90);
-  context.fillText(`Priority: ${state.priorityPlayerId ?? "none"}`, 24, 112);
-  context.fillText(`Passes: ${state.consecutivePriorityPasses}`, 24, 134);
-  context.fillText(`Stack: ${state.stack.length}`, 24, 156);
-  context.fillText(`State Version: ${state.stateVersion}`, 24, 178);
-  context.fillText(`Selected: ${state.selectedEntityId ?? "none"}`, 24, 200);
-  context.fillText(
-    `Hover: ${state.hoveredHex ? `${state.hoveredHex.q}, ${state.hoveredHex.r}` : "none"}`,
-    24,
-    222
-  );
-  context.fillText(`Winner: ${state.winner ?? "none"}`, 24, 244);
-
-  const latestEconomyFeedback = getLatestEconomyFeedback(state);
-
-  const p1 = state.players.player_1.resources;
-  const p2 = state.players.player_2.resources;
-
-  context.fillStyle = "#9fd8ff";
-  context.fillText(`P1 C:${p1.credits} A:${p1.alloy} F:${p1.flux} B:${p1.biomass}`, 230, 68);
-
-  context.fillStyle = "#ffb49a";
-  context.fillText(`P2 C:${p2.credits} A:${p2.alloy} F:${p2.flux} B:${p2.biomass}`, 230, 90);
-
-  context.fillStyle = "#9ca7d6";
-  context.fillText("Click unit: select/deselect (active player)", 230, 112);
-  context.fillText("Arrow Keys: Move selected (tactical phase)", 230, 134);
-  context.fillText("A: Attack first target in range", 230, 156);
-  context.fillText("H: Harvest with selected resource unit", 230, 178);
-  context.fillText("Click hand cards to cast/deploy (bottom tray)", 230, 200);
-  context.fillText("P: Pass priority, R/T/C: No-op/Ping/Counter", 230, 222);
-  context.fillText("N: End phase, U: Select first unit", 230, 244);
-  context.fillText("B: Toggle P2 bot (Shift+B toggles P1 bot)", 230, 266);
-
-  if (state.lastRejectedReason) {
-    context.fillStyle = "#ff9f92";
-    context.fillText(`Last Reject: ${state.lastRejectedReason}`, 24, 332);
-  }
-
-  if (latestEconomyFeedback) {
-    context.fillStyle = "#8dffcf";
-    context.fillText(`Economy: ${latestEconomyFeedback}`, 24, 310);
-  }
-
-  context.strokeStyle = "#1f2a58";
-  context.strokeRect(0.5, 0.5, viewport.width - 1, viewport.height - 1);
-}
-
 function drawHoverHexAndTargetPreview(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number): void {
   if (!state.hoveredHex || !isWithinMapBounds(state.hoveredHex, state.map)) {
     return;
@@ -287,10 +212,6 @@ function drawHoverHexAndTargetPreview(state: GameState, context: CanvasRendering
   const targetPos = toPixel(hoveredEntity.coord, originX, originY);
   const distance = hexDistance(selected.coord, hoveredEntity.coord);
   const canAttackNow = state.phase === "tactical" && selected.attacksRemaining > 0 && distance <= selected.attackRange;
-  const combatPreview = resolveCombatAttack(state, selected, hoveredEntity);
-  const projectedDamage = combatPreview.finalDamage;
-  const projectedHp = combatPreview.targetHpAfter;
-  const isProjectedKill = combatPreview.targetDestroyed;
 
   context.beginPath();
   context.moveTo(selectedPos.x, selectedPos.y);
@@ -298,57 +219,6 @@ function drawHoverHexAndTargetPreview(state: GameState, context: CanvasRendering
   context.strokeStyle = canAttackNow ? "rgba(107, 238, 142, 0.85)" : "rgba(255, 126, 126, 0.85)";
   context.lineWidth = 2;
   context.stroke();
-
-  context.fillStyle = canAttackNow ? "#a8ffc0" : "#ffb1ad";
-  context.font = "12px monospace";
-  context.textAlign = "left";
-  context.textBaseline = "top";
-  context.fillText(
-    `Target ${hoveredEntity.id}: ${distance}/${selected.attackRange}, Dmg ${projectedDamage}, HP ${hoveredEntity.hp}->${projectedHp}, KO ${isProjectedKill ? "yes" : "no"}`,
-    24,
-    324
-  );
-  context.fillText(
-    `Combat: raw ${combatPreview.rawAttack} - def ${combatPreview.defense} - supply ${combatPreview.supplyPenalty} (dist ${combatPreview.distanceFromFriendlyBase})`,
-    24,
-    344
-  );
-}
-
-function drawSelectedUnitPanel(state: GameState, context: CanvasRenderingContext2D, viewport: { width: number; height: number }): void {
-  const selected = getSelectedUnit(state);
-  if (!selected) {
-    return;
-  }
-
-  const panelWidth = 250;
-  const panelHeight = 192;
-  const x = viewport.width - panelWidth - 16;
-  const y = 16;
-
-  context.fillStyle = "rgba(7, 11, 30, 0.88)";
-  context.fillRect(x, y, panelWidth, panelHeight);
-
-  context.strokeStyle = "#274084";
-  context.lineWidth = 1;
-  context.strokeRect(x + 0.5, y + 0.5, panelWidth - 1, panelHeight - 1);
-
-  context.fillStyle = getPlayerColor(selected.ownerId);
-  context.font = "15px monospace";
-  context.textAlign = "left";
-  context.textBaseline = "top";
-  context.fillText("Selected Unit", x + 12, y + 10);
-
-  context.fillStyle = "#d5e6ff";
-  context.font = "13px monospace";
-  context.fillText(`ID: ${selected.id}`, x + 12, y + 34);
-  context.fillText(`Role: ${selected.role}`, x + 12, y + 54);
-  context.fillText(`HP: ${selected.hp}  Armor: ${selected.armor}`, x + 12, y + 74);
-  context.fillText(`Attack: ${selected.attackDamage}  Range: ${selected.attackRange}`, x + 12, y + 94);
-  context.fillText(`Move: ${selected.movesRemaining}/${selected.moveRange}`, x + 12, y + 114);
-  context.fillText(`Attacks: ${selected.attacksRemaining}/${selected.attackActionsPerTurn}`, x + 12, y + 134);
-  context.fillText(`Sickness: ${selected.hasSummoningSickness ? "yes" : "no"}`, x + 12, y + 154);
-  context.fillText(`Cargo: ${selected.carries ?? "none"}`, x + 12, y + 174);
 }
 
 export function updateGame(state: GameState, frame: GameFrame): void {
@@ -375,6 +245,6 @@ export function renderGame(state: GameState, frame: GameFrame): void {
     drawUnit(state, entity, context, originX, originY);
   }
 
-  drawHud(state, context, viewport);
-  drawSelectedUnitPanel(state, context, viewport);
+  context.strokeStyle = "#1f2a58";
+  context.strokeRect(0.5, 0.5, viewport.width - 1, viewport.height - 1);
 }
