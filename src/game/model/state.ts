@@ -55,17 +55,21 @@ export type PlayerState = {
 export type BaseEntity = {
   id: EntityId;
   kind: "base";
+  name: string;
   ownerId: PlayerId;
   hp: number;
+  maxHp: number;
   coord: HexCoord;
 };
 
 export type UnitEntity = {
   id: EntityId;
   kind: "unit";
+  name: string;
   ownerId: PlayerId;
   role: UnitRole;
   hp: number;
+  maxHp: number;
   attackDamage: number;
   armor: number;
   moveRange: number;
@@ -73,6 +77,7 @@ export type UnitEntity = {
   attackActionsPerTurn: number;
   coord: HexCoord;
   carries: ResourceType | null;
+  sourceCardId: string | null;
   hasSummoningSickness: boolean;
   movesRemaining: number;
   attacksRemaining: number;
@@ -193,23 +198,29 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     [baseOneId]: {
       id: baseOneId,
       kind: "base",
+      name: "Player 1 Base",
       ownerId: PLAYER_ONE,
       hp: 100,
+      maxHp: 100,
       coord: { ...map.spawnPoints.player_1 },
     },
     [baseTwoId]: {
       id: baseTwoId,
       kind: "base",
+      name: "Player 2 Base",
       ownerId: PLAYER_TWO,
       hp: 100,
+      maxHp: 100,
       coord: { ...map.spawnPoints.player_2 },
     },
     [unitOneId]: {
       id: unitOneId,
       kind: "unit",
+      name: "Frontline Scout",
       ownerId: PLAYER_ONE,
       role: "combat",
       hp: 6,
+      maxHp: 6,
       attackDamage: 2,
       armor: 0,
       moveRange: 2,
@@ -220,6 +231,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
         r: map.spawnPoints.player_1.r,
       },
       carries: null,
+      sourceCardId: "frontline_scout_card",
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
@@ -227,9 +239,11 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     [unitTwoId]: {
       id: unitTwoId,
       kind: "unit",
+      name: "Command Runner",
       ownerId: PLAYER_TWO,
       role: "combat",
       hp: 6,
+      maxHp: 6,
       attackDamage: 2,
       armor: 0,
       moveRange: 2,
@@ -240,6 +254,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
         r: map.spawnPoints.player_2.r,
       },
       carries: null,
+      sourceCardId: "flux_runner_card",
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
@@ -247,9 +262,11 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     [harvesterOneId]: {
       id: harvesterOneId,
       kind: "unit",
+      name: "Expedition Harvester",
       ownerId: PLAYER_ONE,
       role: "resource",
       hp: 5,
+      maxHp: 5,
       attackDamage: 1,
       armor: 0,
       moveRange: 2,
@@ -260,6 +277,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
         r: map.spawnPoints.player_1.r + 1,
       },
       carries: null,
+      sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
@@ -267,9 +285,11 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     [harvesterTwoId]: {
       id: harvesterTwoId,
       kind: "unit",
+      name: "Expedition Harvester",
       ownerId: PLAYER_TWO,
       role: "resource",
       hp: 5,
+      maxHp: 5,
       attackDamage: 1,
       armor: 0,
       moveRange: 2,
@@ -280,6 +300,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
         r: map.spawnPoints.player_2.r - 1,
       },
       carries: null,
+      sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
@@ -292,7 +313,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   } satisfies Record<PlayerId, PlayerZones>;
 
   return {
-    stateVersion: 8,
+    stateVersion: 10,
     matchId: options.matchId ?? "match_frontier_belt",
     turn: 1,
     phase: "start",

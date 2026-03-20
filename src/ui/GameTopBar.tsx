@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { getGameRuntime } from "../game/runtime";
-import type { GamePhase, ResourceType } from "../game/model/enums";
+import type { Faction, GamePhase, ResourceType } from "../game/model/enums";
 import type { PlayerId } from "../game/model/ids";
+import { formatFactionName, getPlayerLabel, getResourceTheme } from "../game/presentation";
+import { ResourceIcon } from "./ResourceIcon";
 
 const PHASE_ORDER: GamePhase[] = ["start", "economy", "main", "tactical", "end"];
 const RESOURCE_ORDER: ResourceType[] = ["credits", "alloy", "flux", "biomass"];
 
 type PlayerTopBarSnapshot = {
   id: PlayerId;
-  faction: string;
+  faction: Faction;
   resources: Record<ResourceType, number>;
   hand: number;
   deck: number;
@@ -66,19 +68,6 @@ function readSnapshot(): TopBarSnapshot {
   };
 }
 
-function formatResourceLabel(resource: ResourceType): string {
-  if (resource === "credits") {
-    return "C";
-  }
-  if (resource === "alloy") {
-    return "A";
-  }
-  if (resource === "flux") {
-    return "F";
-  }
-  return "B";
-}
-
 export function GameTopBar() {
   const runtime = getGameRuntime();
   const [snapshot, setSnapshot] = useState<TopBarSnapshot>(() => readSnapshot());
@@ -114,8 +103,8 @@ export function GameTopBar() {
           <strong>Turn {snapshot.turn}</strong>
         </div>
         <div className="game-top-bar-status">
-          <span>Active: {snapshot.activePlayerId}</span>
-          <span>Priority: {snapshot.priorityPlayerId ?? "none"}</span>
+          <span>Active: {getPlayerLabel(snapshot.activePlayerId)}</span>
+          <span>Priority: {snapshot.priorityPlayerId ? getPlayerLabel(snapshot.priorityPlayerId) : "none"}</span>
           <span>Stack: {snapshot.stackSize}</span>
           <span>Passes: {snapshot.consecutivePasses}</span>
         </div>
@@ -154,16 +143,27 @@ export function GameTopBar() {
 
       <div className="game-top-bar-players">
         {snapshot.players.map((player) => (
-          <article key={player.id} className={["player-resource-card", player.id === snapshot.activePlayerId ? "active" : ""].join(" ")}>
+          <article
+            key={player.id}
+            className={[
+              "player-resource-card",
+              player.id === snapshot.activePlayerId ? "active" : "",
+              player.id === "player_1" ? "player-one" : "player-two",
+            ].join(" ")}
+          >
             <div className="player-resource-header">
-              <strong>{player.id}</strong>
-              <span>{player.faction}</span>
+              <strong>{getPlayerLabel(player.id)}</strong>
+              <span>{formatFactionName(player.faction)}</span>
               <span>Bot: {player.botAutoplay ? "on" : "off"}</span>
             </div>
             <div className="player-resource-values">
               {RESOURCE_ORDER.map((resource) => (
-                <span key={resource}>
-                  {formatResourceLabel(resource)} {player.resources[resource]}
+                <span key={resource} className={`player-resource-chip ${resource}`}>
+                  <span className="player-resource-symbol">
+                    <ResourceIcon resource={resource} size={16} />
+                  </span>
+                  <strong>{player.resources[resource]}</strong>
+                  <small>{getResourceTheme(resource).shortLabel}</small>
                 </span>
               ))}
             </div>

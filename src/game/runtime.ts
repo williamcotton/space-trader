@@ -6,17 +6,19 @@ import { getStackEffectDefinition } from "./content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
 import { OPENING_HAND_SIZE, createInitialGameState, createInitialZonesForPlayer } from "./model/state";
 import type { PlayerId } from "./model/ids";
-import { HEX_SIZE, getMapOrigin } from "./render/layout";
+import { ensureEntityPresentation } from "./presentation";
+import { captureAnimationSnapshot, buildAnimationsFromEvents, stepAnimations } from "./render/animations";
+import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
 import type { GameState } from "./model/state";
-import type { GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
+import type { CanvasAnimation, GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
 
 const INITIAL_VIEWPORT: GameViewport = {
   width: 1024,
   height: 768,
 };
 
-const CURRENT_STATE_VERSION = 9;
+const CURRENT_STATE_VERSION = 10;
 const BOT_ACTION_INTERVAL_SECONDS = 0.16;
 
 type BotDecisionSystem = typeof decideMvpBotCommand;
@@ -30,9 +32,11 @@ function migratePhaseFourHarvesters(state: GameState): void {
     state.entities[playerOneHarvesterId] = {
       id: playerOneHarvesterId,
       kind: "unit",
+      name: "Expedition Harvester",
       ownerId: "player_1",
       role: "resource",
       hp: 5,
+      maxHp: 5,
       attackDamage: 1,
       armor: 0,
       moveRange: 2,
@@ -40,6 +44,7 @@ function migratePhaseFourHarvesters(state: GameState): void {
       attackActionsPerTurn: 1,
       coord: { q: spawn.q, r: spawn.r + 1 },
       carries: null,
+      sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
@@ -51,9 +56,11 @@ function migratePhaseFourHarvesters(state: GameState): void {
     state.entities[playerTwoHarvesterId] = {
       id: playerTwoHarvesterId,
       kind: "unit",
+      name: "Expedition Harvester",
       ownerId: "player_2",
       role: "resource",
       hp: 5,
+      maxHp: 5,
       attackDamage: 1,
       armor: 0,
       moveRange: 2,
@@ -61,6 +68,7 @@ function migratePhaseFourHarvesters(state: GameState): void {
       attackActionsPerTurn: 1,
       coord: { q: spawn.q, r: spawn.r - 1 },
       carries: null,
+      sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
@@ -116,10 +124,13 @@ function migrateRuntimeState(state: GameState): void {
   }
 
   for (const entity of Object.values(state.entities)) {
-    if (entity.kind !== "unit") {
-      continue;
+    ensureEntityPresentation(entity, state);
+
+    if (typeof entity.maxHp !== "number") {
+      entity.maxHp = entity.hp;
     }
-    if (typeof entity.carries === "undefined") {
+
+    if (entity.kind === "unit" && typeof entity.carries === "undefined") {
       entity.carries = null;
     }
   }
@@ -166,7 +177,7 @@ function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v9 (economy and hand-size pacing update).",
+      text: "State migrated to v10 (presentation metadata and render animation update).",
     });
   }
 }
@@ -177,6 +188,8 @@ class GameRuntime {
   private renderSystem: RenderSystem = renderGame;
   private botDecisionSystem: BotDecisionSystem = decideMvpBotCommand;
   private botActionCooldownSeconds = 0;
+  private elapsedSeconds = 0;
+  private animations: CanvasAnimation[] = [];
   private botAutoplayEnabled: Record<PlayerId, boolean> = {
     player_1: false,
     player_2: true,
@@ -186,6 +199,7 @@ class GameRuntime {
   constructor(state: GameState = createInitialGameState({ map: FRONTIER_BELT_MAP })) {
     this.state = state;
     migrateRuntimeState(this.state);
+    this.rehydrateHotState();
   }
 
   setViewport(width: number, height: number): void {
@@ -193,8 +207,31 @@ class GameRuntime {
     this.viewport.height = height;
   }
 
+  rehydrateHotState(): void {
+    if (!Array.isArray(this.animations)) {
+      this.animations = [];
+    }
+    if (typeof this.elapsedSeconds !== "number") {
+      this.elapsedSeconds = 0;
+    }
+    if (!this.botAutoplayEnabled) {
+      this.botAutoplayEnabled = {
+        player_1: false,
+        player_2: true,
+      };
+    }
+  }
+
   dispatch(command: GameCommand): DispatchResult {
-    return dispatchCommand(this.state, command);
+    const before = captureAnimationSnapshot(this.state);
+    const result = dispatchCommand(this.state, command);
+    if (result.ok && result.events.length > 0) {
+      this.animations.push(...buildAnimationsFromEvents(result.events, before, this.state));
+      if (this.animations.length > 32) {
+        this.animations = this.animations.slice(-32);
+      }
+    }
+    return result;
   }
 
   isBotAutoplayEnabled(playerId: PlayerId): boolean {
@@ -224,8 +261,8 @@ class GameRuntime {
   }
 
   private getHexAtScreenPoint(pixelX: number, pixelY: number): { q: number; r: number } | null {
-    const origin = getMapOrigin(this.viewport);
-    const hoveredHex = pixelToAxial({ x: pixelX, y: pixelY }, origin, HEX_SIZE);
+    const metrics = getHexMetrics(this.viewport, this.state.map);
+    const hoveredHex = pixelToAxial({ x: pixelX, y: pixelY }, metrics.origin, metrics.size);
     if (!isWithinMapBounds(hoveredHex, this.state.map)) {
       return null;
     }
@@ -486,12 +523,18 @@ class GameRuntime {
   }
 
   step(context: CanvasRenderingContext2D, deltaSeconds: number): void {
+    this.elapsedSeconds += deltaSeconds;
     this.stepBotAutoplay(deltaSeconds);
+    this.animations = stepAnimations(this.animations, deltaSeconds);
 
     const frame: GameFrame = {
       context,
       viewport: this.viewport,
       deltaSeconds,
+      transients: {
+        animations: this.animations,
+        timeSeconds: this.elapsedSeconds,
+      },
     };
 
     this.updateSystem(this.state, frame);
@@ -505,6 +548,8 @@ type RuntimeHotData = {
 
 const hotData = (import.meta.hot?.data ?? {}) as RuntimeHotData;
 const runtime = hotData.runtime ?? new GameRuntime();
+Object.setPrototypeOf(runtime, GameRuntime.prototype);
+runtime.rehydrateHotState();
 migrateRuntimeState(runtime.state);
 
 runtime.replaceSystems(updateGame, renderGame);

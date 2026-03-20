@@ -12,7 +12,7 @@ function App() {
       <section className="game-workspace">
         <div className="game-main-column">
           <div className="game-board-shell">
-            <GameCanvas width={1024} height={768} />
+            <GameCanvas />
           </div>
           <HandTray />
         </div>

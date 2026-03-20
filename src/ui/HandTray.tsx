@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCardDefinition, type CardCost } from "../game/content/cards/catalog";
 import { isCounterResponse } from "../game/content/stackEffects";
+import type { ResourceType } from "../game/model/enums";
+import { formatFactionName, getResourceTheme } from "../game/presentation";
 import { getGameRuntime } from "../game/runtime";
 import type { GameState } from "../game/model/state";
+import { ResourceIcon } from "./ResourceIcon";
 
 type HandCardView = {
   instanceId: string;
@@ -23,24 +26,13 @@ type HandSnapshot = {
   hasOpenBaseAdjacentTile: boolean;
 };
 
-function formatCost(cost: CardCost): string {
-  const parts: string[] = [];
-  if (cost.credits) {
-    parts.push(`C${cost.credits}`);
-  }
-  if (cost.alloy) {
-    parts.push(`A${cost.alloy}`);
-  }
-  if (cost.flux) {
-    parts.push(`F${cost.flux}`);
-  }
-  if (cost.biomass) {
-    parts.push(`B${cost.biomass}`);
-  }
-  if (parts.length === 0) {
-    return "Free";
-  }
-  return parts.join(" ");
+function getCostEntries(cost: CardCost): Array<{ resource: ResourceType; amount: number }> {
+  return (["credits", "alloy", "flux", "biomass"] as const)
+    .map((resource) => ({
+      resource,
+      amount: cost[resource] ?? 0,
+    }))
+    .filter((entry) => entry.amount > 0);
 }
 
 function canAfford(resources: HandSnapshot["resources"], cost: CardCost): boolean {
@@ -128,7 +120,7 @@ export function HandTray() {
             playable: false,
             title: card.cardId,
             subtitle: "unknown",
-            costText: "-",
+            costEntries: [] as Array<{ resource: ResourceType; amount: number }>,
             text: "Unknown card",
             counterTarget: undefined as string | undefined,
           };
@@ -150,8 +142,8 @@ export function HandTray() {
           ...card,
           playable: !snapshot.winner && affordable && speedOk && deploymentOk && counterOk,
           title: definition.name,
-          subtitle: `${definition.kind} · ${definition.speed}`,
-          costText: formatCost(definition.cost),
+          subtitle: `${formatFactionName(definition.faction)} · ${definition.kind} · ${definition.speed}`,
+          costEntries: getCostEntries(definition.cost),
           text: definition.text,
           counterTarget,
         };
@@ -180,7 +172,18 @@ export function HandTray() {
             >
               <span className="hand-card-title">{card.title}</span>
               <span className="hand-card-subtitle">{card.subtitle}</span>
-              <span className="hand-card-cost">{card.costText}</span>
+              <span className="hand-card-cost">
+                {card.costEntries.length === 0 ? (
+                  <span className="resource-cost-chip free">Free</span>
+                ) : (
+                  card.costEntries.map((entry) => (
+                    <span key={entry.resource} className="resource-cost-chip" title={getResourceTheme(entry.resource).label}>
+                      <ResourceIcon resource={entry.resource} />
+                      <strong>{entry.amount}</strong>
+                    </span>
+                  ))
+                )}
+              </span>
               <span className="hand-card-text">{card.text}</span>
             </button>
           ))
