@@ -86,6 +86,31 @@ describe("decideMvpBotCommand", () => {
     expect(playedCard).toBeDefined();
   });
 
+  it("rebuilds combat presence before playing more economy units when behind on board", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "main";
+    state.stack = [];
+
+    delete state.entities.unit_player_2_scout;
+    moveCardFromDeckToHand(state, "player_2", "echo_recall");
+
+    state.players.player_2.resources.credits = 3;
+    state.players.player_2.resources.flux = 1;
+    state.players.player_2.resources.alloy = 0;
+    state.players.player_2.resources.biomass = 0;
+
+    const command = decideMvpBotCommand(state, "player_2");
+    expect(command?.type).toBe("PLAY_CARD");
+    if (!command || command.type !== "PLAY_CARD") {
+      throw new Error("Expected bot to rebuild combat board.");
+    }
+
+    const playedCard = state.zones.player_2.hand.find((card) => card.instanceId === command.cardInstanceId);
+    expect(playedCard?.cardId).toBe("flux_runner_card");
+  });
+
   it("attacks with selected combat unit when target is in range during tactical phase", () => {
     const state = setupState();
     state.activePlayerId = "player_2";

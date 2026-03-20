@@ -420,14 +420,14 @@ describe("dispatchCommand", () => {
   it("initializes with opening hands and validated starter decks", () => {
     const state = setupState();
 
-    expect(state.zones.player_1.hand).toHaveLength(7);
-    expect(state.zones.player_2.hand).toHaveLength(7);
-    expect(state.zones.player_1.deck).toHaveLength(53);
-    expect(state.zones.player_2.deck).toHaveLength(53);
-    expect(state.players.player_1.handSize).toBe(7);
-    expect(state.players.player_2.handSize).toBe(7);
-    expect(state.players.player_1.deckSize).toBe(53);
-    expect(state.players.player_2.deckSize).toBe(53);
+    expect(state.zones.player_1.hand).toHaveLength(5);
+    expect(state.zones.player_2.hand).toHaveLength(5);
+    expect(state.zones.player_1.deck).toHaveLength(55);
+    expect(state.zones.player_2.deck).toHaveLength(55);
+    expect(state.players.player_1.handSize).toBe(5);
+    expect(state.players.player_2.handSize).toBe(5);
+    expect(state.players.player_1.deckSize).toBe(55);
+    expect(state.players.player_2.deckSize).toBe(55);
   });
 
   it("draws one card when a new turn enters start phase", () => {
@@ -473,6 +473,28 @@ describe("dispatchCommand", () => {
     expect(state.zones.player_1.deck.length).toBe(p1InitialDeck - 1);
     expect(state.players.player_1.handSize).toBe(state.zones.player_1.hand.length);
     expect(state.players.player_1.deckSize).toBe(state.zones.player_1.deck.length);
+  });
+
+  it("skips start-phase draw when the active player is already at the hand cap", () => {
+    const state = setupState();
+
+    moveCardFromDeckToHand(state, "player_2", "expedition_harvester_card");
+    moveCardFromDeckToHand(state, "player_2", "null_intercept");
+    expect(state.zones.player_2.hand).toHaveLength(7);
+
+    advanceToPhase(state, "end");
+    const beforeHand = state.zones.player_2.hand.length;
+    const beforeDeck = state.zones.player_2.deck.length;
+    const handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+
+    expect(handoff.ok).toBe(true);
+    expect(state.phase).toBe("start");
+    expect(state.activePlayerId).toBe("player_2");
+    expect(state.zones.player_2.hand.length).toBe(beforeHand);
+    expect(state.zones.player_2.deck.length).toBe(beforeDeck);
   });
 
   it("plays a tactic card from hand to stack and moves it to discard on resolve", () => {
@@ -753,6 +775,28 @@ describe("dispatchCommand", () => {
       throw new Error("Expected still-loaded harvester.");
     }
     expect(stillLoaded.carries).toBe("flux");
+  });
+
+  it("deposits two credits from a loaded credits harvester", () => {
+    const state = setupState();
+    const harvester = state.entities.unit_player_1_harvester;
+    expect(harvester?.kind).toBe("unit");
+    if (!harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 harvester.");
+    }
+
+    harvester.carries = "credits";
+    harvester.coord = { q: -3, r: 0 };
+    const beforeCredits = state.players.player_1.resources.credits;
+
+    const economyStep = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+
+    expect(economyStep.ok).toBe(true);
+    expect(state.phase).toBe("economy");
+    expect(state.players.player_1.resources.credits).toBe(beforeCredits + 2);
   });
 
   it("loses cargo when a loaded harvester is destroyed", () => {

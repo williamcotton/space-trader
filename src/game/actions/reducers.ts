@@ -6,7 +6,7 @@ import { advancePhase } from "../turn/phaseMachine";
 import { createStackItemId, getOpponentPlayer, peekTopStackItem, popTopStackItem, removeStackItemById } from "../turn/stack";
 import { validateCommand } from "../rules/validators";
 import type { PlayerId } from "../model/ids";
-import { syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../model/state";
+import { MAX_HAND_SIZE, syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../model/state";
 import { hexDistance, isWithinMapBounds } from "../model/hex";
 import { resolveCombatAttack } from "../systems/combat";
 import { getResourceNodeById, resolveEconomyDeposits } from "../systems/harvesting";
@@ -66,6 +66,15 @@ function addCardToZone(state: GameState, playerId: PlayerId, zone: "hand" | "dis
 }
 
 function drawCardForPlayer(state: GameState, playerId: PlayerId, drawReason: "opening_hand" | "start_phase_draw"): void {
+  if (state.zones[playerId].hand.length >= MAX_HAND_SIZE) {
+    state.log.push({
+      turn: state.turn,
+      text: `${playerId} skipped satellite download (${drawReason}) at hand limit ${MAX_HAND_SIZE}.`,
+    });
+    syncPlayerZoneCounts(state);
+    return;
+  }
+
   const deck = state.zones[playerId].deck;
   const next = deck.shift();
   if (!next) {

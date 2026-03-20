@@ -66,6 +66,20 @@ function getEconomyFocusCards(state: GameState, botPlayerId: PlayerId): CardDefi
   return coreCards.length > 0 ? coreCards : handCards;
 }
 
+function getUnitRoleCounts(state: GameState, playerId: PlayerId): Record<"combat" | "resource" | "utility", number> {
+  const counts = {
+    combat: 0,
+    resource: 0,
+    utility: 0,
+  };
+
+  for (const unit of getPlayerUnits(state, playerId)) {
+    counts[unit.role] += 1;
+  }
+
+  return counts;
+}
+
 function getPriorityOrderForResourceSet(resources: Set<ResourceType>, primaryResource: ResourceType, creditsFirst: boolean): ResourceType[] {
   const ordered: ResourceType[] = [];
 
@@ -221,7 +235,10 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
   const deployOpen = getFirstOpenBaseAdjacentTile(state, botPlayerId);
   const hand = [...state.zones[botPlayerId].hand].sort((a, b) => a.instanceId.localeCompare(b.instanceId));
   const resources = state.players[botPlayerId].resources;
+  const playerFaction = state.players[botPlayerId].faction;
   const focusCards = getEconomyFocusCards(state, botPlayerId);
+  const boardCounts = getUnitRoleCounts(state, botPlayerId);
+  const enemyCombatCount = getUnitRoleCounts(state, getOpponentPlayer(botPlayerId)).combat;
   const hasMissingResourceForHand = focusCards.some((card) => {
     for (const resource of RESOURCE_ORDER) {
       if ((card.cost[resource] ?? 0) > resources[resource]) {
@@ -230,37 +247,114 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
     }
     return false;
   });
+  const desiredResourceUnits = hasMissingResourceForHand ? 2 : 1;
 
-  const scored = hand
+  const candidates = hand
     .map((cardInstance) => {
       const card = getCardDefinition(cardInstance.cardId);
-      if (!card || !canAfford(state, botPlayerId, card.cost)) {
+      if (!card || card.kind !== "unit" || !canAfford(state, botPlayerId, card.cost) || !deployOpen) {
         return null;
       }
 
-      if (card.kind === "unit") {
-        if (!deployOpen) {
-          return null;
-        }
+      const totalCost = (card.cost.credits ?? 0) + (card.cost.alloy ?? 0) + (card.cost.flux ?? 0) + (card.cost.biomass ?? 0);
+      const isFactionCard = card.faction === playerFaction;
+      const isNeutralCard = card.faction === "neutral";
+      const isCoreCard = isFactionCard || isNeutralCard;
 
-        const totalCost = (card.cost.credits ?? 0) + (card.cost.alloy ?? 0) + (card.cost.flux ?? 0) + (card.cost.biomass ?? 0);
-        const roleScore =
-          card.unit.role === "resource"
-            ? hasMissingResourceForHand
-              ? 45
-              : 26
-            : card.unit.role === "combat"
-              ? 30 + card.unit.attackDamage + card.unit.hp * 0.25
-              : 20;
-        return {
-          cardInstanceId: cardInstance.instanceId,
-          score: roleScore - totalCost,
-        };
+      return {
+        cardInstanceId: cardInstance.instanceId,
+        card,
+        totalCost,
+        isCoreCard,
+        isFactionCard,
+        isNeutralCard,
+      };
+    })
+    .filter(
+      (
+        entry
+      ): entry is {
+        cardInstanceId: string;
+        card: Extract<CardDefinition, { kind: "unit" }>;
+        totalCost: number;
+        isCoreCard: boolean;
+        isFactionCard: boolean;
+        isNeutralCard: boolean;
+      } => Boolean(entry)
+    );
+
+  const candidatePool = candidates.some((entry) => entry.isCoreCard)
+    ? candidates.filter((entry) => entry.isCoreCard)
+    : candidates;
+
+  const emergencyCombatCandidates = candidatePool
+    .filter((entry) => entry.card.unit.role === "combat")
+    .sort((a, b) => {
+      const scoreA =
+        (a.isFactionCard ? 12 : a.isNeutralCard ? 4 : -8) +
+        a.card.unit.attackDamage * 4 +
+        a.card.unit.hp * 2 +
+        a.card.unit.armor * 5 -
+        a.totalCost * 3;
+      const scoreB =
+        (b.isFactionCard ? 12 : b.isNeutralCard ? 4 : -8) +
+        b.card.unit.attackDamage * 4 +
+        b.card.unit.hp * 2 +
+        b.card.unit.armor * 5 -
+        b.totalCost * 3;
+      return scoreB - scoreA || a.cardInstanceId.localeCompare(b.cardInstanceId);
+    });
+
+  if ((boardCounts.combat === 0 || enemyCombatCount > boardCounts.combat) && emergencyCombatCandidates[0]) {
+    return {
+      type: "PLAY_CARD",
+      playerId: botPlayerId,
+      cardInstanceId: emergencyCombatCandidates[0].cardInstanceId,
+    };
+  }
+
+  const scored = candidatePool
+    .map((entry) => {
+      let score = 0;
+
+      if (entry.card.unit.role === "combat") {
+        score += 34 + entry.card.unit.attackDamage * 5 + entry.card.unit.hp * 1.5 + entry.card.unit.armor * 6 + entry.card.unit.moveRange;
+        if (boardCounts.combat === 1) {
+          score += 10;
+        }
+        if (entry.isFactionCard) {
+          score += 10;
+        } else if (!entry.isNeutralCard) {
+          score -= 8;
+        }
+      } else if (entry.card.unit.role === "resource") {
+        score += boardCounts.resource === 0 ? 50 : 22;
+        if (hasMissingResourceForHand && boardCounts.resource < desiredResourceUnits) {
+          score += 12;
+        }
+        if (boardCounts.resource >= desiredResourceUnits) {
+          score -= 28 + (boardCounts.resource - desiredResourceUnits) * 10;
+        }
+        if (enemyCombatCount > boardCounts.combat) {
+          score -= 18;
+        }
+        if (!entry.isNeutralCard && !entry.isFactionCard) {
+          score -= 16;
+        }
+      } else {
+        score += boardCounts.utility === 0 ? 16 : 8;
+        if (enemyCombatCount > boardCounts.combat) {
+          score -= 10;
+        }
       }
 
-      return null;
+      score -= entry.totalCost * 4;
+
+      return {
+        cardInstanceId: entry.cardInstanceId,
+        score,
+      };
     })
-    .filter((entry): entry is { cardInstanceId: string; score: number } => Boolean(entry))
     .sort((a, b) => b.score - a.score || a.cardInstanceId.localeCompare(b.cardInstanceId));
 
   const best = scored[0];

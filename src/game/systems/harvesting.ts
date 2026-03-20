@@ -14,6 +14,10 @@ function createEmptyResourceTally(): ResourceTally {
   };
 }
 
+function getDepositAmount(resourceType: ResourceType): number {
+  return resourceType === "credits" ? 2 : 1;
+}
+
 function getPlayerBase(state: GameState, playerId: PlayerId) {
   const baseId = state.players[playerId].baseEntityId;
   const base = state.entities[baseId];
@@ -54,13 +58,14 @@ export function resolveEconomyDeposits(state: GameState, playerId: PlayerId): { 
     }
 
     const carried = entity.carries;
+    const amount = getDepositAmount(carried);
     entity.carries = null;
-    state.players[playerId].resources[carried] += 1;
-    byResource[carried] += 1;
-    deposited += 1;
+    state.players[playerId].resources[carried] += amount;
+    byResource[carried] += amount;
+    deposited += amount;
     state.log.push({
       turn: state.turn,
-      text: `${playerId} deposited 1 ${carried} from ${entity.id}.`,
+      text: `${playerId} deposited ${amount} ${carried} from ${entity.id}.`,
     });
   }
 

@@ -2,6 +2,9 @@ import type { Faction, GamePhase, ResourceType, UnitRole } from "./enums";
 import { PLAYER_ONE, PLAYER_TWO, type EntityId, type NodeId, type PlayerId } from "./ids";
 import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
 
+export const OPENING_HAND_SIZE = 5;
+export const MAX_HAND_SIZE = 7;
+
 export type HexCoord = {
   q: number;
   r: number;
@@ -125,7 +128,7 @@ type CreateInitialGameStateOptions = {
 
 function createStartingResources(faction: Faction): ResourcePool {
   return {
-    credits: 3,
+    credits: 4,
     alloy: faction === "alloy_clan" ? 2 : 0,
     flux: faction === "flux_collective" ? 2 : 0,
     biomass: faction === "biomass_swarm" ? 2 : 0,
@@ -146,7 +149,7 @@ function cloneMap(map: MapState): MapState {
   };
 }
 
-export function createInitialZonesForPlayer(playerId: PlayerId, faction: Faction, openingHandSize = 7): PlayerZones {
+export function createInitialZonesForPlayer(playerId: PlayerId, faction: Faction, openingHandSize = OPENING_HAND_SIZE): PlayerZones {
   const deckCardIds = getStarterDeckCardIds(faction);
   const deckErrors = validateDeckCardIds(deckCardIds);
   if (deckErrors.length > 0) {

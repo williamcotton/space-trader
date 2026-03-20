@@ -4,7 +4,7 @@ import { decideMvpBotCommand } from "./ai/mvpBot";
 import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
 import { getStackEffectDefinition } from "./content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
-import { createInitialGameState, createInitialZonesForPlayer } from "./model/state";
+import { OPENING_HAND_SIZE, createInitialGameState, createInitialZonesForPlayer } from "./model/state";
 import type { PlayerId } from "./model/ids";
 import { HEX_SIZE, getMapOrigin } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
@@ -16,7 +16,7 @@ const INITIAL_VIEWPORT: GameViewport = {
   height: 768,
 };
 
-const CURRENT_STATE_VERSION = 8;
+const CURRENT_STATE_VERSION = 9;
 const BOT_ACTION_INTERVAL_SECONDS = 0.16;
 
 type BotDecisionSystem = typeof decideMvpBotCommand;
@@ -128,14 +128,18 @@ function migrateRuntimeState(state: GameState): void {
 
   if (typeof state.zones === "undefined") {
     state.zones = {
-      player_1: createInitialZonesForPlayer("player_1", state.players.player_1.faction, state.players.player_1.handSize || 7),
-      player_2: createInitialZonesForPlayer("player_2", state.players.player_2.faction, state.players.player_2.handSize || 7),
+      player_1: createInitialZonesForPlayer("player_1", state.players.player_1.faction, state.players.player_1.handSize || OPENING_HAND_SIZE),
+      player_2: createInitialZonesForPlayer("player_2", state.players.player_2.faction, state.players.player_2.handSize || OPENING_HAND_SIZE),
     };
   }
 
   for (const playerId of ["player_1", "player_2"] as const) {
     if (!state.zones[playerId]) {
-      state.zones[playerId] = createInitialZonesForPlayer(playerId, state.players[playerId].faction, state.players[playerId].handSize || 7);
+      state.zones[playerId] = createInitialZonesForPlayer(
+        playerId,
+        state.players[playerId].faction,
+        state.players[playerId].handSize || OPENING_HAND_SIZE
+      );
     }
     if (!Array.isArray(state.zones[playerId].deck)) {
       state.zones[playerId].deck = [];
@@ -162,7 +166,7 @@ function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v8 (Phase 5 card zones and hand gameplay).",
+      text: "State migrated to v9 (economy and hand-size pacing update).",
     });
   }
 }
