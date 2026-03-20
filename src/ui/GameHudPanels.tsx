@@ -15,6 +15,7 @@ type SelectedUnitSnapshot = {
   hp: number;
   armor: number;
   attackDamage: number;
+  siegeDamageBonus: number;
   attackRange: number;
   movesRemaining: number;
   moveRange: number;
@@ -116,6 +117,7 @@ function readSnapshot(): TacticalHudSnapshot {
           hp: selected.hp,
           armor: selected.armor,
           attackDamage: selected.attackDamage,
+          siegeDamageBonus: selected.siegeDamageBonus,
           attackRange: selected.attackRange,
           movesRemaining: selected.movesRemaining,
           moveRange: selected.moveRange,
@@ -168,6 +170,8 @@ export function GameHudPanels() {
               <span>
                 {snapshot.selectedUnit.attackDamage} / {snapshot.selectedUnit.attackRange}
               </span>
+              <span className="game-hud-label">Siege</span>
+              <span>{snapshot.selectedUnit.siegeDamageBonus}</span>
               <span className="game-hud-label">Move</span>
               <span>
                 {snapshot.selectedUnit.movesRemaining}/{snapshot.selectedUnit.moveRange}

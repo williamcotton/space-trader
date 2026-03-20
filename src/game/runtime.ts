@@ -2,11 +2,12 @@ import type { GameCommand } from "./actions/commands";
 import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { decideMvpBotCommand } from "./ai/mvpBot";
 import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
+import { getCardDefinition } from "./content/cards/catalog";
 import { getStackEffectDefinition } from "./content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
-import { OPENING_HAND_SIZE, createInitialGameState, createInitialZonesForPlayer } from "./model/state";
+import { BASE_STARTING_HP, OPENING_HAND_SIZE, createInitialGameState, createInitialZonesForPlayer } from "./model/state";
 import type { PlayerId } from "./model/ids";
-import { ensureEntityPresentation } from "./presentation";
+import { ensureEntityPresentation, inferUnitSourceCardId } from "./presentation";
 import { captureAnimationSnapshot, buildAnimationsFromEvents, stepAnimations } from "./render/animations";
 import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
@@ -18,7 +19,7 @@ const INITIAL_VIEWPORT: GameViewport = {
   height: 768,
 };
 
-const CURRENT_STATE_VERSION = 10;
+const CURRENT_STATE_VERSION = 13;
 const BOT_ACTION_INTERVAL_SECONDS = 0.16;
 
 type BotDecisionSystem = typeof decideMvpBotCommand;
@@ -38,6 +39,7 @@ function migratePhaseFourHarvesters(state: GameState): void {
       hp: 5,
       maxHp: 5,
       attackDamage: 1,
+      siegeDamageBonus: 0,
       armor: 0,
       moveRange: 2,
       attackRange: 1,
@@ -62,6 +64,7 @@ function migratePhaseFourHarvesters(state: GameState): void {
       hp: 5,
       maxHp: 5,
       attackDamage: 1,
+      siegeDamageBonus: 0,
       armor: 0,
       moveRange: 2,
       attackRange: 1,
@@ -77,6 +80,10 @@ function migratePhaseFourHarvesters(state: GameState): void {
 }
 
 function migrateRuntimeState(state: GameState): void {
+  if (typeof state.stateVersion !== "number") {
+    state.stateVersion = 0;
+  }
+
   if (typeof state.consecutivePriorityPasses !== "number") {
     state.consecutivePriorityPasses = 0;
   }
@@ -130,8 +137,25 @@ function migrateRuntimeState(state: GameState): void {
       entity.maxHp = entity.hp;
     }
 
-    if (entity.kind === "unit" && typeof entity.carries === "undefined") {
-      entity.carries = null;
+    if (state.stateVersion < CURRENT_STATE_VERSION && entity.kind === "base") {
+      const previousMaxHp = entity.maxHp > 0 ? entity.maxHp : entity.hp;
+      const hpRatio = previousMaxHp > 0 ? entity.hp / previousMaxHp : 1;
+      entity.maxHp = BASE_STARTING_HP;
+      entity.hp = entity.hp <= 0 ? 0 : Math.max(1, Math.round(BASE_STARTING_HP * hpRatio));
+    }
+
+    if (entity.kind === "unit") {
+      const sourceCardId = entity.sourceCardId ?? inferUnitSourceCardId(entity, state);
+      const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
+      const defaultSiegeDamageBonus =
+        sourceCard && sourceCard.kind === "unit" ? sourceCard.unit.siegeDamageBonus : entity.role === "combat" ? 1 : 0;
+
+      if (state.stateVersion < CURRENT_STATE_VERSION || typeof entity.siegeDamageBonus !== "number") {
+        entity.siegeDamageBonus = defaultSiegeDamageBonus;
+      }
+      if (typeof entity.carries === "undefined") {
+        entity.carries = null;
+      }
     }
   }
 
@@ -169,15 +193,11 @@ function migrateRuntimeState(state: GameState): void {
     state.players[playerId].deckSize = state.zones[playerId].deck.length;
   }
 
-  if (typeof state.stateVersion !== "number") {
-    state.stateVersion = 0;
-  }
-
   if (state.stateVersion < CURRENT_STATE_VERSION) {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v10 (presentation metadata and render animation update).",
+      text: "State migrated to v13 (unit-specific siege values and faster match pacing update).",
     });
   }
 }

@@ -559,6 +559,7 @@ function reduceEvent(state: GameState, event: GameEvent): void {
         hp: event.unit.hp,
         maxHp: event.unit.hp,
         attackDamage: event.unit.attackDamage,
+        siegeDamageBonus: event.unit.siegeDamageBonus,
         armor: event.unit.armor,
         moveRange: event.unit.moveRange,
         attackRange: event.unit.attackRange,

@@ -126,8 +126,36 @@ function parseCardIdFromUnitId(unitId: string): string | null {
   return prefixMatch[1] ?? null;
 }
 
+export function inferUnitSourceCardId(
+  unit: Pick<UnitEntity, "id" | "sourceCardId" | "ownerId">,
+  state?: Pick<GameState, "players">
+): string | null {
+  if (unit.sourceCardId) {
+    return unit.sourceCardId;
+  }
+
+  const parsedCardId = parseCardIdFromUnitId(unit.id);
+  if (parsedCardId) {
+    return parsedCardId;
+  }
+
+  if (unit.id.includes("harvester")) {
+    return "expedition_harvester_card";
+  }
+
+  if (unit.id.includes("scout")) {
+    const faction = state?.players[unit.ownerId]?.faction;
+    if (faction === "flux_collective") {
+      return "flux_runner_card";
+    }
+    return "frontline_scout_card";
+  }
+
+  return null;
+}
+
 export function inferUnitName(unit: Pick<UnitEntity, "id" | "role" | "sourceCardId" | "ownerId">, state?: Pick<GameState, "players">): string {
-  const sourceCardId = unit.sourceCardId ?? parseCardIdFromUnitId(unit.id);
+  const sourceCardId = inferUnitSourceCardId(unit, state);
   const definition = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
   if (definition?.kind === "unit") {
     return definition.name;
@@ -167,7 +195,7 @@ export function ensureEntityPresentation(entity: EntityState, state: Pick<GameSt
   }
 
   if (entity.kind === "unit" && typeof entity.sourceCardId === "undefined") {
-    entity.sourceCardId = parseCardIdFromUnitId(entity.id);
+    entity.sourceCardId = inferUnitSourceCardId(entity, state);
   }
 }
 

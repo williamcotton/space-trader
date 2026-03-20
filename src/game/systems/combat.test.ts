@@ -56,4 +56,24 @@ describe("resolveCombatAttack", () => {
     expect(result.finalDamage).toBe(1);
     expect(result.targetHpAfter).toBe(1);
   });
+
+  it("applies a siege bonus when attacking bases", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const attacker = state.entities.unit_player_1_scout;
+    const target = state.entities.base_player_2;
+    expect(attacker?.kind).toBe("unit");
+    expect(target?.kind).toBe("base");
+    if (!attacker || attacker.kind !== "unit" || !target || target.kind !== "base") {
+      throw new Error("Expected unit attacker and base target.");
+    }
+
+    attacker.coord = { q: 2, r: 0 };
+    target.coord = { q: 3, r: 0 };
+
+    const result = resolveCombatAttack(state, attacker, target);
+
+    expect(result.rawAttack).toBe(attacker.attackDamage + attacker.siegeDamageBonus);
+    expect(result.finalDamage).toBe(3);
+    expect(result.targetHpAfter).toBe(target.hp - 3);
+  });
 });

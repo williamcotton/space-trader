@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { GameCommand } from "./commands";
 import { dispatchCommand } from "./reducers";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
-import { createInitialGameState } from "../model/state";
+import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
 
 function setupState() {
   return createInitialGameState({ map: FRONTIER_BELT_MAP });
@@ -961,7 +961,7 @@ describe("dispatchCommand", () => {
     if (!counteredTargetBase || counteredTargetBase.kind !== "base") {
       throw new Error("Expected player 2 base.");
     }
-    expect(counteredTargetBase.hp).toBe(100);
+    expect(counteredTargetBase.hp).toBe(BASE_STARTING_HP);
   });
 
   it("rejects counter responses without a legal top-of-stack target id", () => {

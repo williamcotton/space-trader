@@ -8,6 +8,7 @@ export type UnitTemplate = {
   role: UnitRole;
   hp: number;
   attackDamage: number;
+  siegeDamageBonus: number;
   armor: number;
   moveRange: number;
   attackRange: number;
@@ -148,6 +149,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       role: "combat",
       hp: 6,
       attackDamage: 2,
+      siegeDamageBonus: 1,
       armor: 0,
       moveRange: 2,
       attackRange: 1,
@@ -166,6 +168,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       role: "combat",
       hp: 8,
       attackDamage: 2,
+      siegeDamageBonus: 2,
       armor: 1,
       moveRange: 1,
       attackRange: 1,
@@ -184,6 +187,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       role: "combat",
       hp: 5,
       attackDamage: 2,
+      siegeDamageBonus: 0,
       armor: 0,
       moveRange: 3,
       attackRange: 1,
@@ -202,6 +206,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       role: "resource",
       hp: 5,
       attackDamage: 1,
+      siegeDamageBonus: 0,
       armor: 0,
       moveRange: 2,
       attackRange: 1,
@@ -220,6 +225,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       role: "utility",
       hp: 4,
       attackDamage: 1,
+      siegeDamageBonus: 0,
       armor: 0,
       moveRange: 2,
       attackRange: 1,
@@ -238,6 +244,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       role: "resource",
       hp: 4,
       attackDamage: 1,
+      siegeDamageBonus: 0,
       armor: 0,
       moveRange: 2,
       attackRange: 1,

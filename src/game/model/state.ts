@@ -4,6 +4,7 @@ import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/sta
 
 export const OPENING_HAND_SIZE = 5;
 export const MAX_HAND_SIZE = 7;
+export const BASE_STARTING_HP = 20;
 
 export type HexCoord = {
   q: number;
@@ -71,6 +72,7 @@ export type UnitEntity = {
   hp: number;
   maxHp: number;
   attackDamage: number;
+  siegeDamageBonus: number;
   armor: number;
   moveRange: number;
   attackRange: number;
@@ -200,8 +202,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       kind: "base",
       name: "Player 1 Base",
       ownerId: PLAYER_ONE,
-      hp: 100,
-      maxHp: 100,
+      hp: BASE_STARTING_HP,
+      maxHp: BASE_STARTING_HP,
       coord: { ...map.spawnPoints.player_1 },
     },
     [baseTwoId]: {
@@ -209,8 +211,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       kind: "base",
       name: "Player 2 Base",
       ownerId: PLAYER_TWO,
-      hp: 100,
-      maxHp: 100,
+      hp: BASE_STARTING_HP,
+      maxHp: BASE_STARTING_HP,
       coord: { ...map.spawnPoints.player_2 },
     },
     [unitOneId]: {
@@ -222,6 +224,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       hp: 6,
       maxHp: 6,
       attackDamage: 2,
+      siegeDamageBonus: 1,
       armor: 0,
       moveRange: 2,
       attackRange: 1,
@@ -245,6 +248,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       hp: 6,
       maxHp: 6,
       attackDamage: 2,
+      siegeDamageBonus: 0,
       armor: 0,
       moveRange: 2,
       attackRange: 1,
@@ -268,6 +272,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       hp: 5,
       maxHp: 5,
       attackDamage: 1,
+      siegeDamageBonus: 0,
       armor: 0,
       moveRange: 2,
       attackRange: 1,
@@ -291,6 +296,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       hp: 5,
       maxHp: 5,
       attackDamage: 1,
+      siegeDamageBonus: 0,
       armor: 0,
       moveRange: 2,
       attackRange: 1,
@@ -313,7 +319,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   } satisfies Record<PlayerId, PlayerZones>;
 
   return {
-    stateVersion: 10,
+    stateVersion: 13,
     matchId: options.matchId ?? "match_frontier_belt",
     turn: 1,
     phase: "start",

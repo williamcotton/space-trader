@@ -12,6 +12,11 @@ type HandCardView = {
   cardId: string;
 };
 
+type UnitStatEntry = {
+  label: string;
+  value: number;
+};
+
 type HandSnapshot = {
   visiblePlayerId: "player_1" | "player_2";
   activePlayerId: "player_1" | "player_2";
@@ -121,6 +126,7 @@ export function HandTray() {
             title: card.cardId,
             subtitle: "unknown",
             costEntries: [] as Array<{ resource: ResourceType; amount: number }>,
+            unitStats: [] as UnitStatEntry[],
             text: "Unknown card",
             counterTarget: undefined as string | undefined,
           };
@@ -144,6 +150,17 @@ export function HandTray() {
           title: definition.name,
           subtitle: `${formatFactionName(definition.faction)} · ${definition.kind} · ${definition.speed}`,
           costEntries: getCostEntries(definition.cost),
+          unitStats:
+            definition.kind === "unit"
+              ? [
+                  { label: "HP", value: definition.unit.hp },
+                  { label: "ATK", value: definition.unit.attackDamage },
+                  { label: "ARM", value: definition.unit.armor },
+                  { label: "RNG", value: definition.unit.attackRange },
+                  { label: "MOV", value: definition.unit.moveRange },
+                  { label: "SG", value: definition.unit.siegeDamageBonus },
+                ]
+              : [],
           text: definition.text,
           counterTarget,
         };
@@ -184,6 +201,16 @@ export function HandTray() {
                   ))
                 )}
               </span>
+              {card.unitStats.length > 0 ? (
+                <span className="hand-card-stats">
+                  {card.unitStats.map((stat) => (
+                    <span key={stat.label} className="hand-card-stat">
+                      <small>{stat.label}</small>
+                      <strong>{stat.value}</strong>
+                    </span>
+                  ))}
+                </span>
+              ) : null}
               <span className="hand-card-text">{card.text}</span>
             </button>
           ))

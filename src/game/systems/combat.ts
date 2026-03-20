@@ -51,11 +51,19 @@ function getSupplyPenalty(distanceFromFriendlyBase: number): number {
   return Math.max(0, Math.ceil((distanceFromFriendlyBase - 6) / 3));
 }
 
+function getBaseSiegeBonus(attacker: UnitEntity, target: EntityState): number {
+  return target.kind === "base" ? attacker.siegeDamageBonus : 0;
+}
+
 export function resolveCombatAttack(state: GameState, attacker: UnitEntity, target: EntityState): CombatResolution {
   const attackerBase = getPlayerBase(state, attacker.ownerId);
   const distanceFromFriendlyBase = attackerBase ? hexDistance(attacker.coord, attackerBase.coord) : 0;
 
-  const rawAttack = attacker.attackDamage + getTemporaryAttackBuffs(state, attacker, target) + getFactionAttackBonus(state, attacker);
+  const rawAttack =
+    attacker.attackDamage +
+    getTemporaryAttackBuffs(state, attacker, target) +
+    getFactionAttackBonus(state, attacker) +
+    getBaseSiegeBonus(attacker, target);
   const defense =
     (target.kind === "unit" ? target.armor : 0) +
     getTerrainDefenseBonus(state, target) +
