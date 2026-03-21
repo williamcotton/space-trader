@@ -132,7 +132,17 @@ export type GameState = {
 type CreateInitialGameStateOptions = {
   map: MapState;
   matchId?: string;
+  randomSource?: () => number;
 };
+
+function shuffleCards<T>(cards: T[], randomSource: () => number): T[] {
+  const shuffled = [...cards];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(randomSource() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
 
 function createStartingResources(faction: Faction): ResourcePool {
   return {
@@ -157,7 +167,12 @@ function cloneMap(map: MapState): MapState {
   };
 }
 
-export function createInitialZonesForPlayer(playerId: PlayerId, faction: Faction, openingHandSize = OPENING_HAND_SIZE): PlayerZones {
+export function createInitialZonesForPlayer(
+  playerId: PlayerId,
+  faction: Faction,
+  openingHandSize = OPENING_HAND_SIZE,
+  randomSource?: () => number
+): PlayerZones {
   const deckCardIds = getStarterDeckCardIds(faction);
   const deckErrors = validateDeckCardIds(deckCardIds);
   if (deckErrors.length > 0) {
@@ -169,9 +184,10 @@ export function createInitialZonesForPlayer(playerId: PlayerId, faction: Faction
     cardId,
     ownerId: playerId,
   }));
+  const orderedInstances = randomSource ? shuffleCards(allInstances, randomSource) : allInstances;
 
-  const hand = allInstances.slice(0, openingHandSize);
-  const deck = allInstances.slice(openingHandSize);
+  const hand = orderedInstances.slice(0, openingHandSize);
+  const deck = orderedInstances.slice(openingHandSize);
 
   return {
     deck,
@@ -315,8 +331,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   };
 
   const zones = {
-    player_1: createInitialZonesForPlayer(PLAYER_ONE, "alloy_clan"),
-    player_2: createInitialZonesForPlayer(PLAYER_TWO, "flux_collective"),
+    player_1: createInitialZonesForPlayer(PLAYER_ONE, "alloy_clan", OPENING_HAND_SIZE, options.randomSource),
+    player_2: createInitialZonesForPlayer(PLAYER_TWO, "flux_collective", OPENING_HAND_SIZE, options.randomSource),
   } satisfies Record<PlayerId, PlayerZones>;
 
   return {

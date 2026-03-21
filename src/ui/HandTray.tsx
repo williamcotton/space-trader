@@ -80,7 +80,7 @@ function readSnapshot(): HandSnapshot {
   const runtime = getGameRuntime();
   const state = runtime.state;
   const visiblePlayerId = state.activePlayerId as "player_1" | "player_2";
-  const hand = state.zones[visiblePlayerId].hand.map((card) => ({
+  const hand = [...state.zones[visiblePlayerId].hand].reverse().map((card) => ({
     instanceId: card.instanceId,
     cardId: card.cardId,
   }));

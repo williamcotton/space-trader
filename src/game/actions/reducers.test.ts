@@ -499,9 +499,9 @@ describe("dispatchCommand", () => {
 
   it("plays a tactic card from hand to stack and moves it to discard on resolve", () => {
     const state = setupState();
-    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "orbital_ping");
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "slag_barrage");
     state.players.player_1.resources.credits = 4;
-    state.players.player_1.resources.flux = 4;
+    state.players.player_1.resources.alloy = 4;
 
     const targetBase = state.entities.base_player_2;
     expect(targetBase?.kind).toBe("base");
@@ -531,7 +531,7 @@ describe("dispatchCommand", () => {
     }
     expect(updatedBase.hp).toBe(beforeHp - 2);
     expect(state.players.player_1.resources.credits).toBe(3);
-    expect(state.players.player_1.resources.flux).toBe(3);
+    expect(state.players.player_1.resources.alloy).toBe(3);
   });
 
   it("casts a main-speed unit card to stack and resolves it to battlefield with summoning sickness", () => {
@@ -677,7 +677,9 @@ describe("dispatchCommand", () => {
 
   it("rejects card play when resources are insufficient", () => {
     const state = setupState();
-    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "orbital_ping");
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    state.players.player_1.resources.credits = 0;
+    state.players.player_1.resources.alloy = 0;
     const result = dispatchCommand(state, {
       type: "PLAY_CARD",
       playerId: "player_1",

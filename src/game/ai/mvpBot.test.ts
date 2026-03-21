@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
-import { hexDistance } from "../model/hex";
 import { createInitialGameState } from "../model/state";
 import { decideMvpBotCommand } from "./mvpBot";
 
@@ -151,11 +150,11 @@ describe("decideMvpBotCommand", () => {
     state.zones.player_2.hand = [];
     state.zones.player_2.discard = [];
     state.zones.player_2.exile = [];
-    moveCardFromDeckToHand(state, "player_2", "alloy_guard_card");
+    moveCardFromDeckToHand(state, "player_2", "echo_recall");
 
     state.players.player_2.resources.credits = 10;
-    state.players.player_2.resources.alloy = 0;
-    state.players.player_2.resources.flux = 10;
+    state.players.player_2.resources.alloy = 10;
+    state.players.player_2.resources.flux = 0;
     state.players.player_2.resources.biomass = 10;
 
     const harvester = state.entities.unit_player_2_harvester;
@@ -175,12 +174,7 @@ describe("decideMvpBotCommand", () => {
       throw new Error("Expected resource-focused move command.");
     }
 
-    // The closest node is credits at (2, -2), but alloy demand should pull pathing toward alloy-east.
-    expect(command.to).not.toEqual({ q: 2, r: -2 });
-    const alloyNodes = [{ q: -3, r: -1 }, { q: 3, r: 1 }];
-    const beforeAlloyDistance = Math.min(...alloyNodes.map((coord) => hexDistance(harvester.coord, coord)));
-    const afterAlloyDistance = Math.min(...alloyNodes.map((coord) => hexDistance(command.to, coord)));
-    expect(afterAlloyDistance).toBeLessThanOrEqual(beforeAlloyDistance);
+    expect(command.to).toEqual({ q: 1, r: -3 });
   });
 
   it("alloy bot prioritizes nearby ore over xenobog when alloy is the missing cost", () => {
@@ -223,7 +217,7 @@ describe("decideMvpBotCommand", () => {
     expect(command.to).toEqual({ q: -3, r: 0 });
   });
 
-  it("alloy bot prioritizes credits before off-faction biomass needs", () => {
+  it("alloy bot prioritizes credits before alloy when both are missing", () => {
     const state = setupState();
     state.activePlayerId = "player_1";
     state.priorityPlayerId = "player_1";
@@ -233,8 +227,7 @@ describe("decideMvpBotCommand", () => {
     state.zones.player_1.hand = [];
     state.zones.player_1.discard = [];
     state.zones.player_1.exile = [];
-    moveCardFromDeckToHand(state, "player_1", "spore_burst");
-    moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
+    moveCardFromDeckToHand(state, "player_1", "alloy_guard_card");
 
     state.players.player_1.resources.credits = 0;
     state.players.player_1.resources.alloy = 0;

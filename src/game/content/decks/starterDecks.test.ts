@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getCardDefinition } from "../cards/catalog";
 import { getStarterDeckCardIds, validateDeckCardIds } from "./starterDecks";
 
 describe("starter decks", () => {
@@ -30,6 +31,17 @@ describe("starter decks", () => {
       const cards = getStarterDeckCardIds(faction);
       const expeditionHarvesters = cards.filter((cardId) => cardId === "expedition_harvester_card");
       expect(expeditionHarvesters).toHaveLength(4);
+    }
+  });
+
+  it("does not include off-faction splash cards in starter decks", () => {
+    for (const faction of ["alloy_clan", "flux_collective", "biomass_swarm"] as const) {
+      const cards = getStarterDeckCardIds(faction);
+      for (const cardId of cards) {
+        const definition = getCardDefinition(cardId);
+        expect(definition).toBeDefined();
+        expect(definition?.faction === faction || definition?.faction === "neutral").toBe(true);
+      }
     }
   });
 });

@@ -24,6 +24,12 @@ const BOT_ACTION_INTERVAL_SECONDS = 0.16;
 
 type BotDecisionSystem = typeof decideMvpBotCommand;
 
+function createRuntimeMatchId(): string {
+  return `match_frontier_belt_${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffff)
+    .toString(36)
+    .padStart(4, "0")}`;
+}
+
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
   const playerTwoHarvesterId = "unit_player_2_harvester";
@@ -219,7 +225,13 @@ class GameRuntime {
   };
   readonly state: GameState;
 
-  constructor(state: GameState = createInitialGameState({ map: FRONTIER_BELT_MAP })) {
+  constructor(
+    state: GameState = createInitialGameState({
+      map: FRONTIER_BELT_MAP,
+      matchId: createRuntimeMatchId(),
+      randomSource: () => Math.random(),
+    })
+  ) {
     this.state = state;
     migrateRuntimeState(this.state);
     this.rehydrateHotState();
