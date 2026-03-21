@@ -164,11 +164,15 @@ export function GameTopBar() {
                 <span>{formatFactionName(player.faction)}</span>
               </div>
               <div className="player-resource-flags">
+                <button
+                  type="button"
+                  className={["player-state-badge", "player-state-toggle", "bot", player.botAutoplay ? "enabled" : "disabled"].join(" ")}
+                  onClick={() => runtime.toggleBotAutoplay(player.id)}
+                >
+                  Bot {player.botAutoplay ? "On" : "Off"}
+                </button>
                 {player.id === snapshot.activePlayerId ? <span className="player-state-badge active">Active</span> : null}
                 {player.id === snapshot.priorityPlayerId ? <span className="player-state-badge priority">Priority</span> : null}
-                <span className={["player-state-badge", "bot", player.botAutoplay ? "enabled" : "disabled"].join(" ")}>
-                  Bot {player.botAutoplay ? "On" : "Off"}
-                </span>
               </div>
             </div>
             <div className="player-resource-values">

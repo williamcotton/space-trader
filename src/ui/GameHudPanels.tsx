@@ -146,11 +146,26 @@ export function GameHudPanels() {
   }, []);
 
   const roleAccent = snapshot.selectedUnit ? getUnitRoleTheme(snapshot.selectedUnit.role).accent : undefined;
+  const roleLabel = snapshot.selectedUnit ? getUnitRoleTheme(snapshot.selectedUnit.role).label : null;
+  const selectedStatusLabel = snapshot.selectedUnit
+    ? snapshot.selectedUnit.hasSummoningSickness
+      ? "Summoning"
+      : "Ready"
+    : null;
+  const cargoLabel = snapshot.selectedUnit?.carries ? snapshot.selectedUnit.carries : "No cargo";
+  const canAttackLabel = snapshot.hoverCombat?.canAttackNow ? "Attack Ready" : "Out of Window";
 
   return (
     <aside className="game-hud-panels" aria-label="Tactical information">
-      <section className="game-hud-panel">
-        <p className="game-hud-title">Selected Unit</p>
+      <section className="game-hud-panel selected-unit-panel">
+        <div className="game-hud-panel-head">
+          <p className="game-hud-title">Selected Unit</p>
+          {roleLabel ? (
+            <span className="game-hud-pill role" style={roleAccent ? { borderColor: roleAccent, color: roleAccent } : undefined}>
+              {roleLabel}
+            </span>
+          ) : null}
+        </div>
         {snapshot.selectedUnit ? (
           <>
             <div className="game-hud-entity-header">
@@ -159,42 +174,60 @@ export function GameHudPanels() {
                 {snapshot.selectedUnit.ownerLabel} · {snapshot.selectedUnit.factionLabel}
               </span>
             </div>
-            <div className="game-hud-grid">
-              <span className="game-hud-label">Role</span>
-              <span>{snapshot.selectedUnit.role}</span>
-              <span className="game-hud-label">HP / Armor</span>
-              <span>
-                {snapshot.selectedUnit.hp} / {snapshot.selectedUnit.armor}
+            <div className="game-hud-stat-grid">
+              <span className="game-hud-stat-chip">
+                <small>HP</small>
+                <strong>{snapshot.selectedUnit.hp}</strong>
               </span>
-              <span className="game-hud-label">Attack / Range</span>
-              <span>
-                {snapshot.selectedUnit.attackDamage} / {snapshot.selectedUnit.attackRange}
+              <span className="game-hud-stat-chip">
+                <small>ARM</small>
+                <strong>{snapshot.selectedUnit.armor}</strong>
               </span>
-              <span className="game-hud-label">Siege</span>
-              <span>{snapshot.selectedUnit.siegeDamageBonus}</span>
-              <span className="game-hud-label">Move</span>
-              <span>
-                {snapshot.selectedUnit.movesRemaining}/{snapshot.selectedUnit.moveRange}
+              <span className="game-hud-stat-chip">
+                <small>ATK</small>
+                <strong>{snapshot.selectedUnit.attackDamage}</strong>
               </span>
-              <span className="game-hud-label">Attacks</span>
-              <span>
-                {snapshot.selectedUnit.attacksRemaining}/{snapshot.selectedUnit.attackActionsPerTurn}
+              <span className="game-hud-stat-chip">
+                <small>RNG</small>
+                <strong>{snapshot.selectedUnit.attackRange}</strong>
               </span>
-              <span className="game-hud-label">Summoning</span>
-              <span>{snapshot.selectedUnit.hasSummoningSickness ? "Sick" : "Ready"}</span>
-              <span className="game-hud-label">Cargo</span>
-              <span>{snapshot.selectedUnit.carries ?? "none"}</span>
-              <span className="game-hud-label">Entity ID</span>
-              <span className="game-hud-id">{snapshot.selectedUnit.id}</span>
+              <span className="game-hud-stat-chip">
+                <small>MOV</small>
+                <strong>
+                  {snapshot.selectedUnit.movesRemaining}/{snapshot.selectedUnit.moveRange}
+                </strong>
+              </span>
+              <span className="game-hud-stat-chip">
+                <small>ACT</small>
+                <strong>
+                  {snapshot.selectedUnit.attacksRemaining}/{snapshot.selectedUnit.attackActionsPerTurn}
+                </strong>
+              </span>
+              <span className="game-hud-stat-chip">
+                <small>SG</small>
+                <strong>{snapshot.selectedUnit.siegeDamageBonus}</strong>
+              </span>
             </div>
+            <div className="game-hud-pill-row">
+              <span className={["game-hud-pill", snapshot.selectedUnit.hasSummoningSickness ? "bad" : "good"].join(" ")}>
+                {selectedStatusLabel}
+              </span>
+              <span className="game-hud-pill">{cargoLabel}</span>
+            </div>
+            <p className="game-hud-meta-line">Entity {snapshot.selectedUnit.id}</p>
           </>
         ) : (
           <p className="game-hud-empty">No unit selected.</p>
         )}
       </section>
 
-      <section className="game-hud-panel">
-        <p className="game-hud-title">Hover Combat Preview</p>
+      <section className="game-hud-panel combat-preview-panel">
+        <div className="game-hud-panel-head">
+          <p className="game-hud-title">Combat Preview</p>
+          {snapshot.hoverCombat ? (
+            <span className={["game-hud-pill", snapshot.hoverCombat.canAttackNow ? "good" : "bad"].join(" ")}>{canAttackLabel}</span>
+          ) : null}
+        </div>
         {snapshot.hoverCombat ? (
           <>
             <div className="game-hud-entity-header">
@@ -203,34 +236,38 @@ export function GameHudPanels() {
                 {snapshot.hoverCombat.targetOwnerLabel} · {snapshot.hoverCombat.targetKind}
               </span>
             </div>
-            <div className="game-hud-grid">
-              <span className="game-hud-label">Range Check</span>
-              <span>
-                {snapshot.hoverCombat.distance}/{snapshot.hoverCombat.attackRange}
+            <div className="game-hud-stat-grid combat">
+              <span className="game-hud-stat-chip">
+                <small>RANGE</small>
+                <strong>
+                  {snapshot.hoverCombat.distance}/{snapshot.hoverCombat.attackRange}
+                </strong>
               </span>
-              <span className="game-hud-label">Can Attack Now</span>
-              <span className={snapshot.hoverCombat.canAttackNow ? "game-hud-good" : "game-hud-bad"}>
-                {snapshot.hoverCombat.canAttackNow ? "yes" : "no"}
+              <span className="game-hud-stat-chip">
+                <small>DMG</small>
+                <strong>{snapshot.hoverCombat.projectedDamage}</strong>
               </span>
-              <span className="game-hud-label">Projected Damage</span>
-              <span>{snapshot.hoverCombat.projectedDamage}</span>
-              <span className="game-hud-label">Projected HP</span>
-              <span>
-                {snapshot.hoverCombat.targetHpBefore}
-                {" -> "}
-                {snapshot.hoverCombat.targetHpAfter}
+              <span className="game-hud-stat-chip">
+                <small>HP</small>
+                <strong>
+                  {snapshot.hoverCombat.targetHpBefore}
+                  {" -> "}
+                  {snapshot.hoverCombat.targetHpAfter}
+                </strong>
               </span>
-              <span className="game-hud-label">Projected Kill</span>
-              <span>{snapshot.hoverCombat.targetDestroyed ? "yes" : "no"}</span>
-              <span className="game-hud-label">Formula</span>
-              <span>
-                raw {snapshot.hoverCombat.rawAttack} - def {snapshot.hoverCombat.defense} - supply {snapshot.hoverCombat.supplyPenalty}
+              <span className="game-hud-stat-chip">
+                <small>KILL</small>
+                <strong>{snapshot.hoverCombat.targetDestroyed ? "Yes" : "No"}</strong>
               </span>
-              <span className="game-hud-label">Supply Distance</span>
-              <span>{snapshot.hoverCombat.distanceFromFriendlyBase}</span>
-              <span className="game-hud-label">Target ID</span>
-              <span className="game-hud-id">{snapshot.hoverCombat.targetId}</span>
+              <span className="game-hud-stat-chip">
+                <small>SUPPLY</small>
+                <strong>{snapshot.hoverCombat.distanceFromFriendlyBase}</strong>
+              </span>
             </div>
+            <p className="game-hud-detail-line">
+              Raw {snapshot.hoverCombat.rawAttack} - Def {snapshot.hoverCombat.defense} - Supply {snapshot.hoverCombat.supplyPenalty}
+            </p>
+            <p className="game-hud-meta-line">Target {snapshot.hoverCombat.targetId}</p>
           </>
         ) : (
           <p className="game-hud-empty">
