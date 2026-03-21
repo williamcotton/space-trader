@@ -12,6 +12,9 @@ export type StackResolutionRules =
       type: "noop_log";
     }
   | {
+      type: "deploy_unit";
+    }
+  | {
       type: "damage_enemy_base";
       amount: number;
     }
@@ -38,6 +41,18 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
     },
     resolution: {
       type: "noop_log",
+    },
+  },
+  deploy_unit_card: {
+    id: "deploy_unit_card",
+    label: "Deploy Unit",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    resolution: {
+      type: "deploy_unit",
     },
   },
   damage_enemy_base_2: {

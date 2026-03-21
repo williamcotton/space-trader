@@ -82,6 +82,7 @@ export function GameTopBar() {
   }, []);
 
   const phaseIndex = PHASE_ORDER.indexOf(snapshot.phase);
+  const phaseLabel = snapshot.phase.charAt(0).toUpperCase() + snapshot.phase.slice(1);
   const statusMessage = useMemo(() => {
     if (snapshot.winner) {
       return `${snapshot.winner} wins the match.`;
@@ -97,17 +98,39 @@ export function GameTopBar() {
 
   return (
     <header className="game-top-bar" aria-label="Match controls and status">
-      <div className="game-top-bar-row">
-        <div className="game-top-bar-title">
-          <span className="eyebrow">{snapshot.mapName}</span>
-          <strong>Turn {snapshot.turn}</strong>
+      <div className="game-top-bar-main">
+        <div className="game-top-bar-title-block">
+          <div className="game-top-bar-title">
+            <span className="eyebrow">{snapshot.mapName}</span>
+            <strong>Turn {snapshot.turn}</strong>
+          </div>
+          <div className="game-top-bar-meta">
+            <span className="game-top-bar-chip active-phase">Phase {phaseLabel}</span>
+            <span className="game-top-bar-chip">Active {getPlayerLabel(snapshot.activePlayerId)}</span>
+            <span className="game-top-bar-chip">
+              Priority {snapshot.priorityPlayerId ? getPlayerLabel(snapshot.priorityPlayerId) : "none"}
+            </span>
+            <span className="game-top-bar-chip">Stack {snapshot.stackSize}</span>
+            <span className="game-top-bar-chip">Pass {snapshot.consecutivePasses}</span>
+          </div>
         </div>
-        <div className="game-top-bar-status">
-          <span>Active: {getPlayerLabel(snapshot.activePlayerId)}</span>
-          <span>Priority: {snapshot.priorityPlayerId ? getPlayerLabel(snapshot.priorityPlayerId) : "none"}</span>
-          <span>Stack: {snapshot.stackSize}</span>
-          <span>Passes: {snapshot.consecutivePasses}</span>
-        </div>
+
+        <ol className="game-phase-track">
+          {PHASE_ORDER.map((phase, index) => (
+            <li
+              key={phase}
+              className={[
+                index < phaseIndex ? "done" : "",
+                index === phaseIndex ? "active" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {phase}
+            </li>
+          ))}
+        </ol>
+
         <div className="game-top-bar-actions">
           <button type="button" disabled={Boolean(snapshot.winner)} onClick={() => runtime.debugAdvancePhase()}>
             End Phase
@@ -125,22 +148,6 @@ export function GameTopBar() {
         </div>
       </div>
 
-      <ol className="game-phase-track">
-        {PHASE_ORDER.map((phase, index) => (
-          <li
-            key={phase}
-            className={[
-              index < phaseIndex ? "done" : "",
-              index === phaseIndex ? "active" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            {phase}
-          </li>
-        ))}
-      </ol>
-
       <div className="game-top-bar-players">
         {snapshot.players.map((player) => (
           <article
@@ -152,9 +159,17 @@ export function GameTopBar() {
             ].join(" ")}
           >
             <div className="player-resource-header">
-              <strong>{getPlayerLabel(player.id)}</strong>
-              <span>{formatFactionName(player.faction)}</span>
-              <span>Bot: {player.botAutoplay ? "on" : "off"}</span>
+              <div className="player-resource-identity">
+                <strong>{getPlayerLabel(player.id)}</strong>
+                <span>{formatFactionName(player.faction)}</span>
+              </div>
+              <div className="player-resource-flags">
+                {player.id === snapshot.activePlayerId ? <span className="player-state-badge active">Active</span> : null}
+                {player.id === snapshot.priorityPlayerId ? <span className="player-state-badge priority">Priority</span> : null}
+                <span className={["player-state-badge", "bot", player.botAutoplay ? "enabled" : "disabled"].join(" ")}>
+                  Bot {player.botAutoplay ? "On" : "Off"}
+                </span>
+              </div>
             </div>
             <div className="player-resource-values">
               {RESOURCE_ORDER.map((resource) => (

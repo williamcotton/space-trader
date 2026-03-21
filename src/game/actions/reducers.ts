@@ -1,7 +1,7 @@
 import type { GameCommand } from "./commands";
 import type { GameEvent, UnitAttackDeclaredEvent, UnitMovedEvent } from "./events";
 import { getCardDefinition, type CardCost } from "../content/cards/catalog";
-import { getStackEffectDefinition } from "../content/stackEffects";
+import { getStackEffectDefinition, type CounterDestination } from "../content/stackEffects";
 import { advancePhase } from "../turn/phaseMachine";
 import { createStackItemId, getOpponentPlayer, peekTopStackItem, popTopStackItem, removeStackItemById } from "../turn/stack";
 import { validateCommand } from "../rules/validators";
@@ -130,6 +130,46 @@ function createSummonedUnitId(state: GameState, playerId: PlayerId, cardId: stri
   return `unit_${playerId}_${cardId}_${suffix}`;
 }
 
+function deployUnitToBattlefield(
+  state: GameState,
+  playerId: PlayerId,
+  cardId: string,
+  cardName: string,
+  unitEntityId: string,
+  spawnCoord: HexCoord
+): void {
+  const cardDefinition = getCardDefinition(cardId);
+  if (!cardDefinition || cardDefinition.kind !== "unit") {
+    return;
+  }
+
+  state.entities[unitEntityId] = {
+    id: unitEntityId,
+    kind: "unit",
+    name: cardName,
+    ownerId: playerId,
+    role: cardDefinition.unit.role,
+    hp: cardDefinition.unit.hp,
+    maxHp: cardDefinition.unit.hp,
+    attackDamage: cardDefinition.unit.attackDamage,
+    siegeDamageBonus: cardDefinition.unit.siegeDamageBonus,
+    armor: cardDefinition.unit.armor,
+    moveRange: cardDefinition.unit.moveRange,
+    attackRange: cardDefinition.unit.attackRange,
+    attackActionsPerTurn: cardDefinition.unit.attackActionsPerTurn,
+    coord: { ...spawnCoord },
+    carries: null,
+    sourceCardId: cardId,
+    hasSummoningSickness: true,
+    movesRemaining: 0,
+    attacksRemaining: 0,
+  };
+  state.log.push({
+    turn: state.turn,
+    text: `${playerId} deployed ${cardName} to (${spawnCoord.q}, ${spawnCoord.r}).`,
+  });
+}
+
 function moveStackSourceCardToZone(state: GameState, stackItem: GameState["stack"][number], destination: "hand" | "discard" | "exile" | "none"): void {
   if (destination === "none") {
     return;
@@ -147,14 +187,14 @@ function moveStackSourceCardToZone(state: GameState, stackItem: GameState["stack
   syncPlayerZoneCounts(state);
 }
 
-function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["stack"][number]): void {
+function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["stack"][number]): CounterDestination {
   const definition = getStackEffectDefinition(resolvedItem.effectId);
   if (!definition) {
     state.log.push({
       turn: state.turn,
       text: `Resolved ${resolvedItem.label}: unknown effect id ${resolvedItem.effectId}.`,
     });
-    return;
+    return "discard";
   }
 
   switch (definition.resolution.type) {
@@ -163,12 +203,39 @@ function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["sta
         turn: state.turn,
         text: `Resolved stack item ${resolvedItem.label}: no-op.`,
       });
-      return;
+      return "discard";
+    case "deploy_unit": {
+      const sourceCardId = resolvedItem.sourceCardId;
+      const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
+      if (!sourceCard || sourceCard.kind !== "unit") {
+        state.log.push({
+          turn: state.turn,
+          text: `Resolved ${resolvedItem.label}: missing unit card definition.`,
+        });
+        return "discard";
+      }
+
+      const spawnCoord = getFirstOpenBaseAdjacentTile(state, resolvedItem.controllerId);
+      if (!spawnCoord) {
+        state.log.push({
+          turn: state.turn,
+          text: `Resolved ${resolvedItem.label}: no open base-adjacent tile; card discarded.`,
+        });
+        return "discard";
+      }
+
+      const unitEntityId =
+        resolvedItem.pendingUnitEntityId && !state.entities[resolvedItem.pendingUnitEntityId]
+          ? resolvedItem.pendingUnitEntityId
+          : createSummonedUnitId(state, resolvedItem.controllerId, sourceCard.id);
+      deployUnitToBattlefield(state, resolvedItem.controllerId, sourceCard.id, sourceCard.name, unitEntityId, spawnCoord);
+      return "none";
+    }
     case "damage_enemy_base": {
       const enemyPlayerId = getOpponentPlayer(resolvedItem.controllerId);
       const targetBase = getPlayerBase(state, enemyPlayerId);
       if (!targetBase) {
-        return;
+        return "discard";
       }
 
       const damage = definition.resolution.amount;
@@ -178,7 +245,7 @@ function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["sta
         turn: state.turn,
         text: `Resolved ${resolvedItem.label}: dealt ${damage} to ${enemyPlayerId} base (${beforeHp} -> ${targetBase.hp}).`,
       });
-      return;
+      return "discard";
     }
     case "counter": {
       const targetId = resolvedItem.targetStackItemId;
@@ -187,7 +254,7 @@ function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["sta
           turn: state.turn,
           text: `Resolved ${resolvedItem.label}: no stack target configured.`,
         });
-        return;
+        return "discard";
       }
 
       const countered = removeStackItemById(state.stack, targetId);
@@ -196,7 +263,7 @@ function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["sta
           turn: state.turn,
           text: `Resolved ${resolvedItem.label}: target stack item not found.`,
         });
-        return;
+        return "discard";
       }
 
       const destination =
@@ -209,10 +276,10 @@ function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["sta
         turn: state.turn,
         text: `Resolved ${resolvedItem.label}: countered ${countered.label} -> ${destination}.`,
       });
-      return;
+      return "discard";
     }
     default:
-      return;
+      return "discard";
   }
 }
 
@@ -267,6 +334,7 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
           sourceCardInstanceId: topItem.sourceCardInstanceId,
           sourceCardId: topItem.sourceCardId,
           sourceCardOwnerId: topItem.sourceCardOwnerId,
+          pendingUnitEntityId: topItem.pendingUnitEntityId,
         });
       }
 
@@ -295,6 +363,7 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
           sourceCardId: null,
           sourceCardOwnerId: null,
           nextPriorityPlayerId: getOpponentPlayer(command.playerId),
+          pendingUnitEntityId: null,
         },
       ];
     }
@@ -385,48 +454,29 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
         return [];
       }
 
-      if (card.kind === "tactic") {
-        const effectDefinition = getStackEffectDefinition(card.stackEffectId);
-        if (!effectDefinition) {
-          return [];
-        }
-
-        return [
-          {
-            type: "CARD_PLAYED_TO_STACK",
-            playerId: command.playerId,
-            cardInstanceId: handCard.instanceId,
-            cardId: handCard.cardId,
-            cardName: card.name,
-            cost: card.cost,
-            stackItemId: createStackItemId(state.turn, state.log.length),
-            effectId: card.stackEffectId,
-            effectMagnitude: getStackEffectMagnitude(card.stackEffectId),
-            targetStackItemId: command.targetStackItemId ?? null,
-            objectKind: effectDefinition.object.kind,
-            counterable: effectDefinition.object.counterable,
-            defaultCounterDestination: effectDefinition.object.defaultCounterDestination,
-            nextPriorityPlayerId: getOpponentPlayer(command.playerId),
-          },
-        ];
-      }
-
-      const spawnCoord = getFirstOpenBaseAdjacentTile(state, command.playerId);
-      if (!spawnCoord) {
+      const effectId = card.kind === "tactic" ? card.stackEffectId : "deploy_unit_card";
+      const effectDefinition = getStackEffectDefinition(effectId);
+      if (!effectDefinition) {
         return [];
       }
 
       return [
         {
-          type: "CARD_PLAYED_TO_BATTLEFIELD",
+          type: "CARD_PLAYED_TO_STACK",
           playerId: command.playerId,
           cardInstanceId: handCard.instanceId,
           cardId: handCard.cardId,
           cardName: card.name,
           cost: card.cost,
-          unitEntityId: createSummonedUnitId(state, command.playerId, card.id),
-          spawnCoord,
-          unit: card.unit,
+          stackItemId: createStackItemId(state.turn, state.log.length),
+          effectId,
+          effectMagnitude: getStackEffectMagnitude(effectId),
+          targetStackItemId: command.targetStackItemId ?? null,
+          objectKind: effectDefinition.object.kind,
+          counterable: effectDefinition.object.counterable,
+          defaultCounterDestination: effectDefinition.object.defaultCounterDestination,
+          nextPriorityPlayerId: getOpponentPlayer(command.playerId),
+          pendingUnitEntityId: card.kind === "unit" ? createSummonedUnitId(state, command.playerId, card.id) : null,
         },
       ];
     }
@@ -489,6 +539,7 @@ function reduceEvent(state: GameState, event: GameEvent): void {
         sourceCardInstanceId: event.sourceCardInstanceId,
         sourceCardId: event.sourceCardId,
         sourceCardOwnerId: event.sourceCardOwnerId,
+        pendingUnitEntityId: event.pendingUnitEntityId,
       });
       state.priorityPlayerId = event.nextPriorityPlayerId;
       state.consecutivePriorityPasses = 0;
@@ -505,14 +556,14 @@ function reduceEvent(state: GameState, event: GameEvent): void {
 
       state.priorityPlayerId = state.activePlayerId;
       state.consecutivePriorityPasses = 0;
-      applyResolvedStackEffect(state, resolvedItem);
-      moveStackSourceCardToZone(state, resolvedItem, "discard");
+      const resolvedSourceDestination = applyResolvedStackEffect(state, resolvedItem);
+      moveStackSourceCardToZone(state, resolvedItem, resolvedSourceDestination);
       return;
     }
     case "CARD_PLAYED_TO_STACK": {
       const card = removeCardFromHand(state, event.playerId, event.cardInstanceId);
       const cardDefinition = getCardDefinition(event.cardId);
-      if (!card || !cardDefinition || cardDefinition.kind !== "tactic") {
+      if (!card || !cardDefinition) {
         return;
       }
 
@@ -532,12 +583,13 @@ function reduceEvent(state: GameState, event: GameEvent): void {
         sourceCardInstanceId: card.instanceId,
         sourceCardId: card.cardId,
         sourceCardOwnerId: card.ownerId,
+        pendingUnitEntityId: event.pendingUnitEntityId,
       });
       state.priorityPlayerId = event.nextPriorityPlayerId;
       state.consecutivePriorityPasses = 0;
       state.log.push({
         turn: state.turn,
-        text: `${event.playerId} played ${event.cardName} from hand to stack.`,
+        text: `${event.playerId} cast ${event.cardName} from hand to stack.`,
       });
       return;
     }
@@ -550,31 +602,7 @@ function reduceEvent(state: GameState, event: GameEvent): void {
 
       applyCardCost(state, event.playerId, event.cost);
       syncPlayerZoneCounts(state);
-      state.entities[event.unitEntityId] = {
-        id: event.unitEntityId,
-        kind: "unit",
-        name: event.cardName,
-        ownerId: event.playerId,
-        role: event.unit.role,
-        hp: event.unit.hp,
-        maxHp: event.unit.hp,
-        attackDamage: event.unit.attackDamage,
-        siegeDamageBonus: event.unit.siegeDamageBonus,
-        armor: event.unit.armor,
-        moveRange: event.unit.moveRange,
-        attackRange: event.unit.attackRange,
-        attackActionsPerTurn: event.unit.attackActionsPerTurn,
-        coord: { ...event.spawnCoord },
-        carries: null,
-        sourceCardId: event.cardId,
-        hasSummoningSickness: true,
-        movesRemaining: 0,
-        attacksRemaining: 0,
-      };
-      state.log.push({
-        turn: state.turn,
-        text: `${event.playerId} deployed ${event.cardName} to (${event.spawnCoord.q}, ${event.spawnCoord.r}).`,
-      });
+      deployUnitToBattlefield(state, event.playerId, event.cardId, event.cardName, event.unitEntityId, event.spawnCoord);
       return;
     }
     case "UNIT_MOVED": {

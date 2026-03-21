@@ -28,6 +28,7 @@ describe("stack helpers", () => {
         sourceCardInstanceId: null,
         sourceCardId: null,
         sourceCardOwnerId: null,
+        pendingUnitEntityId: null,
       },
       {
         id: "s2",
@@ -43,6 +44,7 @@ describe("stack helpers", () => {
         sourceCardInstanceId: null,
         sourceCardId: null,
         sourceCardOwnerId: null,
+        pendingUnitEntityId: null,
       },
     ];
 
@@ -71,6 +73,7 @@ describe("stack helpers", () => {
         sourceCardInstanceId: null,
         sourceCardId: null,
         sourceCardOwnerId: null,
+        pendingUnitEntityId: null,
       },
       {
         id: "s2",
@@ -86,6 +89,7 @@ describe("stack helpers", () => {
         sourceCardInstanceId: null,
         sourceCardId: null,
         sourceCardOwnerId: null,
+        pendingUnitEntityId: null,
       },
     ];
 

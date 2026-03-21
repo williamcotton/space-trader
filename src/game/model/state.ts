@@ -101,6 +101,7 @@ export type StackItem = {
   sourceCardInstanceId: string | null;
   sourceCardId: string | null;
   sourceCardOwnerId: PlayerId | null;
+  pendingUnitEntityId: EntityId | null;
 };
 
 export type MatchLogEntry = {

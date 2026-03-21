@@ -19,7 +19,7 @@ const INITIAL_VIEWPORT: GameViewport = {
   height: 768,
 };
 
-const CURRENT_STATE_VERSION = 13;
+const CURRENT_STATE_VERSION = 14;
 const BOT_ACTION_INTERVAL_SECONDS = 0.16;
 
 type BotDecisionSystem = typeof decideMvpBotCommand;
@@ -128,6 +128,9 @@ function migrateRuntimeState(state: GameState): void {
     if (typeof stackItem.sourceCardOwnerId === "undefined") {
       stackItem.sourceCardOwnerId = null;
     }
+    if (typeof stackItem.pendingUnitEntityId === "undefined") {
+      stackItem.pendingUnitEntityId = null;
+    }
   }
 
   for (const entity of Object.values(state.entities)) {
@@ -197,7 +200,7 @@ function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v13 (unit-specific siege values and faster match pacing update).",
+      text: "State migrated to v14 (unit spells now use stack-based resolution).",
     });
   }
 }

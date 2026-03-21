@@ -96,6 +96,27 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
         break;
       case "STACK_ITEM_RESOLVED": {
         const definition = getStackEffectDefinition(event.effectId);
+        if (definition?.resolution.type === "deploy_unit") {
+          if (!event.pendingUnitEntityId) {
+            break;
+          }
+
+          const resolvedUnit = state.entities[event.pendingUnitEntityId];
+          if (!resolvedUnit || resolvedUnit.kind !== "unit") {
+            break;
+          }
+
+          animations.push({
+            id: baseId,
+            kind: "deploy",
+            playerId: resolvedUnit.ownerId,
+            ageSeconds: 0,
+            durationSeconds: 0.66,
+            coord: resolvedUnit.coord,
+          });
+          break;
+        }
+
         if (definition?.resolution.type !== "damage_enemy_base") {
           break;
         }

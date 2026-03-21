@@ -50,6 +50,7 @@ describe("decideMvpBotCommand", () => {
       sourceCardInstanceId: null,
       sourceCardId: null,
       sourceCardOwnerId: null,
+      pendingUnitEntityId: null,
     });
     state.players.player_2.resources.credits = 3;
     state.players.player_2.resources.flux = 3;

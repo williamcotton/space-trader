@@ -66,6 +66,7 @@ export type CardPlayedToStackEvent = {
   counterable: boolean;
   defaultCounterDestination: "discard" | "hand" | "exile" | "none";
   nextPriorityPlayerId: PlayerId;
+  pendingUnitEntityId: EntityId | null;
 };
 
 export type CardPlayedToBattlefieldEvent = {
@@ -104,6 +105,7 @@ export type StackItemPushedEvent = {
   sourceCardId: string | null;
   sourceCardOwnerId: PlayerId | null;
   nextPriorityPlayerId: PlayerId;
+  pendingUnitEntityId: EntityId | null;
 };
 
 export type StackItemResolvedEvent = {
@@ -121,6 +123,7 @@ export type StackItemResolvedEvent = {
   sourceCardInstanceId: string | null;
   sourceCardId: string | null;
   sourceCardOwnerId: PlayerId | null;
+  pendingUnitEntityId: EntityId | null;
 };
 
 export type UnitMovedEventPayload = Omit<UnitMovedEvent, "type">;
