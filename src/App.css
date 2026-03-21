@@ -546,7 +546,7 @@ body {
   font-weight: 700;
 }
 
-.debug-stack-controls {
+.command-stack-panel {
   width: 100%;
   background: var(--bg-panel);
   border: 1px solid var(--border-panel);
@@ -556,7 +556,7 @@ body {
   border-radius: 10px;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -678,7 +678,7 @@ body {
   font-size: 12px;
 }
 
-.debug-stack-title {
+.command-stack-title {
   margin: 0;
   color: #dbe8ff;
   font-size: 12px;
@@ -686,20 +686,20 @@ body {
   text-transform: uppercase;
 }
 
-.debug-stack-header {
+.command-stack-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
 }
 
-.debug-stack-subtitle {
+.command-stack-subtitle {
   margin: 3px 0 0;
   color: #93a8d8;
   font-size: 11px;
 }
 
-.debug-stack-target-badge {
+.command-stack-badge {
   display: inline-flex;
   align-items: center;
   min-height: 20px;
@@ -714,72 +714,22 @@ body {
   white-space: nowrap;
 }
 
-.debug-stack-target-badge.selected {
+.command-stack-badge.selected {
   border-color: rgba(243, 218, 116, 0.56);
   color: #fff0b8;
   background: rgba(105, 79, 24, 0.28);
 }
 
-.debug-stack-target-badge.top {
+.command-stack-badge.top {
   border-color: rgba(124, 170, 255, 0.52);
   color: #d5e6ff;
 }
 
-.debug-stack-target-badge.none {
+.command-stack-badge.none {
   opacity: 0.72;
 }
 
-.debug-stack-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.debug-stack-buttons button {
-  border: 1px solid #3559a6;
-  background: linear-gradient(180deg, rgba(19, 31, 72, 0.96), rgba(13, 23, 56, 0.96));
-  color: #d7e6ff;
-  min-height: 34px;
-  padding: 7px 8px;
-  font: inherit;
-  font-size: 11px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.debug-stack-buttons button:hover {
-  background: linear-gradient(180deg, rgba(27, 44, 99, 0.96), rgba(19, 33, 76, 0.96));
-}
-
-.debug-stack-target {
-  margin: 0;
-  color: #9bb8e9;
-  font-size: 11px;
-}
-
-.debug-bot-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.debug-bot-buttons button {
-  border: 1px solid #3559a6;
-  background: rgba(13, 23, 56, 0.82);
-  color: #d7e6ff;
-  min-height: 32px;
-  padding: 7px 8px;
-  font: inherit;
-  font-size: 11px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.debug-bot-buttons button:hover {
-  background: #14214f;
-}
-
-.debug-stack-list {
+.command-stack-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -790,27 +740,24 @@ body {
   align-content: start;
 }
 
-.debug-stack-empty {
+.command-stack-empty {
   color: #7f8db3;
   font-size: 12px;
 }
 
-.debug-stack-item {
+.command-stack-item {
   width: 100%;
   border: 1px solid #2f427b;
   background: rgba(13, 20, 49, 0.9);
   color: #d7e6ff;
   padding: 7px 8px;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
   gap: 4px 8px;
   border-radius: 10px;
 }
 
-.debug-stack-item-order {
+.command-stack-item-order {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -824,18 +771,18 @@ body {
   text-transform: uppercase;
 }
 
-.debug-stack-item-main {
+.command-stack-item-main {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
-.debug-stack-item-main strong {
+.command-stack-item-main strong {
   font-size: 13px;
   color: #f2f7ff;
 }
 
-.debug-stack-item-meta {
+.command-stack-item-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -845,25 +792,20 @@ body {
   text-transform: uppercase;
 }
 
-.debug-stack-item-detail {
+.command-stack-item-detail {
   grid-column: 2 / -1;
   color: #bfd0f4;
   font-size: 11px;
   line-height: 1.35;
 }
 
-.debug-stack-item.counterable {
+.command-stack-item.counterable {
   border-color: rgba(68, 118, 204, 0.78);
 }
 
-.debug-stack-item.uncounterable {
+.command-stack-item.uncounterable {
   border-color: #6f4a58;
   opacity: 0.9;
-}
-
-.debug-stack-item.selected {
-  border-color: #f3da74;
-  box-shadow: inset 0 0 0 1px rgba(243, 218, 116, 0.45);
 }
 
 .resource-icon {
@@ -912,8 +854,8 @@ body {
     overflow: visible;
   }
 
-  .debug-stack-controls {
-    grid-template-rows: auto auto auto auto auto;
+  .command-stack-panel {
+    grid-template-rows: auto minmax(0, 1fr);
   }
 }
 

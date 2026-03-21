@@ -1,6 +1,6 @@
 import "./App.css";
 import { GameCanvas } from "./GameCanvas";
-import { DebugStackControls } from "./ui/DebugStackControls";
+import { CommandStackPanel } from "./ui/CommandStackPanel";
 import { GameHudPanels } from "./ui/GameHudPanels";
 import { GameTopBar } from "./ui/GameTopBar";
 import { HandTray } from "./ui/HandTray";
@@ -18,7 +18,7 @@ function App() {
         </div>
         <aside className="game-sidebar">
           <GameHudPanels />
-          <DebugStackControls />
+          <CommandStackPanel />
         </aside>
       </section>
     </main>
