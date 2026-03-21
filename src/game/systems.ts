@@ -152,6 +152,68 @@ function drawBackdrop(context: CanvasRenderingContext2D, frame: GameFrame): void
   context.globalAlpha = 1;
 }
 
+function getStackAnchor(frame: GameFrame): { x: number; y: number } {
+  return {
+    x: frame.viewport.width * 0.5,
+    y: clamp(frame.viewport.height * 0.1, 36, 60),
+  };
+}
+
+function truncateLabel(label: string, maxLength = 18): string {
+  return label.length > maxLength ? `${label.slice(0, maxLength - 1)}…` : label;
+}
+
+function drawStackGlyph(context: CanvasRenderingContext2D, x: number, y: number, size: number, visual: "unit" | "counter" | "tactic" | "generic"): void {
+  context.save();
+  context.translate(x, y);
+  context.lineWidth = Math.max(1.4, size * 0.14);
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  if (visual === "unit") {
+    drawDiamond(context, 0, 0, size * 0.9);
+    context.stroke();
+  } else if (visual === "counter") {
+    context.beginPath();
+    context.moveTo(-size * 0.74, -size * 0.74);
+    context.lineTo(size * 0.74, size * 0.74);
+    context.moveTo(size * 0.74, -size * 0.74);
+    context.lineTo(-size * 0.74, size * 0.74);
+    context.stroke();
+  } else if (visual === "tactic") {
+    drawRegularPolygon(context, 0, 0, size * 0.9, 6, -Math.PI / 6);
+    context.stroke();
+  } else {
+    context.beginPath();
+    context.arc(0, 0, size * 0.82, 0, Math.PI * 2);
+    context.stroke();
+  }
+
+  context.restore();
+}
+
+function drawStackAnchor(context: CanvasRenderingContext2D, frame: GameFrame, stackCount: number, highlightLevel: number): void {
+  const anchor = getStackAnchor(frame);
+  const width = 92;
+  const height = 24;
+  const alpha = 0.56 + highlightLevel * 0.24;
+
+  context.save();
+  drawRoundedRect(context, anchor.x - width / 2, anchor.y - height / 2, width, height, 12);
+  context.fillStyle = `rgba(12, 20, 49, ${alpha})`;
+  context.fill();
+  context.strokeStyle = `rgba(108, 169, 255, ${0.24 + highlightLevel * 0.52})`;
+  context.lineWidth = 1.4;
+  context.stroke();
+
+  context.fillStyle = `rgba(219, 233, 255, ${0.84 + highlightLevel * 0.12})`;
+  context.font = `600 10px "Avenir Next", "Trebuchet MS", sans-serif`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(stackCount > 0 ? `STACK ${stackCount}` : "STACK", anchor.x, anchor.y);
+  context.restore();
+}
+
 function drawHexGrid(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
   const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
   const fillPulse = 0.42 + 0.08 * Math.sin((originX + originY) * 0.001);
@@ -572,6 +634,66 @@ function drawAnimations(context: CanvasRenderingContext2D, frame: GameFrame, ori
       context.textAlign = "center";
       context.textBaseline = "bottom";
       context.fillText(`-${animation.damage}`, position.x, position.y - hexSize * (0.5 + progress * 0.4));
+      continue;
+    }
+
+    if (animation.kind === "stack_cast") {
+      const from = toPixel(animation.from, originX, originY, hexSize);
+      const anchor = getStackAnchor(frame);
+      const controlX = (from.x + anchor.x) * 0.5;
+      const controlY = Math.min(from.y, anchor.y) - hexSize * 1.25;
+      const trailT = progress;
+      const currentX = (1 - trailT) * (1 - trailT) * from.x + 2 * (1 - trailT) * trailT * controlX + trailT * trailT * anchor.x;
+      const currentY = (1 - trailT) * (1 - trailT) * from.y + 2 * (1 - trailT) * trailT * controlY + trailT * trailT * anchor.y;
+      const beamAlpha = 0.78 - progress * 0.42;
+
+      context.beginPath();
+      context.moveTo(from.x, from.y);
+      context.quadraticCurveTo(controlX, controlY, anchor.x, anchor.y);
+      context.strokeStyle = animation.playerId === "player_1" ? `rgba(99, 213, 255, ${beamAlpha})` : `rgba(255, 153, 105, ${beamAlpha})`;
+      context.lineWidth = 2.4 + (1 - progress) * 1.4;
+      context.stroke();
+
+      context.strokeStyle = animation.visual === "counter" ? "#a9d7ff" : "#e6f0ff";
+      drawStackGlyph(context, currentX, currentY, hexSize * 0.16, animation.visual);
+
+      context.fillStyle = `rgba(228, 239, 255, ${0.86 - progress * 0.54})`;
+      context.font = `${clamp(hexSize * 0.3, 10, 13)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+      context.textAlign = "center";
+      context.textBaseline = "bottom";
+      context.fillText(truncateLabel(animation.label), anchor.x, anchor.y - hexSize * 0.42);
+      continue;
+    }
+
+    if (animation.kind === "stack_counter") {
+      const from = toPixel(animation.from, originX, originY, hexSize);
+      const anchor = getStackAnchor(frame);
+      const controlX = (from.x + anchor.x) * 0.5;
+      const controlY = Math.min(from.y, anchor.y) - hexSize * 1.18;
+      const burstRadius = hexSize * (0.2 + progress * 0.52);
+      const beamAlpha = 0.84 - progress * 0.48;
+
+      context.beginPath();
+      context.moveTo(from.x, from.y);
+      context.quadraticCurveTo(controlX, controlY, anchor.x, anchor.y);
+      context.strokeStyle = animation.playerId === "player_1" ? `rgba(99, 213, 255, ${beamAlpha})` : `rgba(255, 153, 105, ${beamAlpha})`;
+      context.lineWidth = 2.8 + (1 - progress) * 1.6;
+      context.stroke();
+
+      context.beginPath();
+      context.arc(anchor.x, anchor.y, burstRadius, 0, Math.PI * 2);
+      context.strokeStyle = animation.returnToHand ? `rgba(114, 244, 198, ${0.9 - progress * 0.52})` : `rgba(255, 126, 126, ${0.9 - progress * 0.52})`;
+      context.lineWidth = 2.2;
+      context.stroke();
+
+      context.strokeStyle = animation.returnToHand ? `rgba(150, 250, 214, ${0.92 - progress * 0.56})` : `rgba(255, 210, 210, ${0.92 - progress * 0.56})`;
+      drawStackGlyph(context, anchor.x, anchor.y, hexSize * (0.18 + progress * 0.1), "counter");
+
+      context.fillStyle = animation.returnToHand ? `rgba(180, 255, 222, ${0.9 - progress * 0.58})` : `rgba(255, 219, 219, ${0.9 - progress * 0.58})`;
+      context.font = `${clamp(hexSize * 0.28, 10, 13)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+      context.textAlign = "center";
+      context.textBaseline = "bottom";
+      context.fillText(`${animation.returnToHand ? "Recall" : "Counter"} ${truncateLabel(animation.targetLabel, 16)}`, anchor.x, anchor.y - hexSize * (0.54 + progress * 0.2));
     }
   }
 }
@@ -601,6 +723,10 @@ export function renderGame(state: GameState, frame: GameFrame): void {
   drawMoveRangeOverlay(state, context, originX, originY, hexSize);
   drawResourceNodes(state, context, originX, originY, hexSize);
   drawHoverHexAndTargetPreview(state, context, originX, originY, hexSize);
+  const stackActivityLevel = frame.transients.animations.some((animation) => animation.kind === "stack_cast" || animation.kind === "stack_counter") ? 1 : 0;
+  if (state.stack.length > 0 || stackActivityLevel > 0) {
+    drawStackAnchor(context, frame, state.stack.length, stackActivityLevel);
+  }
   drawAnimations(context, frame, originX, originY, hexSize);
 
   for (const entity of Object.values(state.entities)) {

@@ -11,6 +11,7 @@ import { ensureEntityPresentation, inferUnitSourceCardId } from "./presentation"
 import { captureAnimationSnapshot, buildAnimationsFromEvents, stepAnimations } from "./render/animations";
 import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
+import { getAutoFlowCommand } from "./turn/autoFlow";
 import type { GameState } from "./model/state";
 import type { CanvasAnimation, GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
 
@@ -557,8 +558,18 @@ class GameRuntime {
     }
   }
 
+  private stepAutoFlow(): void {
+    const command = getAutoFlowCommand(this.state);
+    if (!command) {
+      return;
+    }
+
+    void this.dispatch(command);
+  }
+
   step(context: CanvasRenderingContext2D, deltaSeconds: number): void {
     this.elapsedSeconds += deltaSeconds;
+    this.stepAutoFlow();
     this.stepBotAutoplay(deltaSeconds);
     this.animations = stepAnimations(this.animations, deltaSeconds);
 

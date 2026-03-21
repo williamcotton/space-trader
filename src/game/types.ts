@@ -48,6 +48,27 @@ export type CanvasAnimation =
       durationSeconds: number;
       coord: HexCoord;
       damage: number;
+    }
+  | {
+      id: string;
+      kind: "stack_cast";
+      playerId: PlayerId;
+      ageSeconds: number;
+      durationSeconds: number;
+      from: HexCoord;
+      label: string;
+      visual: "unit" | "counter" | "tactic" | "generic";
+    }
+  | {
+      id: string;
+      kind: "stack_counter";
+      playerId: PlayerId;
+      ageSeconds: number;
+      durationSeconds: number;
+      from: HexCoord;
+      label: string;
+      targetLabel: string;
+      returnToHand: boolean;
     };
 
 export type FrameTransients = {

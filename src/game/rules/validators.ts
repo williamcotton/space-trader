@@ -58,9 +58,17 @@ function getFirstOpenBaseAdjacentTile(state: GameState, playerId: PlayerId): { q
   return null;
 }
 
+function hasUnresolvedStack(state: GameState): boolean {
+  return state.stack.length > 0;
+}
+
 function validateAdvancePhase(state: GameState, playerId: string): CommandValidationResult {
   if (state.activePlayerId !== playerId) {
     return { ok: false, reason: "Only the active player can advance the phase." };
+  }
+
+  if (hasUnresolvedStack(state)) {
+    return { ok: false, reason: "Cannot advance phases while stack items are unresolved." };
   }
 
   return { ok: true };
@@ -69,6 +77,10 @@ function validateAdvancePhase(state: GameState, playerId: string): CommandValida
 function validateEndPhase(state: GameState, playerId: string): CommandValidationResult {
   if (state.activePlayerId !== playerId) {
     return { ok: false, reason: "Only the active player can end the phase." };
+  }
+
+  if (hasUnresolvedStack(state)) {
+    return { ok: false, reason: "Cannot end phases while stack items are unresolved." };
   }
 
   return { ok: true };
@@ -134,6 +146,10 @@ function validateSelectEntity(state: GameState, command: Extract<GameCommand, { 
     return { ok: false, reason: "Only the active player can select entities." };
   }
 
+  if (hasUnresolvedStack(state)) {
+    return { ok: false, reason: "Cannot select units while stack items are unresolved." };
+  }
+
   const entity = getEntity(state, command.entityId);
   if (!entity) {
     return { ok: false, reason: "Entity does not exist." };
@@ -155,6 +171,10 @@ function validateClearSelection(state: GameState, command: Extract<GameCommand, 
     return { ok: false, reason: "Only the active player can clear selection." };
   }
 
+  if (hasUnresolvedStack(state)) {
+    return { ok: false, reason: "Cannot clear selection while stack items are unresolved." };
+  }
+
   if (!state.selectedEntityId) {
     return { ok: false, reason: "No selected entity to clear." };
   }
@@ -165,6 +185,10 @@ function validateClearSelection(state: GameState, command: Extract<GameCommand, 
 function validateMoveUnit(state: GameState, command: Extract<GameCommand, { type: "MOVE_UNIT" }>): CommandValidationResult {
   if (state.activePlayerId !== command.playerId) {
     return { ok: false, reason: "Only the active player can move units." };
+  }
+
+  if (hasUnresolvedStack(state)) {
+    return { ok: false, reason: "Cannot move units while stack items are unresolved." };
   }
 
   if (state.phase !== "tactical") {
@@ -217,6 +241,10 @@ function validateAttackUnit(state: GameState, command: Extract<GameCommand, { ty
     return { ok: false, reason: "Only the active player can attack." };
   }
 
+  if (hasUnresolvedStack(state)) {
+    return { ok: false, reason: "Cannot attack while stack items are unresolved." };
+  }
+
   if (state.phase !== "tactical") {
     return { ok: false, reason: "Units can only attack during tactical phase." };
   }
@@ -266,6 +294,10 @@ function validateAttackUnit(state: GameState, command: Extract<GameCommand, { ty
 function validateHarvestNode(state: GameState, command: Extract<GameCommand, { type: "HARVEST_NODE" }>): CommandValidationResult {
   if (state.activePlayerId !== command.playerId) {
     return { ok: false, reason: "Only the active player can harvest." };
+  }
+
+  if (hasUnresolvedStack(state)) {
+    return { ok: false, reason: "Cannot harvest while stack items are unresolved." };
   }
 
   if (state.phase !== "tactical") {

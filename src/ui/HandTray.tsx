@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { getCardDefinition, type CardCost } from "../game/content/cards/catalog";
 import { isCounterResponse } from "../game/content/stackEffects";
 import type { ResourceType } from "../game/model/enums";
-import { formatFactionName, getResourceTheme } from "../game/presentation";
+import { formatFactionName, getResourceTheme, getUnitRoleTheme } from "../game/presentation";
 import { getGameRuntime } from "../game/runtime";
 import type { GameState } from "../game/model/state";
 import { ResourceIcon } from "./ResourceIcon";
@@ -15,6 +15,12 @@ type HandCardView = {
 type UnitStatEntry = {
   label: string;
   value: number;
+};
+
+type CardTag = {
+  label: string;
+  tone: "neutral" | "speed" | "role";
+  accent?: string;
 };
 
 type HandSnapshot = {
@@ -124,7 +130,8 @@ export function HandTray() {
             ...card,
             playable: false,
             title: card.cardId,
-            subtitle: "unknown",
+            subtitle: "Unknown",
+            tags: [{ label: "Unknown Card", tone: "neutral" }] as CardTag[],
             costEntries: [] as Array<{ resource: ResourceType; amount: number }>,
             unitStats: [] as UnitStatEntry[],
             text: "Unknown card",
@@ -144,11 +151,32 @@ export function HandTray() {
             ? Boolean(counterTarget)
             : true;
 
+        const roleTag =
+          definition.kind === "unit"
+            ? (() => {
+                const roleTheme = getUnitRoleTheme(definition.unit.role);
+                return {
+                  label: `${roleTheme.label} Unit`,
+                  tone: "role" as const,
+                  accent: roleTheme.accent,
+                };
+              })()
+            : null;
+        const tags: CardTag[] = [];
+        if (definition.kind === "tactic") {
+          tags.push({ label: "Tactic", tone: "neutral" });
+        }
+        if (roleTag) {
+          tags.push(roleTag);
+        }
+        tags.push({ label: definition.speed === "instant" ? "Instant" : "Main", tone: "speed" });
+
         return {
           ...card,
           playable: !snapshot.winner && affordable && speedOk && deploymentOk && counterOk,
           title: definition.name,
-          subtitle: `${formatFactionName(definition.faction)} · ${definition.kind} · ${definition.speed}`,
+          subtitle: formatFactionName(definition.faction),
+          tags,
           costEntries: getCostEntries(definition.cost),
           unitStats:
             definition.kind === "unit"
@@ -189,6 +217,17 @@ export function HandTray() {
             >
               <span className="hand-card-title">{card.title}</span>
               <span className="hand-card-subtitle">{card.subtitle}</span>
+              <span className="hand-card-tags">
+                {card.tags.map((tag) => (
+                  <span
+                    key={tag.label}
+                    className={`hand-card-tag ${tag.tone}`}
+                    style={tag.accent ? ({ "--hand-card-tag-accent": tag.accent } as CSSProperties) : undefined}
+                  >
+                    {tag.label}
+                  </span>
+                ))}
+              </span>
               <span className="hand-card-cost">
                 {card.costEntries.length === 0 ? (
                   <span className="resource-cost-chip free">Free</span>

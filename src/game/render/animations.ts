@@ -1,4 +1,5 @@
 import type { GameEvent } from "../actions/events";
+import { getCardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, HexCoord } from "../model/state";
@@ -10,8 +11,18 @@ type EntitySnapshot = {
   coord: HexCoord;
 };
 
+type StackItemSnapshot = {
+  id: string;
+  label: string;
+  controllerId: PlayerId;
+  effectId: string;
+  sourceCardId: string | null;
+  targetStackItemId: string | null;
+};
+
 export type AnimationCapture = {
   entities: Record<string, EntitySnapshot>;
+  stackItems: Record<string, StackItemSnapshot>;
 };
 
 export function captureAnimationSnapshot(state: GameState): AnimationCapture {
@@ -26,7 +37,39 @@ export function captureAnimationSnapshot(state: GameState): AnimationCapture {
     ])
   );
 
-  return { entities };
+  const stackItems = Object.fromEntries(
+    state.stack.map((item) => [
+      item.id,
+      {
+        id: item.id,
+        label: item.label,
+        controllerId: item.controllerId,
+        effectId: item.effectId,
+        sourceCardId: item.sourceCardId,
+        targetStackItemId: item.targetStackItemId,
+      } satisfies StackItemSnapshot,
+    ])
+  );
+
+  return { entities, stackItems };
+}
+
+function getStackAnimationVisual(effectId: string, sourceCardId: string | null): "unit" | "counter" | "tactic" | "generic" {
+  const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
+  if (sourceCard?.kind === "unit" || effectId === "deploy_unit_card") {
+    return "unit";
+  }
+
+  const effect = getStackEffectDefinition(effectId);
+  if (effect?.resolution.type === "counter") {
+    return "counter";
+  }
+
+  if (sourceCard?.kind === "tactic" || effect?.object.kind === "spell") {
+    return "tactic";
+  }
+
+  return "generic";
 }
 
 export function buildAnimationsFromEvents(events: GameEvent[], before: AnimationCapture, state: GameState): CanvasAnimation[] {
@@ -84,6 +127,42 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
         });
         break;
       }
+      case "STACK_ITEM_PUSHED": {
+        const sourceBase = state.entities[state.players[event.playerId].baseEntityId];
+        if (!sourceBase || sourceBase.kind !== "base") {
+          break;
+        }
+
+        animations.push({
+          id: baseId,
+          kind: "stack_cast",
+          playerId: event.playerId,
+          ageSeconds: 0,
+          durationSeconds: 0.72,
+          from: sourceBase.coord,
+          label: event.label,
+          visual: getStackAnimationVisual(event.effectId, event.sourceCardId),
+        });
+        break;
+      }
+      case "CARD_PLAYED_TO_STACK": {
+        const sourceBase = state.entities[state.players[event.playerId].baseEntityId];
+        if (!sourceBase || sourceBase.kind !== "base") {
+          break;
+        }
+
+        animations.push({
+          id: baseId,
+          kind: "stack_cast",
+          playerId: event.playerId,
+          ageSeconds: 0,
+          durationSeconds: 0.72,
+          from: sourceBase.coord,
+          label: event.cardName,
+          visual: getStackAnimationVisual(event.effectId, event.cardId),
+        });
+        break;
+      }
       case "CARD_PLAYED_TO_BATTLEFIELD":
         animations.push({
           id: baseId,
@@ -96,6 +175,27 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
         break;
       case "STACK_ITEM_RESOLVED": {
         const definition = getStackEffectDefinition(event.effectId);
+        if (definition?.resolution.type === "counter") {
+          const sourceBase = state.entities[state.players[event.controllerId].baseEntityId];
+          const targetItem = event.targetStackItemId ? before.stackItems[event.targetStackItemId] : undefined;
+          if (!sourceBase || sourceBase.kind !== "base" || !targetItem) {
+            break;
+          }
+
+          animations.push({
+            id: baseId,
+            kind: "stack_counter",
+            playerId: event.controllerId,
+            ageSeconds: 0,
+            durationSeconds: 0.88,
+            from: sourceBase.coord,
+            label: event.label,
+            targetLabel: targetItem.label,
+            returnToHand: definition.resolution.destination === "hand",
+          });
+          break;
+        }
+
         if (definition?.resolution.type === "deploy_unit") {
           if (!event.pendingUnitEntityId) {
             break;

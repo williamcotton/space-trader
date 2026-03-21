@@ -534,6 +534,74 @@ describe("dispatchCommand", () => {
     expect(state.players.player_1.resources.alloy).toBe(3);
   });
 
+  it("rejects phase changes while stack items are unresolved", () => {
+    const state = setupState();
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.alloy = 4;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+    expect(state.stack).toHaveLength(1);
+
+    const endPhase = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(expectRejected(endPhase)).toContain("stack items are unresolved");
+
+    const advancePhase = dispatchCommand(state, {
+      type: "ADVANCE_PHASE",
+      playerId: "player_1",
+    });
+    expect(expectRejected(advancePhase)).toContain("stack items are unresolved");
+    expect(state.phase).toBe("start");
+  });
+
+  it("rejects tactical board actions while stack items are unresolved", () => {
+    const state = setupState();
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.alloy = 4;
+
+    advanceToTactical(state);
+    expect(state.phase).toBe("tactical");
+
+    const select = dispatchCommand(state, {
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: "unit_player_1_scout",
+    });
+    expect(select.ok).toBe(true);
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+    expect(state.stack).toHaveLength(1);
+
+    const move = dispatchCommand(state, {
+      type: "MOVE_UNIT",
+      playerId: "player_1",
+      entityId: "unit_player_1_scout",
+      to: { q: -2, r: 0 },
+    });
+    expect(expectRejected(move)).toContain("stack items are unresolved");
+
+    const clearSelection = dispatchCommand(state, {
+      type: "CLEAR_SELECTION",
+      playerId: "player_1",
+      reason: "clicked_selected_unit",
+    });
+    expect(expectRejected(clearSelection)).toContain("stack items are unresolved");
+  });
+
   it("casts a main-speed unit card to stack and resolves it to battlefield with summoning sickness", () => {
     const state = setupState();
     const cardInHand = state.zones.player_1.hand.find((card) => card.cardId === "frontline_scout_card");
