@@ -6,6 +6,13 @@ import { formatFactionName, getPlayerLabel, getResourceTheme } from "../game/pre
 import { ResourceIcon } from "./ResourceIcon";
 
 const PHASE_ORDER: GamePhase[] = ["start", "economy", "main", "tactical", "end"];
+const PHASE_LABELS: Record<GamePhase, string> = {
+  start: "Start",
+  economy: "Eco",
+  main: "Main",
+  tactical: "Tac",
+  end: "End",
+};
 const RESOURCE_ORDER: ResourceType[] = ["credits", "alloy", "flux", "biomass"];
 
 type PlayerTopBarSnapshot = {
@@ -27,21 +34,8 @@ type TopBarSnapshot = {
   consecutivePasses: number;
   winner: PlayerId | null;
   lastRejectedReason: string | null;
-  latestEconomyFeedback: string | null;
   players: PlayerTopBarSnapshot[];
 };
-
-function getLatestEconomyFeedback(): string | null {
-  const runtime = getGameRuntime();
-  const { log } = runtime.state;
-  for (let index = log.length - 1; index >= 0; index -= 1) {
-    const text = log[index]?.text ?? "";
-    if (text.includes("deposited") || text.includes("captured") || text.includes("seized") || text.includes("cargo lost")) {
-      return text;
-    }
-  }
-  return null;
-}
 
 function readSnapshot(): TopBarSnapshot {
   const runtime = getGameRuntime();
@@ -56,7 +50,6 @@ function readSnapshot(): TopBarSnapshot {
     consecutivePasses: state.consecutivePriorityPasses,
     winner: state.winner,
     lastRejectedReason: state.lastRejectedReason,
-    latestEconomyFeedback: getLatestEconomyFeedback(),
     players: (["player_1", "player_2"] as const).map((playerId) => ({
       id: playerId,
       faction: state.players[playerId].faction,
@@ -82,119 +75,104 @@ export function GameTopBar() {
   }, []);
 
   const phaseIndex = PHASE_ORDER.indexOf(snapshot.phase);
-  const phaseLabel = snapshot.phase.charAt(0).toUpperCase() + snapshot.phase.slice(1);
   const statusMessage = useMemo(() => {
     if (snapshot.winner) {
-      return `${snapshot.winner} wins the match.`;
+      return `${getPlayerLabel(snapshot.winner)} wins`;
     }
     if (snapshot.lastRejectedReason) {
-      return `Last reject: ${snapshot.lastRejectedReason}`;
+      return `Reject: ${snapshot.lastRejectedReason}`;
     }
-    if (snapshot.latestEconomyFeedback) {
-      return snapshot.latestEconomyFeedback;
-    }
-    return "Ready.";
-  }, [snapshot.lastRejectedReason, snapshot.latestEconomyFeedback, snapshot.winner]);
+    return null;
+  }, [snapshot.lastRejectedReason, snapshot.winner]);
 
   return (
     <header className="game-top-bar" aria-label="Match controls and status">
-      <div className="game-top-bar-main">
-        <div className="game-top-bar-title-block">
-          <div className="game-top-bar-title">
-            <span className="eyebrow">{snapshot.mapName}</span>
-            <strong>Turn {snapshot.turn}</strong>
-          </div>
-          <div className="game-top-bar-meta">
-            <span className="game-top-bar-chip active-phase">Phase {phaseLabel}</span>
-            <span className="game-top-bar-chip">Active {getPlayerLabel(snapshot.activePlayerId)}</span>
-            <span className="game-top-bar-chip">
-              Priority {snapshot.priorityPlayerId ? getPlayerLabel(snapshot.priorityPlayerId) : "none"}
-            </span>
-            <span className="game-top-bar-chip">Stack {snapshot.stackSize}</span>
-            <span className="game-top-bar-chip">Pass {snapshot.consecutivePasses}</span>
-          </div>
+      <div className="game-top-bar-line">
+        <div className="game-top-bar-match">
+          <span className="eyebrow">{snapshot.mapName}</span>
+          <strong>Turn {snapshot.turn}</strong>
+          {statusMessage ? <span className="game-top-bar-inline-status">{statusMessage}</span> : null}
         </div>
 
-        <ol className="game-phase-track">
-          {PHASE_ORDER.map((phase, index) => (
-            <li
-              key={phase}
+        <div className="game-top-bar-players-inline">
+          {snapshot.players.map((player) => (
+            <article
+              key={player.id}
               className={[
-                index < phaseIndex ? "done" : "",
-                index === phaseIndex ? "active" : "",
+                "top-bar-player-pod",
+                player.id === snapshot.activePlayerId ? "active" : "",
+                player.id === snapshot.priorityPlayerId ? "priority" : "",
+                player.id === "player_1" ? "player-one" : "player-two",
               ]
                 .filter(Boolean)
                 .join(" ")}
             >
-              {phase}
-            </li>
+              <div className="top-bar-player-identity">
+                <strong>{getPlayerLabel(player.id)}</strong>
+                <span>{formatFactionName(player.faction)}</span>
+              </div>
+              <div className="top-bar-player-resources">
+                {RESOURCE_ORDER.map((resource) => (
+                  <span key={resource} className={`top-bar-resource-pill ${resource}`} title={getResourceTheme(resource).label}>
+                    <ResourceIcon resource={resource} size={12} />
+                    <strong>{player.resources[resource]}</strong>
+                  </span>
+                ))}
+              </div>
+              <div className="top-bar-player-meta">
+                <button
+                  type="button"
+                  className={["top-bar-bot-toggle", player.botAutoplay ? "enabled" : "disabled"].join(" ")}
+                  onClick={() => runtime.toggleBotAutoplay(player.id)}
+                >
+                  {player.botAutoplay ? "Bot On" : "Bot Off"}
+                </button>
+                <span className="top-bar-player-zones">
+                  H{player.hand} D{player.deck}
+                </span>
+              </div>
+            </article>
           ))}
-        </ol>
+        </div>
+
+        <div className="game-top-bar-phase-cluster">
+          <div className="game-top-bar-mini-metrics">
+            <span className="game-top-bar-chip">Stack {snapshot.stackSize}</span>
+            <span className="game-top-bar-chip">Pass {snapshot.consecutivePasses}</span>
+          </div>
+          <ol className="game-phase-track compact">
+            {PHASE_ORDER.map((phase, index) => (
+              <li
+                key={phase}
+                className={[
+                  index < phaseIndex ? "done" : "",
+                  index === phaseIndex ? "active" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                {PHASE_LABELS[phase]}
+              </li>
+            ))}
+          </ol>
+        </div>
 
         <div className="game-top-bar-actions">
           <button type="button" disabled={Boolean(snapshot.winner)} onClick={() => runtime.debugAdvancePhase()}>
-            End Phase
+            Phase
           </button>
           <button
             type="button"
             disabled={Boolean(snapshot.winner) || !snapshot.priorityPlayerId}
             onClick={() => runtime.debugPassPriority()}
           >
-            Pass Priority
+            Pass
           </button>
           <button type="button" disabled={Boolean(snapshot.winner)} onClick={() => runtime.debugSelectFirstActiveUnit()}>
-            Select Unit
+            Select
           </button>
         </div>
       </div>
-
-      <div className="game-top-bar-players">
-        {snapshot.players.map((player) => (
-          <article
-            key={player.id}
-            className={[
-              "player-resource-card",
-              player.id === snapshot.activePlayerId ? "active" : "",
-              player.id === "player_1" ? "player-one" : "player-two",
-            ].join(" ")}
-          >
-            <div className="player-resource-header">
-              <div className="player-resource-identity">
-                <strong>{getPlayerLabel(player.id)}</strong>
-                <span>{formatFactionName(player.faction)}</span>
-              </div>
-              <div className="player-resource-flags">
-                <button
-                  type="button"
-                  className={["player-state-badge", "player-state-toggle", "bot", player.botAutoplay ? "enabled" : "disabled"].join(" ")}
-                  onClick={() => runtime.toggleBotAutoplay(player.id)}
-                >
-                  Bot {player.botAutoplay ? "On" : "Off"}
-                </button>
-                {player.id === snapshot.activePlayerId ? <span className="player-state-badge active">Active</span> : null}
-                {player.id === snapshot.priorityPlayerId ? <span className="player-state-badge priority">Priority</span> : null}
-              </div>
-            </div>
-            <div className="player-resource-values">
-              {RESOURCE_ORDER.map((resource) => (
-                <span key={resource} className={`player-resource-chip ${resource}`}>
-                  <span className="player-resource-symbol">
-                    <ResourceIcon resource={resource} size={16} />
-                  </span>
-                  <strong>{player.resources[resource]}</strong>
-                  <small>{getResourceTheme(resource).shortLabel}</small>
-                </span>
-              ))}
-            </div>
-            <div className="player-zone-values">
-              <span>Hand {player.hand}</span>
-              <span>Deck {player.deck}</span>
-            </div>
-          </article>
-        ))}
-      </div>
-
-      <p className={["game-top-bar-message", snapshot.lastRejectedReason ? "warning" : ""].join(" ")}>{statusMessage}</p>
     </header>
   );
 }
