@@ -27,6 +27,7 @@ type SimulationConfig = {
   playerOnePrimaryCandidates: number[];
   playerTwoCreditCandidates: number[];
   playerTwoPrimaryCandidates: number[];
+  targetPairings: Array<readonly [Faction, Faction]> | null;
 };
 
 type MatchResult = {
@@ -71,7 +72,40 @@ const DEFAULT_CONFIG: SimulationConfig = {
   playerOnePrimaryCandidates: [2, 1, 0],
   playerTwoCreditCandidates: [4, 5, 6],
   playerTwoPrimaryCandidates: [2, 3],
+  targetPairings: null,
 };
+
+function printUsage(): void {
+  console.log(`Frontier Belt balance simulator`);
+  console.log("");
+  console.log(`Usage`);
+  console.log(`  vite-node scripts/frontier-balance.ts [options]`);
+  console.log("");
+  console.log(`Core options`);
+  console.log(`  --games <n>                  Number of simulated games`);
+  console.log(`  --max-turns <n>              Turn cap before timeout`);
+  console.log(`  --seed <n>                   Base RNG seed`);
+  console.log(`  --p1-credits <n>             Override player 1 starting credits`);
+  console.log(`  --p1-primary <n>             Override player 1 starting faction resource`);
+  console.log(`  --p2-credits <n>             Override player 2 starting credits`);
+  console.log(`  --p2-primary <n>             Override player 2 starting faction resource`);
+  console.log(`  --pairings <a:b,c:d>         Restrict runs to explicit ordered faction pairings`);
+  console.log("");
+  console.log(`Sweep options`);
+  console.log(`  --sweep-p1-resources true    Sweep player 1 resources across candidate lists`);
+  console.log(`  --sweep-resource-grid true   Sweep both players across candidate lists`);
+  console.log(`  --p1-credit-candidates <csv> Candidate player 1 credit values`);
+  console.log(`  --p1-primary-candidates <csv> Candidate player 1 primary values`);
+  console.log(`  --p2-credit-candidates <csv> Candidate player 2 credit values`);
+  console.log(`  --p2-primary-candidates <csv> Candidate player 2 primary values`);
+  console.log("");
+  console.log(`Examples`);
+  console.log(`  vite-node scripts/frontier-balance.ts --games 1000 --max-turns 120`);
+  console.log(`  vite-node scripts/frontier-balance.ts --games 2000 --max-turns 120 --pairings alloy_clan:flux_collective,flux_collective:alloy_clan`);
+  console.log(
+    `  vite-node scripts/frontier-balance.ts --games 1000 --max-turns 120 --sweep-resource-grid true --p1-credit-candidates 4,3,2,1,0 --p1-primary-candidates 2 --p2-credit-candidates 4,5,6,7,8 --p2-primary-candidates 2`
+  );
+}
 
 function parseIntegerList(value: string, flag: string): number[] {
   const values = value
@@ -84,6 +118,34 @@ function parseIntegerList(value: string, flag: string): number[] {
   }
 
   return [...new Set(values)];
+}
+
+function parsePairings(value: string): Array<readonly [Faction, Faction]> {
+  const seen = new Set<string>();
+  const pairings: Array<readonly [Faction, Faction]> = [];
+
+  for (const entry of value.split(",")) {
+    const [leftRaw, rightRaw] = entry.split(":").map((part) => part.trim());
+    if (!leftRaw || !rightRaw) {
+      throw new Error(`Invalid --pairings value: ${value}`);
+    }
+    if (!FACTIONS.includes(leftRaw as Faction) || !FACTIONS.includes(rightRaw as Faction)) {
+      throw new Error(`Invalid --pairings value: ${value}`);
+    }
+
+    const key = `${leftRaw}:${rightRaw}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    pairings.push([leftRaw as Faction, rightRaw as Faction]);
+  }
+
+  if (pairings.length === 0) {
+    throw new Error(`Invalid --pairings value: ${value}`);
+  }
+
+  return pairings;
 }
 
 function parseConfig(argv: string[]): SimulationConfig {
@@ -158,6 +220,11 @@ function parseConfig(argv: string[]): SimulationConfig {
     }
     if (arg === "--p2-primary-candidates") {
       config.playerTwoPrimaryCandidates = parseIntegerList(value, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--pairings") {
+      config.targetPairings = parsePairings(value);
       index += 1;
     }
   }
@@ -330,8 +397,12 @@ function getOrderedPairings() {
   return FACTIONS.flatMap((playerOneFaction) => FACTIONS.map((playerTwoFaction) => [playerOneFaction, playerTwoFaction] as const));
 }
 
+function getConfiguredPairings(config: SimulationConfig) {
+  return config.targetPairings ?? getOrderedPairings();
+}
+
 function collectSimulationSummary(config: SimulationConfig): SimulationSummary {
-  const orderedPairings = getOrderedPairings();
+  const orderedPairings = getConfiguredPairings(config);
 
   const factionAppearanceRows = new Map<Faction, AggregateRow>();
   const pairingRows = new Map<string, AggregateRow>();
@@ -415,7 +486,7 @@ function collectSimulationSummary(config: SimulationConfig): SimulationSummary {
 
 function printSimulationSummary(summary: SimulationSummary): void {
   const { config, factionAppearanceRows, pairingRows, combinedPairingRows, factionGameWins, playerOneWins, playerTwoWins, timeouts, totalTurns } = summary;
-  const orderedPairings = getOrderedPairings();
+  const orderedPairings = getConfiguredPairings(config);
   const mirrorSeatStats = getMirrorSeatStats(summary);
   const mirrorDecisiveGames = mirrorSeatStats.games - mirrorSeatStats.draws;
   const mirrorPlayerOneRate = mirrorDecisiveGames === 0 ? 0.5 : mirrorSeatStats.playerOneWins / mirrorDecisiveGames;
@@ -450,11 +521,12 @@ function printSimulationSummary(summary: SimulationSummary): void {
 
   for (const faction of sortedFactions) {
     const wins = factionGameWins.get(faction) ?? 0;
-    const appearanceRow = factionAppearanceRows.get(faction)!;
+    const appearanceRow = factionAppearanceRows.get(faction);
+    const appearanceWinrate = !appearanceRow || appearanceRow.games === 0 ? 0 : appearanceRow.wins / appearanceRow.games;
     console.log(
       `${faction.padEnd(16)} wins=${String(wins).padStart(4)} shareOfGames=${formatPercent(wins / config.games)} decisiveShare=${formatPercent(
         decisiveGames === 0 ? 0 : wins / decisiveGames
-      )} appearanceWinrate=${formatPercent(appearanceRow.wins / appearanceRow.games)}`
+      )} appearanceWinrate=${formatPercent(appearanceWinrate)}`
     );
   }
 
@@ -673,7 +745,13 @@ function runResourceGridSweep(baseConfig: SimulationConfig): void {
   }
 }
 
-const config = parseConfig(process.argv.slice(2));
+const argv = process.argv.slice(2);
+if (argv.includes("--help") || argv.includes("-h")) {
+  printUsage();
+  process.exit(0);
+}
+
+const config = parseConfig(argv);
 if (config.sweepResourceGrid) {
   runResourceGridSweep(config);
 } else if (config.sweepPlayerOneResources) {
