@@ -68,7 +68,19 @@ export type CanvasAnimation =
       from: HexCoord;
       label: string;
       targetLabel: string;
+      targetVisual: "unit" | "counter" | "tactic" | "generic";
       returnToHand: boolean;
+    }
+  | {
+      id: string;
+      kind: "spell_resolve";
+      playerId: PlayerId;
+      ageSeconds: number;
+      durationSeconds: number;
+      coord: HexCoord;
+      visual: "damage" | "destroy" | "buff" | "base_damage";
+      amount?: number;
+      label: string;
     };
 
 export type FrameTransients = {

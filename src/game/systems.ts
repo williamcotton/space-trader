@@ -686,14 +686,93 @@ function drawAnimations(context: CanvasRenderingContext2D, frame: GameFrame, ori
       context.lineWidth = 2.2;
       context.stroke();
 
+      context.strokeStyle = `rgba(226, 240, 255, ${0.78 - progress * 0.48})`;
+      drawStackGlyph(context, anchor.x, anchor.y, hexSize * (0.2 + progress * 0.06), animation.targetVisual);
+
       context.strokeStyle = animation.returnToHand ? `rgba(150, 250, 214, ${0.92 - progress * 0.56})` : `rgba(255, 210, 210, ${0.92 - progress * 0.56})`;
-      drawStackGlyph(context, anchor.x, anchor.y, hexSize * (0.18 + progress * 0.1), "counter");
+      drawStackGlyph(context, anchor.x, anchor.y, hexSize * (0.16 + progress * 0.1), "counter");
 
       context.fillStyle = animation.returnToHand ? `rgba(180, 255, 222, ${0.9 - progress * 0.58})` : `rgba(255, 219, 219, ${0.9 - progress * 0.58})`;
       context.font = `${clamp(hexSize * 0.28, 10, 13)}px "Avenir Next", "Trebuchet MS", sans-serif`;
       context.textAlign = "center";
       context.textBaseline = "bottom";
       context.fillText(`${animation.returnToHand ? "Recall" : "Counter"} ${truncateLabel(animation.targetLabel, 16)}`, anchor.x, anchor.y - hexSize * (0.54 + progress * 0.2));
+      continue;
+    }
+
+    if (animation.kind === "spell_resolve") {
+      const anchor = getStackAnchor(frame);
+      const target = toPixel(animation.coord, originX, originY, hexSize);
+      const controlX = anchor.x + (target.x - anchor.x) * 0.46;
+      const controlY = Math.min(anchor.y, target.y) - hexSize * 0.68;
+
+      const beamAlpha = 0.86 - progress * 0.44;
+      context.beginPath();
+      context.moveTo(anchor.x, anchor.y);
+      context.quadraticCurveTo(controlX, controlY, target.x, target.y);
+      context.strokeStyle = animation.playerId === "player_1" ? `rgba(99, 213, 255, ${beamAlpha})` : `rgba(255, 153, 105, ${beamAlpha})`;
+      context.lineWidth = 2.4 + (1 - progress) * 1.8;
+      context.stroke();
+
+      if (animation.visual === "buff") {
+        context.beginPath();
+        context.arc(target.x, target.y, hexSize * (0.3 + progress * 0.46), 0, Math.PI * 2);
+        context.strokeStyle = `rgba(111, 245, 195, ${0.88 - progress * 0.5})`;
+        context.lineWidth = 2.2;
+        context.stroke();
+
+        context.beginPath();
+        context.arc(target.x, target.y, hexSize * (0.14 + progress * 0.18), 0, Math.PI * 2);
+        context.fillStyle = `rgba(111, 245, 195, ${0.22 - progress * 0.14})`;
+        context.fill();
+
+        context.fillStyle = `rgba(190, 255, 229, ${0.9 - progress * 0.5})`;
+        context.font = `${clamp(hexSize * 0.29, 10, 13)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+        context.textAlign = "center";
+        context.textBaseline = "bottom";
+        context.fillText(animation.label, target.x, target.y - hexSize * (0.54 + progress * 0.22));
+        continue;
+      }
+
+      if (animation.visual === "destroy") {
+        const radius = hexSize * (0.22 + progress * 0.42);
+        context.beginPath();
+        context.arc(target.x, target.y, radius, 0, Math.PI * 2);
+        context.strokeStyle = `rgba(255, 120, 120, ${0.9 - progress * 0.5})`;
+        context.lineWidth = 2.3;
+        context.stroke();
+
+        context.beginPath();
+        context.moveTo(target.x - radius * 0.72, target.y - radius * 0.72);
+        context.lineTo(target.x + radius * 0.72, target.y + radius * 0.72);
+        context.moveTo(target.x + radius * 0.72, target.y - radius * 0.72);
+        context.lineTo(target.x - radius * 0.72, target.y + radius * 0.72);
+        context.strokeStyle = `rgba(255, 215, 215, ${0.94 - progress * 0.56})`;
+        context.lineWidth = 2.4;
+        context.stroke();
+
+        context.fillStyle = `rgba(255, 215, 215, ${0.88 - progress * 0.54})`;
+        context.font = `${clamp(hexSize * 0.29, 10, 13)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+        context.textAlign = "center";
+        context.textBaseline = "bottom";
+        context.fillText("Destroy", target.x, target.y - hexSize * (0.54 + progress * 0.22));
+        continue;
+      }
+
+      const impactColor = animation.visual === "base_damage" ? "rgba(255, 137, 116," : "rgba(255, 232, 178,";
+      const textColor = animation.visual === "base_damage" ? "rgba(255, 214, 194," : "rgba(255, 244, 214,";
+      context.beginPath();
+      context.arc(target.x, target.y, hexSize * (0.18 + progress * 0.46), 0, Math.PI * 2);
+      context.strokeStyle = `${impactColor} ${0.88 - progress * 0.54})`;
+      context.lineWidth = 2.2;
+      context.stroke();
+
+      context.fillStyle = `${textColor} ${0.84 - progress * 0.5})`;
+      context.font = `${clamp(hexSize * 0.34, 11, 15)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+      context.textAlign = "center";
+      context.textBaseline = "bottom";
+      context.fillText(`-${animation.amount ?? 0}`, target.x, target.y - hexSize * (0.5 + progress * 0.3));
+      continue;
     }
   }
 }
@@ -723,7 +802,11 @@ export function renderGame(state: GameState, frame: GameFrame): void {
   drawMoveRangeOverlay(state, context, originX, originY, hexSize);
   drawResourceNodes(state, context, originX, originY, hexSize);
   drawHoverHexAndTargetPreview(state, context, originX, originY, hexSize);
-  const stackActivityLevel = frame.transients.animations.some((animation) => animation.kind === "stack_cast" || animation.kind === "stack_counter") ? 1 : 0;
+  const stackActivityLevel = frame.transients.animations.some((animation) => {
+    return animation.kind === "stack_cast" || animation.kind === "stack_counter" || animation.kind === "spell_resolve";
+  })
+    ? 1
+    : 0;
   if (state.stack.length > 0 || stackActivityLevel > 0) {
     drawStackAnchor(context, frame, state.stack.length, stackActivityLevel);
   }

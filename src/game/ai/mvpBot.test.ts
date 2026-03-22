@@ -112,6 +112,113 @@ describe("decideMvpBotCommand", () => {
     expect(playedCard?.cardId).toBe("flux_runner_card");
   });
 
+  it("casts Arc Snap to kill an enemy combat unit during tactical phase", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "tactical";
+    state.stack = [];
+    state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 4;
+
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_2", "arc_snap");
+    const target = state.entities.unit_player_1_scout;
+    if (!target || target.kind !== "unit") {
+      throw new Error("Expected player 1 scout for Arc Snap bot test.");
+    }
+    target.hp = 2;
+
+    const command = decideMvpBotCommand(state, "player_2");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetEntityId: target.id,
+    });
+  });
+
+  it("casts Overload Finish on a damaged enemy unit before deploying more units", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 4;
+
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_2", "overload_finish");
+    const target = state.entities.unit_player_1_scout;
+    if (!target || target.kind !== "unit") {
+      throw new Error("Expected player 1 scout for Overload Finish bot test.");
+    }
+    target.hp = target.maxHp - 1;
+
+    const command = decideMvpBotCommand(state, "player_2");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetEntityId: target.id,
+    });
+  });
+
+  it("casts Rivet Volley at the enemy base when it is lethal", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.alloy = 4;
+
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "rivet_volley");
+    const enemyBase = state.entities.base_player_2;
+    if (!enemyBase || enemyBase.kind !== "base") {
+      throw new Error("Expected player 2 base for Rivet Volley bot test.");
+    }
+    enemyBase.hp = 2;
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetEntityId: enemyBase.id,
+    });
+  });
+
+  it("casts Brace Protocol on an allied unit when it prevents a lethal counterattack", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.alloy = 4;
+
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "brace_protocol");
+    const ally = state.entities.unit_player_1_scout;
+    const enemy = state.entities.unit_player_2_scout;
+    if (!ally || ally.kind !== "unit" || !enemy || enemy.kind !== "unit") {
+      throw new Error("Expected units for Brace Protocol bot test.");
+    }
+
+    ally.hp = 2;
+    ally.coord = { q: 0, r: 0 };
+    enemy.coord = { q: 1, r: 0 };
+    enemy.attackDamage = 3;
+    enemy.attacksRemaining = 1;
+    enemy.hasSummoningSickness = false;
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetEntityId: ally.id,
+    });
+  });
+
   it("attacks with selected combat unit when target is in range during tactical phase", () => {
     const state = setupState();
     state.activePlayerId = "player_2";

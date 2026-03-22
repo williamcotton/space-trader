@@ -1,6 +1,6 @@
 import type { GameCommand } from "../actions/commands";
 import { getCardDefinition, type CardDefinition } from "../content/cards/catalog";
-import { isCounterResponse } from "../content/stackEffects";
+import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import type { Faction, ResourceType } from "../model/enums";
 import type { PlayerId } from "../model/ids";
@@ -21,6 +21,13 @@ const PRIMARY_RESOURCE_BY_FACTION: Record<Faction, ResourceType> = {
   alloy_clan: "alloy",
   flux_collective: "flux",
   biomass_swarm: "biomass",
+};
+
+type ScoredCardCommand = {
+  command: GameCommand;
+  score: number;
+  cardInstanceId: string;
+  targetEntityId?: string;
 };
 
 function getOpponentPlayer(playerId: PlayerId): PlayerId {
@@ -229,6 +236,203 @@ function chooseCounterCommand(state: GameState, botPlayerId: PlayerId): GameComm
   }
 
   return null;
+}
+
+function scoreEnemyEntityThreat(state: GameState, botPlayerId: PlayerId, target: EntityState): number {
+  if (target.kind === "base") {
+    return 0;
+  }
+
+  let score = target.role === "combat" ? 34 : target.role === "resource" ? 20 : 15;
+  score += target.attackDamage * 4 + target.armor * 4 + target.attackRange * 2;
+
+  const botBase = state.entities[state.players[botPlayerId].baseEntityId];
+  if (botBase && botBase.kind === "base") {
+    const distanceToBase = hexDistance(target.coord, botBase.coord);
+    if (distanceToBase <= 2) {
+      score += 22;
+    } else if (distanceToBase <= 4) {
+      score += 12;
+    }
+  }
+
+  return score;
+}
+
+function scoreDamageSpellTarget(
+  state: GameState,
+  botPlayerId: PlayerId,
+  target: EntityState,
+  amount: number,
+  phase: GameState["phase"]
+): number {
+  if (target.kind === "base") {
+    if (amount >= target.hp) {
+      return 320;
+    }
+
+    if (phase !== "tactical") {
+      return -Infinity;
+    }
+
+    const enemyUnits = getEnemyEntities(state, botPlayerId).filter((entity) => entity.kind === "unit");
+    const boardPressureBonus = enemyUnits.length === 0 ? 30 : 0;
+    return boardPressureBonus + (target.maxHp - target.hp) * 4 + amount * 5;
+  }
+
+  const appliedDamage = Math.min(amount, target.hp);
+  const killBonus = amount >= target.hp ? 96 : 0;
+  const woundedBonus = target.hp < target.maxHp ? 12 : 0;
+  const timingPenalty = phase === "main" && killBonus === 0 ? 30 : 0;
+
+  return scoreEnemyEntityThreat(state, botPlayerId, target) + appliedDamage * 10 + killBonus + woundedBonus - timingPenalty;
+}
+
+function scoreDestroySpellTarget(state: GameState, botPlayerId: PlayerId, target: UnitEntity): number {
+  if (target.hp >= target.maxHp) {
+    return -Infinity;
+  }
+
+  return 110 + scoreEnemyEntityThreat(state, botPlayerId, target) + (target.maxHp - target.hp) * 4;
+}
+
+function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId, target: UnitEntity): number {
+  const threateningEnemies = getPlayerUnits(state, getOpponentPlayer(botPlayerId)).filter((enemy) => {
+    return enemy.role === "combat" && !enemy.hasSummoningSickness && enemy.attacksRemaining > 0 && hexDistance(enemy.coord, target.coord) <= enemy.attackRange;
+  });
+
+  if (threateningEnemies.length === 0) {
+    return -Infinity;
+  }
+
+  let preventedDamage = 0;
+  let preventsKill = false;
+  target.temporaryArmorBonus += 2;
+  try {
+    for (const enemy of threateningEnemies) {
+      target.temporaryArmorBonus -= 2;
+      const before = resolveCombatAttack(state, enemy, target);
+      target.temporaryArmorBonus += 2;
+      const after = resolveCombatAttack(state, enemy, target);
+      preventedDamage += before.finalDamage - after.finalDamage;
+      if (before.targetDestroyed && !after.targetDestroyed) {
+        preventsKill = true;
+      }
+    }
+  } finally {
+    target.temporaryArmorBonus -= 2;
+  }
+
+  if (preventedDamage <= 0) {
+    return -Infinity;
+  }
+
+  return 26 + preventedDamage * 15 + (preventsKill ? 80 : 0) + (target.role === "combat" ? 18 : 0);
+}
+
+function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
+  if (state.phase !== "main" && state.phase !== "tactical") {
+    return null;
+  }
+
+  const hand = [...state.zones[botPlayerId].hand].sort((a, b) => a.instanceId.localeCompare(b.instanceId));
+  const candidates: ScoredCardCommand[] = [];
+
+  for (const cardInstance of hand) {
+    const card = getCardDefinition(cardInstance.cardId);
+    if (!card || card.kind !== "tactic" || !canAfford(state, botPlayerId, card.cost)) {
+      continue;
+    }
+
+    const effect = getStackEffectDefinition(card.stackEffectId);
+    if (!effect) {
+      continue;
+    }
+
+    if (effect.targeting.type === "entity") {
+      for (const entity of Object.values(state.entities).sort((a, b) => a.id.localeCompare(b.id))) {
+        if (effect.targeting.relation === "ally" && entity.ownerId !== botPlayerId) {
+          continue;
+        }
+        if (effect.targeting.relation === "enemy" && entity.ownerId === botPlayerId) {
+          continue;
+        }
+        if (effect.targeting.entityKind === "unit" && entity.kind !== "unit") {
+          continue;
+        }
+        if (effect.targeting.requireDamaged && entity.hp >= entity.maxHp) {
+          continue;
+        }
+
+        let score = -Infinity;
+        if (effect.resolution.type === "damage_entity") {
+          score = scoreDamageSpellTarget(state, botPlayerId, entity, effect.resolution.amount, state.phase);
+        } else if (effect.resolution.type === "destroy_entity" && entity.kind === "unit") {
+          score = scoreDestroySpellTarget(state, botPlayerId, entity);
+        } else if (effect.resolution.type === "modify_unit_until_end_of_turn" && entity.kind === "unit") {
+          score = scoreBraceProtocolTarget(state, botPlayerId, entity);
+        }
+
+        if (score === -Infinity) {
+          continue;
+        }
+
+        candidates.push({
+          command: {
+            type: "PLAY_CARD",
+            playerId: botPlayerId,
+            cardInstanceId: cardInstance.instanceId,
+            targetEntityId: entity.id,
+          },
+          score,
+          cardInstanceId: cardInstance.instanceId,
+          targetEntityId: entity.id,
+        });
+      }
+      continue;
+    }
+
+    if (effect.resolution.type === "damage_enemy_base") {
+      const enemyBase = state.entities[state.players[getOpponentPlayer(botPlayerId)].baseEntityId];
+      if (!enemyBase || enemyBase.kind !== "base") {
+        continue;
+      }
+
+      const score = effect.resolution.amount >= enemyBase.hp ? 300 : state.phase === "tactical" ? 18 : -Infinity;
+      if (score === -Infinity) {
+        continue;
+      }
+
+      candidates.push({
+        command: {
+          type: "PLAY_CARD",
+          playerId: botPlayerId,
+          cardInstanceId: cardInstance.instanceId,
+        },
+        score,
+        cardInstanceId: cardInstance.instanceId,
+      });
+    }
+  }
+
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    const targetCompare = (a.targetEntityId ?? "").localeCompare(b.targetEntityId ?? "");
+    if (targetCompare !== 0) {
+      return targetCompare;
+    }
+    return a.cardInstanceId.localeCompare(b.cardInstanceId);
+  });
+
+  const best = candidates[0];
+  if (!best) {
+    return null;
+  }
+
+  const threshold = state.phase === "main" ? 90 : 55;
+  return best.score >= threshold ? best.command : null;
 }
 
 function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
@@ -624,6 +828,11 @@ export function decideMvpBotCommand(state: GameState, botPlayerId: PlayerId): Ga
   }
 
   if (state.phase === "main") {
+    const tactic = chooseTacticCardCommand(state, botPlayerId);
+    if (tactic) {
+      return tactic;
+    }
+
     const playCard = chooseMainPhaseCardCommand(state, botPlayerId);
     if (playCard) {
       return playCard;
@@ -631,6 +840,11 @@ export function decideMvpBotCommand(state: GameState, botPlayerId: PlayerId): Ga
   }
 
   if (state.phase === "tactical") {
+    const tactic = chooseTacticCardCommand(state, botPlayerId);
+    if (tactic) {
+      return tactic;
+    }
+
     return chooseTacticalCommand(state, botPlayerId);
   }
 

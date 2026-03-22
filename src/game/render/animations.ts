@@ -44,10 +44,10 @@ export function captureAnimationSnapshot(state: GameState): AnimationCapture {
         id: item.id,
         label: item.label,
         controllerId: item.controllerId,
-        effectId: item.effectId,
-        sourceCardId: item.sourceCardId,
-        targetStackItemId: item.targetStackItemId,
-      } satisfies StackItemSnapshot,
+          effectId: item.effectId,
+          sourceCardId: item.sourceCardId,
+          targetStackItemId: item.targetStackItemId,
+        } satisfies StackItemSnapshot,
     ])
   );
 
@@ -191,6 +191,7 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
             from: sourceBase.coord,
             label: event.label,
             targetLabel: targetItem.label,
+            targetVisual: getStackAnimationVisual(targetItem.effectId, targetItem.sourceCardId),
             returnToHand: definition.resolution.destination === "hand",
           });
           break;
@@ -218,6 +219,84 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
         }
 
         if (definition?.resolution.type !== "damage_enemy_base") {
+          if (definition?.resolution.type === "damage_entity") {
+            const targetId = event.targetEntityId;
+            if (!targetId) {
+              break;
+            }
+            const target = before.entities[targetId] ?? state.entities[targetId];
+            if (!target) {
+              break;
+            }
+
+            animations.push({
+              id: baseId,
+              kind: "spell_resolve",
+              playerId: event.controllerId,
+              ageSeconds: 0,
+              durationSeconds: 0.78,
+              coord: target.coord,
+              visual: target.kind === "base" ? "base_damage" : "damage",
+              amount: definition.resolution.amount,
+              label: event.label,
+            });
+            break;
+          }
+
+          if (definition?.resolution.type === "destroy_entity") {
+            const targetId = event.targetEntityId;
+            if (!targetId) {
+              break;
+            }
+            const target = before.entities[targetId] ?? state.entities[targetId];
+            if (!target) {
+              break;
+            }
+
+            animations.push({
+              id: baseId,
+              kind: "spell_resolve",
+              playerId: event.controllerId,
+              ageSeconds: 0,
+              durationSeconds: 0.84,
+              coord: target.coord,
+              visual: "destroy",
+              label: event.label,
+            });
+            break;
+          }
+
+          if (definition?.resolution.type === "modify_unit_until_end_of_turn") {
+            const targetId = event.targetEntityId;
+            if (!targetId) {
+              break;
+            }
+            const target = before.entities[targetId] ?? state.entities[targetId];
+            if (!target) {
+              break;
+            }
+
+            const buffLabelParts: string[] = [];
+            if (definition.resolution.attackBonus !== 0) {
+              buffLabelParts.push(`${definition.resolution.attackBonus > 0 ? "+" : ""}${definition.resolution.attackBonus} ATK`);
+            }
+            if (definition.resolution.armorBonus !== 0) {
+              buffLabelParts.push(`${definition.resolution.armorBonus > 0 ? "+" : ""}${definition.resolution.armorBonus} ARM`);
+            }
+
+            animations.push({
+              id: baseId,
+              kind: "spell_resolve",
+              playerId: event.controllerId,
+              ageSeconds: 0,
+              durationSeconds: 0.86,
+              coord: target.coord,
+              visual: "buff",
+              label: buffLabelParts.join(" · ") || event.label,
+            });
+            break;
+          }
+
           break;
         }
 

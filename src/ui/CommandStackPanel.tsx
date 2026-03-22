@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getCardDefinition } from "../game/content/cards/catalog";
 import { getStackEffectDefinition } from "../game/content/stackEffects";
-import { getPlayerLabel } from "../game/presentation";
+import { getEntityDisplayName, getPlayerLabel } from "../game/presentation";
 import { getGameRuntime } from "../game/runtime";
 
 type StackPreviewItem = {
@@ -28,6 +28,7 @@ type CommandStackSnapshot = {
 
 function readPanelSnapshot(): CommandStackSnapshot {
   const runtime = getGameRuntime();
+  const currentState = runtime.state;
   const stackItems = runtime.state.stack.map((item) => ({
     id: item.id,
     label: item.label,
@@ -53,18 +54,30 @@ function readPanelSnapshot(): CommandStackSnapshot {
     })(),
     detail: (() => {
       const sourceCard = item.sourceCardId ? getCardDefinition(item.sourceCardId) : undefined;
+      const targetEntity = item.targetEntityId ? currentState.entities[item.targetEntityId] : null;
+      const targetStackItem = item.targetStackItemId ? currentState.stack.find((stackItem) => stackItem.id === item.targetStackItemId) : null;
       if (sourceCard?.kind === "unit" && item.effectId === "deploy_unit_card") {
         return `${sourceCard.unit.role} · ${sourceCard.unit.hp} HP · deploy near base on resolve`;
       }
       if (sourceCard?.kind === "tactic") {
+        if (targetEntity) {
+          return `${sourceCard.text} Target: ${getEntityDisplayName(targetEntity, { players: currentState.players })}.`;
+        }
+        if (targetStackItem) {
+          return `${sourceCard.text} Target: ${targetStackItem.label}.`;
+        }
         return sourceCard.text;
       }
       const effect = getStackEffectDefinition(item.effectId);
       if (effect?.resolution.type === "counter") {
-        return effect.resolution.destination === "hand" ? "Counter target spell and return it to hand." : "Counter target spell.";
+        const baseText = effect.resolution.destination === "hand" ? "Counter target spell and return it to hand." : "Counter target spell.";
+        return targetStackItem ? `${baseText} Target: ${targetStackItem.label}.` : baseText;
       }
       if (effect?.resolution.type === "damage_enemy_base") {
         return `Deal ${effect.resolution.amount} damage to the enemy base.`;
+      }
+      if (targetEntity) {
+        return `${effect?.label ?? item.effectId} targeting ${getEntityDisplayName(targetEntity, { players: currentState.players })}.`;
       }
       return effect?.label ?? item.effectId;
     })(),
