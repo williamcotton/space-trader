@@ -7,8 +7,11 @@ import type { PlayerId } from "../model/ids";
 import { MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord, type UnitEntity } from "../model/state";
 import { resolveCombatAttack } from "../systems/combat";
 import { canAffordCardCost, getEnemyEntities, getFirstOpenBaseAdjacentTile, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../model/queries";
-import { canAttackEntityDirectly, canTargetEntityDirectly } from "../systems/keywords";
+import { canAttackEntityDirectly } from "../systems/keywords";
 import { getOpponentPlayer } from "../turn/stack";
+import { getCascadeAffectedHexes } from "../systems/cascade";
+import { getLegalPlayCardTargetOptions } from "../rules/cardPlayOptions";
+import { getEffectiveUnitAttackDamage } from "../systems/unitStats";
 
 const RESOURCE_ORDER: ResourceType[] = ["credits", "alloy", "flux", "biomass"];
 const PRIMARY_RESOURCE_BY_FACTION: Record<Faction, ResourceType> = {
@@ -104,6 +107,7 @@ type ScoredCardCommand = {
   score: number;
   cardInstanceId: string;
   targetEntityId?: string;
+  targetHex?: HexCoord;
 };
 
 function getHandCardDefinitions(state: GameState, botPlayerId: PlayerId): CardDefinition[] {
@@ -426,6 +430,61 @@ function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId, targe
   return AI_WEIGHTS.braceBase + preventedDamage * AI_WEIGHTS.bracePreventedDmgMult + (preventsKill ? AI_WEIGHTS.bracePreventKillBonus : 0) + (target.role === "combat" ? AI_WEIGHTS.braceCombatBonus : 0);
 }
 
+function scoreCascadeAttackBuffTarget(
+  state: GameState,
+  botPlayerId: PlayerId,
+  targetHex: HexCoord,
+  amount: number,
+  waves: number
+): number {
+  const affectedHexes = getCascadeAffectedHexes(state, botPlayerId, targetHex, waves);
+  const affectedUnits = getPlayerUnits(state, botPlayerId)
+    .filter((unit) => affectedHexes.some((coord) => areSameHex(coord, unit.coord)))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  if (affectedUnits.length === 0) {
+    return -Infinity;
+  }
+
+  let score = affectedHexes.length;
+  let hasAttackOpportunity = false;
+
+  for (const unit of affectedUnits) {
+    score += unit.role === "combat" ? 14 : unit.role === "utility" ? 8 : 5;
+
+    if (unit.role !== "combat" || unit.attacksRemaining <= 0 || unit.hasSummoningSickness) {
+      continue;
+    }
+
+    const inRangeTargets = getEnemyEntities(state, botPlayerId)
+      .filter((target) => canAttackEntityDirectly(state, botPlayerId, target))
+      .filter((target) => hexDistance(unit.coord, target.coord) <= unit.attackRange)
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    const bestTarget = inRangeTargets[0];
+    if (!bestTarget) {
+      continue;
+    }
+
+    hasAttackOpportunity = true;
+    score += 28;
+
+    const currentAttack = getEffectiveUnitAttackDamage(state, unit);
+    const buffedAttack = currentAttack + amount;
+    const currentDamage = Math.min(currentAttack, bestTarget.hp);
+    const buffedDamage = Math.min(buffedAttack, bestTarget.hp);
+    score += (buffedDamage - currentDamage) * 20;
+
+    if (bestTarget.kind === "base") {
+      score += 18;
+    } else if (currentAttack < bestTarget.hp && buffedAttack >= bestTarget.hp) {
+      score += 70;
+    }
+  }
+
+  return hasAttackOpportunity ? score : -Infinity;
+}
+
 function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
   if (state.phase !== "main" && state.phase !== "tactical") {
     return null;
@@ -445,46 +504,38 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
       continue;
     }
 
-    if (card.play.targetMode === "entity") {
-      for (const entity of Object.values(state.entities).sort((a, b) => a.id.localeCompare(b.id))) {
-        if (!card.play.isValidTarget(state, entity, botPlayerId)) continue;
-        if (!canTargetEntityDirectly(state, botPlayerId, entity)) continue;
+    const legalTargets = getLegalPlayCardTargetOptions(state, botPlayerId, cardInstance.instanceId, card);
+    for (const targeting of legalTargets) {
+      let score = -Infinity;
 
-        let score = -Infinity;
-        if (effect.behavior.type === "damage_entity") {
-          score = scoreDamageSpellTarget(state, botPlayerId, entity, effect.behavior.amount, state.phase);
-        } else if (effect.behavior.type === "destroy_entity" && entity.kind === "unit") {
-          score = scoreDestroySpellTarget(state, botPlayerId, entity);
-        } else if (effect.behavior.type === "modify_unit_until_end_of_turn" && entity.kind === "unit") {
-          score = scoreBraceProtocolTarget(state, botPlayerId, entity);
-        }
-
-        if (score === -Infinity) {
+      if (effect.behavior.type === "damage_entity" && targeting.targetEntityId) {
+        const entity = state.entities[targeting.targetEntityId];
+        if (!entity) {
           continue;
         }
-
-        candidates.push({
-          command: {
-            type: "PLAY_CARD",
-            playerId: botPlayerId,
-            cardInstanceId: cardInstance.instanceId,
-            targetEntityId: entity.id,
-          },
-          score,
-          cardInstanceId: cardInstance.instanceId,
-          targetEntityId: entity.id,
-        });
+        score = scoreDamageSpellTarget(state, botPlayerId, entity, effect.behavior.amount, state.phase);
+      } else if (effect.behavior.type === "destroy_entity" && targeting.targetEntityId) {
+        const entity = state.entities[targeting.targetEntityId];
+        if (!entity || entity.kind !== "unit") {
+          continue;
+        }
+        score = scoreDestroySpellTarget(state, botPlayerId, entity);
+      } else if (effect.behavior.type === "modify_unit_until_end_of_turn" && targeting.targetEntityId) {
+        const entity = state.entities[targeting.targetEntityId];
+        if (!entity || entity.kind !== "unit") {
+          continue;
+        }
+        score = scoreBraceProtocolTarget(state, botPlayerId, entity);
+      } else if (effect.behavior.type === "damage_enemy_base" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        const enemyBase = state.entities[state.players[getOpponentPlayer(botPlayerId)].baseEntityId];
+        if (!enemyBase || enemyBase.kind !== "base") {
+          continue;
+        }
+        score = effect.behavior.amount >= enemyBase.hp ? AI_WEIGHTS.basePingLethalScore : state.phase === "tactical" ? AI_WEIGHTS.basePingTacticalScore : -Infinity;
+      } else if (effect.behavior.type === "cascade_attack_buff" && targeting.targetHex) {
+        score = scoreCascadeAttackBuffTarget(state, botPlayerId, targeting.targetHex, effect.behavior.amount, effect.behavior.waves);
       }
-      continue;
-    }
 
-    if (effect.behavior.type === "damage_enemy_base") {
-      const enemyBase = state.entities[state.players[getOpponentPlayer(botPlayerId)].baseEntityId];
-      if (!enemyBase || enemyBase.kind !== "base") {
-        continue;
-      }
-
-      const score = effect.behavior.amount >= enemyBase.hp ? AI_WEIGHTS.basePingLethalScore : state.phase === "tactical" ? AI_WEIGHTS.basePingTacticalScore : -Infinity;
       if (score === -Infinity) {
         continue;
       }
@@ -494,9 +545,12 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
           type: "PLAY_CARD",
           playerId: botPlayerId,
           cardInstanceId: cardInstance.instanceId,
+          ...targeting,
         },
         score,
         cardInstanceId: cardInstance.instanceId,
+        targetEntityId: targeting.targetEntityId,
+        targetHex: targeting.targetHex,
       });
     }
   }
@@ -508,6 +562,14 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
     const targetCompare = (a.targetEntityId ?? "").localeCompare(b.targetEntityId ?? "");
     if (targetCompare !== 0) {
       return targetCompare;
+    }
+    const targetHexQCompare = (a.targetHex?.q ?? Number.MIN_SAFE_INTEGER) - (b.targetHex?.q ?? Number.MIN_SAFE_INTEGER);
+    if (targetHexQCompare !== 0) {
+      return targetHexQCompare;
+    }
+    const targetHexRCompare = (a.targetHex?.r ?? Number.MIN_SAFE_INTEGER) - (b.targetHex?.r ?? Number.MIN_SAFE_INTEGER);
+    if (targetHexRCompare !== 0) {
+      return targetHexRCompare;
     }
     return a.cardInstanceId.localeCompare(b.cardInstanceId);
   });

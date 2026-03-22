@@ -69,6 +69,7 @@ export function handlePassPriority(
       effectMagnitude: topItem.effectMagnitude,
       targetStackItemId: topItem.targetStackItemId,
       targetEntityId: topItem.targetEntityId,
+      targetHex: topItem.targetHex ?? null,
       objectKind: topItem.objectKind,
       counterable: topItem.counterable,
       defaultCounterDestination: topItem.defaultCounterDestination,

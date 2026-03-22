@@ -4,7 +4,7 @@ import { ensureEntityPresentation } from "../presentation";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
 
-export const CURRENT_STATE_VERSION = 18;
+export const CURRENT_STATE_VERSION = 19;
 
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
@@ -101,6 +101,9 @@ export function migrateRuntimeState(state: GameState): void {
     }
     if (typeof stackItem.targetEntityId === "undefined") {
       stackItem.targetEntityId = null;
+    }
+    if (typeof stackItem.targetHex === "undefined") {
+      stackItem.targetHex = null;
     }
     if (typeof stackItem.ownerId === "undefined") {
       stackItem.ownerId = stackItem.controllerId;
@@ -211,7 +214,7 @@ export function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v18 (unit keyword support).",
+      text: "State migrated to v19 (hex target support).",
     });
   }
 }

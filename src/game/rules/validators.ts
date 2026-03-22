@@ -2,7 +2,7 @@ import type { GameCommand } from "../actions/commands";
 import { getCardDefinition, type CardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
-import { MAX_HAND_SIZE, type EntityState, type GameState } from "../model/state";
+import { MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { canUnitHarvestNode, getResourceNodeById } from "../systems/harvesting";
 import { getAttackKeywordBlockReason, getTargetingKeywordBlockReason } from "../systems/keywords";
@@ -72,6 +72,31 @@ function validateEntityTargetForEffect(
   const keywordBlockReason = getTargetingKeywordBlockReason(state, playerId, target);
   if (keywordBlockReason) {
     return { ok: false, reason: keywordBlockReason };
+  }
+
+  return { ok: true };
+}
+
+function validateHexTargetForEffect(
+  state: GameState,
+  playerId: PlayerId,
+  targetHex: HexCoord | undefined,
+  card: CardDefinition
+): CommandValidationResult {
+  if (!targetHex) {
+    return { ok: false, reason: "This card requires a hex target." };
+  }
+
+  if (card.play.targetMode !== "hex") {
+    return { ok: true };
+  }
+
+  if (!isWithinMapBounds(targetHex, state.map)) {
+    return { ok: false, reason: "Target hex is outside map bounds." };
+  }
+
+  if (!card.play.isValidHexTarget(state, targetHex, playerId)) {
+    return { ok: false, reason: "Target hex does not meet card requirements." };
   }
 
   return { ok: true };
@@ -269,16 +294,25 @@ function validateCardTargeting(
     if (topItem.id !== command.targetStackItemId) return { ok: false, reason: "Counter target must be the current top stack item." };
     if (!topItem.counterable) return { ok: false, reason: "Target stack item is uncounterable." };
     if (command.targetEntityId) return { ok: false, reason: "This card does not accept a battlefield target." };
+    if (command.targetHex) return { ok: false, reason: "This card does not accept a hex target." };
     return { ok: true };
   }
 
   if (targetingType === "entity") {
     if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };
+    if (command.targetHex) return { ok: false, reason: "This card does not accept a hex target." };
     return validateEntityTargetForEffect(state, command.playerId, command.targetEntityId, card);
+  }
+
+  if (targetingType === "hex") {
+    if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };
+    if (command.targetEntityId) return { ok: false, reason: "This card does not accept a battlefield target." };
+    return validateHexTargetForEffect(state, command.playerId, command.targetHex, card);
   }
 
   if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };
   if (command.targetEntityId) return { ok: false, reason: "This card does not accept a battlefield target." };
+  if (command.targetHex) return { ok: false, reason: "This card does not accept a hex target." };
 
   if (card.play.requiresOpenBaseAdjacentTile && !getFirstOpenBaseAdjacentTile(state, command.playerId)) {
     return { ok: false, reason: "No open base-adjacent tile to deploy unit." };

@@ -1,5 +1,6 @@
 import type { GameInstruction, InstructionContext } from "../actions/instructions";
 import { getCardDefinition } from "./cards/catalog";
+import { createCascadeAttackBuffInstructions } from "./cards/instructionFactories";
 import { LAYER } from "../systems/continuousEffects";
 
 export type CounterDestination = "discard" | "hand" | "exile" | "none";
@@ -25,6 +26,9 @@ export type StackTargetingRules =
       entityKind: StackEntityTargetKind;
       relation: StackEntityTargetRelation;
       requireDamaged?: boolean;
+    }
+  | {
+      type: "hex";
     };
 
 export type StackEffectBehavior =
@@ -50,6 +54,11 @@ export type StackEffectBehavior =
       type: "modify_unit_until_end_of_turn";
       attackBonus: number;
       armorBonus: number;
+    }
+  | {
+      type: "cascade_attack_buff";
+      amount: number;
+      waves: number;
     }
   | {
       type: "counter";
@@ -193,6 +202,27 @@ function createModifyUnitUntilEndOfTurnInstructions(attackBonus: number, armorBo
     });
 
     return instructions;
+  };
+}
+
+function createCascadeAttackBuffEffect(id: string, amount: number, waves: number): StackEffectDefinition {
+  return {
+    id,
+    label: "Cascade Attack Buff",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "hex",
+    },
+    behavior: {
+      type: "cascade_attack_buff",
+      amount,
+      waves,
+    },
+    createInstructions: createCascadeAttackBuffInstructions(amount, waves),
   };
 }
 
@@ -373,6 +403,7 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
     },
     createInstructions: createModifyUnitUntilEndOfTurnInstructions(0, 2),
   },
+  cascade_attack_buff_1_waves_2: createCascadeAttackBuffEffect("cascade_attack_buff_1_waves_2", 1, 2),
   damage_enemy_unit_1_uncounterable: {
     id: "damage_enemy_unit_1_uncounterable",
     label: "Deal 1 Unit Damage",
@@ -414,6 +445,7 @@ export function getStackEffectMagnitude(effectId: string): number {
   switch (effect.behavior.type) {
     case "damage_enemy_base":
     case "damage_entity":
+    case "cascade_attack_buff":
       return effect.behavior.amount;
     default:
       return 0;

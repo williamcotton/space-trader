@@ -168,6 +168,7 @@ function applyResolvedStackEffect(state: GameState, resolvedItem: StackItem): Co
     controllerId: resolvedItem.controllerId,
     targetEntityId: resolvedItem.targetEntityId,
     targetStackItemId: resolvedItem.targetStackItemId,
+    targetHex: resolvedItem.targetHex ?? null,
   };
   const instructions = sourceCard?.onResolve
     ? sourceCard.onResolve(context)
@@ -242,6 +243,7 @@ export function handlePlayCard(
       effectMagnitude: getStackEffectMagnitude(effectId),
       targetStackItemId: command.targetStackItemId ?? null,
       targetEntityId: command.targetEntityId ?? null,
+      targetHex: command.targetHex ?? null,
       objectKind: effectDefinition.object.kind,
       counterable: effectDefinition.object.counterable,
       defaultCounterDestination: effectDefinition.object.defaultCounterDestination,
@@ -293,6 +295,7 @@ export function reduceCardPlayedToStack(
     effectMagnitude: event.effectMagnitude,
     targetStackItemId: event.targetStackItemId,
     targetEntityId: event.targetEntityId,
+    targetHex: event.targetHex ?? null,
     objectKind: event.objectKind,
     counterable: event.counterable,
     defaultCounterDestination: event.defaultCounterDestination,
@@ -354,6 +357,7 @@ export function reduceStackItemPushed(
     effectMagnitude: event.effectMagnitude,
     targetStackItemId: event.targetStackItemId,
     targetEntityId: event.targetEntityId,
+    targetHex: event.targetHex ?? null,
     objectKind: event.objectKind,
     counterable: event.counterable,
     defaultCounterDestination: event.defaultCounterDestination,

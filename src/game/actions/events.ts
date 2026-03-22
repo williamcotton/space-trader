@@ -63,6 +63,7 @@ export type CardPlayedToStackEvent = {
   effectMagnitude: number;
   targetStackItemId: string | null;
   targetEntityId: EntityId | null;
+  targetHex?: HexCoord | null;
   objectKind: "spell" | "ability";
   counterable: boolean;
   defaultCounterDestination: "discard" | "hand" | "exile" | "none";
@@ -107,6 +108,7 @@ export type StackItemPushedEvent = {
   effectMagnitude: number;
   targetStackItemId: string | null;
   targetEntityId: EntityId | null;
+  targetHex?: HexCoord | null;
   objectKind: "spell" | "ability";
   counterable: boolean;
   defaultCounterDestination: "discard" | "hand" | "exile" | "none";
@@ -127,6 +129,7 @@ export type StackItemResolvedEvent = {
   effectMagnitude: number;
   targetStackItemId: string | null;
   targetEntityId: EntityId | null;
+  targetHex?: HexCoord | null;
   objectKind: "spell" | "ability";
   counterable: boolean;
   defaultCounterDestination: "discard" | "hand" | "exile" | "none";

@@ -4,7 +4,7 @@ import { dispatchCommand } from "./reducers";
 import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
-import { getEffectiveUnitArmor } from "../systems/unitStats";
+import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "../systems/unitStats";
 
 function setupState() {
   return createInitialGameState({ map: FRONTIER_BELT_MAP });
@@ -1060,6 +1060,98 @@ describe("dispatchCommand", () => {
     resolveStackByPassing(state);
 
     expect(state.entities[target.id]).toBeUndefined();
+    expect(state.zones.player_2.discard.some((card) => card.instanceId === cardInstanceId)).toBe(true);
+  });
+
+  it("requires Ion Shower to target a legal hex and buffs cascaded friendly units until end of turn", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "tactical";
+    state.stack = [];
+    state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 4;
+
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_2", "ion_shower");
+
+    const missingTarget = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+    });
+    expect(expectRejected(missingTarget)).toContain("hex target");
+
+    const outOfBounds = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetHex: { q: 99, r: 99 },
+    });
+    expect(expectRejected(outOfBounds)).toContain("outside map bounds");
+
+    const illegalHex = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetHex: { ...state.map.spawnPoints.player_1 },
+    });
+    expect(expectRejected(illegalHex)).toContain("card requirements");
+
+    const scout = state.entities.unit_player_2_scout;
+    const harvester = state.entities.unit_player_2_harvester;
+    expect(scout?.kind).toBe("unit");
+    expect(harvester?.kind).toBe("unit");
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 2 units for Ion Shower.");
+    }
+
+    scout.coord = { q: 0, r: 0 };
+    scout.attacksRemaining = 1;
+    scout.hasSummoningSickness = false;
+    harvester.coord = { q: 1, r: 0 };
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetHex: { q: 0, r: 0 },
+    });
+    expect(play.ok).toBe(true);
+    expect(state.stack[0]?.targetHex).toEqual({ q: 0, r: 0 });
+
+    resolveStackByPassing(state);
+
+    const buffedScout = state.entities[scout.id];
+    const buffedHarvester = state.entities[harvester.id];
+    expect(buffedScout?.kind).toBe("unit");
+    expect(buffedHarvester?.kind).toBe("unit");
+    if (!buffedScout || buffedScout.kind !== "unit" || !buffedHarvester || buffedHarvester.kind !== "unit") {
+      throw new Error("Expected Ion Shower targets to remain on the battlefield.");
+    }
+
+    expect(getEffectiveUnitAttackDamage(state, buffedScout)).toBe(buffedScout.attackDamage + 1);
+    expect(getEffectiveUnitAttackDamage(state, buffedHarvester)).toBe(buffedHarvester.attackDamage + 1);
+    expect(state.continuousEffects.some((effect) =>
+      effect.payload.type === "stat_modifier" &&
+      effect.payload.stat === "attackDamage" &&
+      effect.payload.amount === 1
+    )).toBe(true);
+
+    advanceToPhase(state, "end");
+    expect(getEffectiveUnitAttackDamage(state, state.entities[scout.id] as typeof buffedScout)).toBe((state.entities[scout.id] as typeof buffedScout).attackDamage + 1);
+
+    const handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_2",
+    });
+    expect(handoff.ok).toBe(true);
+
+    const afterHandoffScout = state.entities[scout.id];
+    expect(afterHandoffScout?.kind).toBe("unit");
+    if (!afterHandoffScout || afterHandoffScout.kind !== "unit") {
+      throw new Error("Expected Ion Shower scout after turn rollover.");
+    }
+    expect(getEffectiveUnitAttackDamage(state, afterHandoffScout)).toBe(afterHandoffScout.attackDamage);
     expect(state.zones.player_2.discard.some((card) => card.instanceId === cardInstanceId)).toBe(true);
   });
 

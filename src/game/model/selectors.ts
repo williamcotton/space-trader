@@ -4,7 +4,7 @@ import type { PlayerId } from "./ids";
 import { getCardDefinition, getCardKeywords, type CardCost, type CardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
 import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleTheme } from "../presentation";
-import { canAffordCardCost, getFirstOpenBaseAdjacentTile } from "./queries";
+import { getLegalPlayCardTargetOptions } from "../rules/cardPlayOptions";
 
 // --- Stack Item Selectors (from CommandStackPanel) ---
 
@@ -41,6 +41,7 @@ export function getStackItemDetail(item: StackItem, state: GameState): string {
   const sourceCard = item.sourceCardId ? getCardDefinition(item.sourceCardId) : undefined;
   const targetEntity = item.targetEntityId ? state.entities[item.targetEntityId] : null;
   const targetStackItem = item.targetStackItemId ? state.stack.find((si) => si.id === item.targetStackItemId) : null;
+  const targetHex = item.targetHex ?? null;
 
   if (sourceCard?.kind === "unit" && item.effectId === "deploy_unit_card") {
     return `${sourceCard.unit.role} · ${sourceCard.unit.hp} HP · deploy near base on resolve`;
@@ -51,6 +52,9 @@ export function getStackItemDetail(item: StackItem, state: GameState): string {
     }
     if (targetStackItem) {
       return `${sourceCard.text} Target: ${targetStackItem.label}.`;
+    }
+    if (targetHex) {
+      return `${sourceCard.text} Target: (${targetHex.q}, ${targetHex.r}).`;
     }
     return sourceCard.text;
   }
@@ -64,6 +68,9 @@ export function getStackItemDetail(item: StackItem, state: GameState): string {
   }
   if (targetEntity) {
     return `${effect?.label ?? item.effectId} targeting ${getEntityDisplayName(targetEntity, { players: state.players })}.`;
+  }
+  if (targetHex) {
+    return `${effect?.label ?? item.effectId} targeting (${targetHex.q}, ${targetHex.r}).`;
   }
   return effect?.label ?? item.effectId;
 }
@@ -105,33 +112,8 @@ export function getCostEntries(cost: CardCost): CostEntry[] {
     .filter((entry) => entry.amount > 0);
 }
 
-export function isCardPlayable(state: GameState, playerId: PlayerId, definition: CardDefinition): boolean {
-  if (state.winner) return false;
-  if (state.phase === "discard") return false;
-  if (!canAffordCardCost(state, playerId, definition.cost)) return false;
-
-  if (definition.speed === "main") {
-    if (state.activePlayerId !== playerId) return false;
-    if (state.phase !== "main") return false;
-    if (state.stack.length > 0) return false;
-  } else {
-    if (state.priorityPlayerId !== playerId) return false;
-  }
-
-  if (definition.play.requiresOpenBaseAdjacentTile && !getFirstOpenBaseAdjacentTile(state, playerId)) return false;
-
-  if (definition.play.targetMode === "stack_item" && isCounterResponse(definition.play.stackEffectId)) {
-    if (state.stack.length === 0) return false;
-  }
-
-  if (definition.play.isValidTarget) {
-    const hasValidTarget = Object.values(state.entities).some(
-      (entity) => definition.play.isValidTarget!(state, entity, playerId)
-    );
-    if (!hasValidTarget) return false;
-  }
-
-  return true;
+export function isCardPlayable(state: GameState, playerId: PlayerId, instanceId: string, definition: CardDefinition): boolean {
+  return getLegalPlayCardTargetOptions(state, playerId, instanceId, definition).length > 0;
 }
 
 export function getCounterTarget(definition: CardDefinition, stack: GameState["stack"]): string | undefined {
@@ -188,7 +170,7 @@ export function getCardDisplayInfo(state: GameState, playerId: PlayerId, cardId:
   return {
     instanceId,
     cardId,
-    playable: isCardPlayable(state, playerId, definition),
+    playable: isCardPlayable(state, playerId, instanceId, definition),
     title: definition.name,
     subtitle: formatFactionName(definition.faction),
     tags: getCardTags(definition),

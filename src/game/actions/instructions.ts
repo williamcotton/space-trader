@@ -38,4 +38,5 @@ export type InstructionContext = {
   controllerId: PlayerId;
   targetEntityId: EntityId | null;
   targetStackItemId: string | null;
+  targetHex: HexCoord | null;
 };

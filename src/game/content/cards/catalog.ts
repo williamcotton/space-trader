@@ -1,10 +1,12 @@
 import type { Faction, ResourceType, UnitRole } from "../../model/enums";
 import type { PlayerId } from "../../model/ids";
 import type { EntityState } from "../../model/state";
-import type { GameState } from "../../model/state";
+import type { GameState, HexCoord } from "../../model/state";
 import type { GameInstruction, InstructionContext } from "../../actions/instructions";
+import { hexDistance, isWithinMapBounds } from "../../model/hex";
 import { LAYER } from "../../systems/continuousEffects";
 import type { CardTrigger } from "../../systems/triggerEngine";
+import { createCascadeAttackBuffInstructions } from "./instructionFactories";
 
 export type TargetPredicate = (
   state: Readonly<GameState>,
@@ -12,9 +14,15 @@ export type TargetPredicate = (
   sourcePlayerId: PlayerId
 ) => boolean;
 
+export type HexTargetPredicate = (
+  state: Readonly<GameState>,
+  target: HexCoord,
+  sourcePlayerId: PlayerId
+) => boolean;
+
 export type CardKeyword = string;
 export type CardSpeed = "instant" | "main";
-export type CardTargetMode = "none" | "entity" | "stack_item";
+export type CardTargetMode = "none" | "entity" | "stack_item" | "hex";
 export type CardSourceDestination = "discard" | "hand" | "exile" | "none";
 
 export type CardCost = Partial<Record<ResourceType, number>>;
@@ -69,6 +77,12 @@ export type CardPlayProfile =
   | (CardPlayBase & {
       targetMode: "entity";
       isValidTarget: TargetPredicate;
+      isValidHexTarget?: undefined;
+    })
+  | (CardPlayBase & {
+      targetMode: "hex";
+      isValidTarget?: undefined;
+      isValidHexTarget: HexTargetPredicate;
     });
 
 export type AutoTargetStrategy = "weakest_enemy_unit";
@@ -101,6 +115,7 @@ function tacticPlay(
   options?: {
     targetMode?: CardTargetMode;
     isValidTarget?: TargetPredicate;
+    isValidHexTarget?: HexTargetPredicate;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
@@ -115,6 +130,18 @@ function tacticPlay(
       targetMode,
       sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
       isValidTarget: options.isValidTarget,
+    };
+  }
+
+  if (targetMode === "hex") {
+    if (!options?.isValidHexTarget) {
+      throw new Error(`Hex-targeted card play ${stackEffectId} is missing isValidHexTarget.`);
+    }
+    return {
+      stackEffectId,
+      targetMode,
+      sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
+      isValidHexTarget: options.isValidHexTarget,
     };
   }
 
@@ -166,6 +193,14 @@ function damageTargetEntity(amount: number, label: string): (ctx: InstructionCon
 
 function deployUnit(cardId: string): (ctx: InstructionContext) => GameInstruction[] {
   return (ctx) => [{ type: "DEPLOY_UNIT", cardId, controllerId: ctx.controllerId, entityId: ctx.item.pendingUnitEntityId ?? undefined }];
+}
+
+function hasFriendlyUnitNearHex(state: Readonly<GameState>, playerId: PlayerId, target: HexCoord): boolean {
+  return Object.values(state.entities).some((entity) =>
+    entity.kind === "unit" &&
+    entity.ownerId === playerId &&
+    hexDistance(entity.coord, target) <= 1
+  );
 }
 
 export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
@@ -387,6 +422,20 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       }
       return [{ type: "DESTROY_ENTITY", targetEntityId: ctx.targetEntityId, sourceLabel: "Overload Finish" }];
     },
+  },
+  ion_shower: {
+    id: "ion_shower",
+    name: "Ion Shower",
+    faction: "flux_collective",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 2, flux: 1 },
+    text: "Choose a hex near one of your units. Cascade 2. Friendly units on affected hexes get +1 ATK until end of turn.",
+    play: tacticPlay("cascade_attack_buff_1_waves_2", {
+      targetMode: "hex",
+      isValidHexTarget: (state, target, pid) => isWithinMapBounds(target, state.map) && hasFriendlyUnitNearHex(state, pid, target),
+    }),
+    onResolve: createCascadeAttackBuffInstructions(1, 2),
   },
   frontline_scout_card: {
     id: "frontline_scout_card",

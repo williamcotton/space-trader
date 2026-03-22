@@ -29,6 +29,7 @@ type PendingCardTargeting = {
   playerId: PlayerId;
   cardInstanceId: string;
   cardName: string;
+  targetMode: "entity" | "hex";
   targetStackItemId?: string;
   prompt: string;
 };
@@ -152,6 +153,8 @@ class GameRuntime {
     }
     if (!this.pendingCardTargeting) {
       this.pendingCardTargeting = null;
+    } else if (!this.pendingCardTargeting.targetMode) {
+      this.pendingCardTargeting = null;
     }
     if (!this.listeners) {
       this.listeners = new Set();
@@ -266,20 +269,32 @@ class GameRuntime {
         return;
       }
 
-      const targetEntity = findEntityAtHex(this.state, hoveredHex);
-      if (!targetEntity) {
-        this.clearPendingCardTargeting(`Cancelled targeting for ${this.pendingCardTargeting.cardName}.`);
-        this.notifyListeners();
-        return;
-      }
+      const pending = this.pendingCardTargeting;
+      let result: DispatchResult;
+      if (pending.targetMode === "entity") {
+        const targetEntity = findEntityAtHex(this.state, hoveredHex);
+        if (!targetEntity) {
+          this.clearPendingCardTargeting(`Cancelled targeting for ${pending.cardName}.`);
+          this.notifyListeners();
+          return;
+        }
 
-      const result = this.dispatch({
-        type: "PLAY_CARD",
-        playerId: this.pendingCardTargeting.playerId,
-        cardInstanceId: this.pendingCardTargeting.cardInstanceId,
-        targetStackItemId: this.pendingCardTargeting.targetStackItemId,
-        targetEntityId: targetEntity.id,
-      });
+        result = this.dispatch({
+          type: "PLAY_CARD",
+          playerId: pending.playerId,
+          cardInstanceId: pending.cardInstanceId,
+          targetStackItemId: pending.targetStackItemId,
+          targetEntityId: targetEntity.id,
+        });
+      } else {
+        result = this.dispatch({
+          type: "PLAY_CARD",
+          playerId: pending.playerId,
+          cardInstanceId: pending.cardInstanceId,
+          targetStackItemId: pending.targetStackItemId,
+          targetHex: hoveredHex,
+        });
+      }
       if (result.ok) {
         this.pendingCardTargeting = null;
       }
@@ -397,7 +412,12 @@ class GameRuntime {
     });
   }
 
-  playCardFromHand(cardInstanceId: string, targetStackItemId?: string, targetEntityId?: string): DispatchResult {
+  playCardFromHand(
+    cardInstanceId: string,
+    targetStackItemId?: string,
+    targetEntityId?: string,
+    targetHex?: { q: number; r: number }
+  ): DispatchResult {
     if (this.state.phase === "discard") {
       this.pendingCardTargeting = null;
       return this.dispatch({
@@ -410,18 +430,29 @@ class GameRuntime {
     const playerId = this.state.priorityPlayerId ?? this.state.activePlayerId;
     const handCard = this.state.zones[playerId].hand.find((card) => card.instanceId === cardInstanceId);
     const definition = handCard ? getCardDefinition(handCard.cardId) : undefined;
-    const needsEntityTarget = definition?.play.targetMode === "entity";
-    if (needsEntityTarget && !targetEntityId) {
+    const cardName = definition?.name ?? handCard?.cardId ?? cardInstanceId;
+    const pendingTargetMode =
+      definition?.play.targetMode === "entity"
+        ? "entity"
+        : definition?.play.targetMode === "hex"
+          ? "hex"
+          : null;
+    const hasExplicitTarget =
+      (pendingTargetMode === "entity" && Boolean(targetEntityId)) ||
+      (pendingTargetMode === "hex" && Boolean(targetHex));
+
+    if (pendingTargetMode && !hasExplicitTarget) {
       this.pendingCardTargeting = {
         playerId,
         cardInstanceId,
-        cardName: definition.name,
+        cardName,
+        targetMode: pendingTargetMode,
         targetStackItemId,
-        prompt: `Select target for ${definition.name}.`,
+        prompt: `Select ${pendingTargetMode === "hex" ? "hex" : "target"} for ${cardName}.`,
       };
       this.state.log.push({
         turn: this.state.turn,
-        text: `Select target for ${definition.name}.`,
+        text: `Select ${pendingTargetMode === "hex" ? "hex" : "target"} for ${cardName}.`,
       });
       this.notifyListeners();
       return {
@@ -436,6 +467,7 @@ class GameRuntime {
       cardInstanceId,
       targetStackItemId,
       targetEntityId,
+      targetHex,
     });
     if (result.ok) {
       this.pendingCardTargeting = null;

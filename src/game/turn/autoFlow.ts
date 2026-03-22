@@ -1,35 +1,21 @@
 import type { GameCommand } from "../actions/commands";
 import { getCardDefinition } from "../content/cards/catalog";
-import { isCounterResponse } from "../content/stackEffects";
 import { getMapAxialBounds, hexDistance, isWithinMapBounds } from "../model/hex";
 import { MAX_HAND_SIZE, type GameState, type UnitEntity } from "../model/state";
 import type { PlayerId } from "../model/ids";
-import { validateCommand } from "../rules/validators";
+import { hasLegalPlayCardTargetOption } from "../rules/cardPlayOptions";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../systems/harvesting";
 import { canAttackEntityDirectly } from "../systems/keywords";
 import { hasEntityAtCoord } from "../model/queries";
 
 function hasAnyPlayableCard(state: GameState, playerId: PlayerId): boolean {
-  const topStackItemId = state.stack[state.stack.length - 1]?.id;
-
   for (const cardInstance of state.zones[playerId].hand) {
     const card = getCardDefinition(cardInstance.cardId);
     if (!card) {
       continue;
     }
 
-    const targetStackItemId =
-      card.play.targetMode === "stack_item" && isCounterResponse(card.play.stackEffectId)
-        ? topStackItemId
-        : undefined;
-    const result = validateCommand(state, {
-      type: "PLAY_CARD",
-      playerId,
-      cardInstanceId: cardInstance.instanceId,
-      targetStackItemId,
-    });
-
-    if (result.ok) {
+    if (hasLegalPlayCardTargetOption(state, playerId, cardInstance.instanceId, card)) {
       return true;
     }
   }

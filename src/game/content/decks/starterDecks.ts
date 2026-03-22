@@ -34,6 +34,7 @@ const FLUX_STARTER_UNIQUE: string[] = [
   "overload_finish",
   "counter_pulse",
   "echo_recall",
+  "ion_shower",
   "expedition_harvester_card",
   "escort_drone_card",
   "salvage_hauler_card",
@@ -42,7 +43,6 @@ const FLUX_STARTER_UNIQUE: string[] = [
   "null_intercept",
   "jammer_cloud",
   "failsafe_redirect",
-  "orbital_ping",
 ];
 
 const BIOMASS_STARTER_UNIQUE: string[] = [

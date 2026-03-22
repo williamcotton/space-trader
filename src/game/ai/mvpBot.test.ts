@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { hexDistance } from "../model/hex";
 import { createInitialGameState } from "../model/state";
 import { decideMvpBotCommand } from "./mvpBot";
 
@@ -209,6 +210,43 @@ describe("decideMvpBotCommand", () => {
       cardInstanceId,
       targetEntityId: target.id,
     });
+  });
+
+  it("casts Ion Shower with a legal hex target when it creates a combat kill", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "tactical";
+    state.stack = [];
+    state.zones.player_2.hand = [];
+    state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 4;
+
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_2", "ion_shower");
+    const scout = state.entities.unit_player_2_scout;
+    const enemy = state.entities.unit_player_1_scout;
+    if (!scout || scout.kind !== "unit" || !enemy || enemy.kind !== "unit") {
+      throw new Error("Expected units for Ion Shower bot test.");
+    }
+
+    scout.coord = { q: 0, r: 0 };
+    scout.attacksRemaining = 1;
+    scout.hasSummoningSickness = false;
+    enemy.coord = { q: 1, r: 0 };
+    enemy.hp = 3;
+
+    const command = decideMvpBotCommand(state, "player_2");
+    expect(command?.type).toBe("PLAY_CARD");
+    if (!command || command.type !== "PLAY_CARD") {
+      throw new Error("Expected Ion Shower play command.");
+    }
+
+    expect(command.cardInstanceId).toBe(cardInstanceId);
+    expect(command.targetHex).toBeDefined();
+    if (!command.targetHex) {
+      throw new Error("Expected Ion Shower to choose a hex target.");
+    }
+    expect(hexDistance(command.targetHex, scout.coord)).toBeLessThanOrEqual(1);
   });
 
   it("casts Rivet Volley at the enemy base when it is lethal", () => {

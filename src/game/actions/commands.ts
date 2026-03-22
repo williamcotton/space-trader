@@ -63,6 +63,7 @@ export type PlayCardCommand = {
   cardInstanceId: string;
   targetStackItemId?: string;
   targetEntityId?: EntityId;
+  targetHex?: HexCoord;
 };
 
 export type DiscardCardCommand = {
