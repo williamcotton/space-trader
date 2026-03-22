@@ -242,10 +242,10 @@ function chooseCounterCommand(state: GameState, botPlayerId: PlayerId): GameComm
   const hand = [...state.zones[botPlayerId].hand].sort((a, b) => a.instanceId.localeCompare(b.instanceId));
   for (const cardInstance of hand) {
     const card = getCardDefinition(cardInstance.cardId);
-    if (!card || card.kind !== "tactic") {
+    if (!card) {
       continue;
     }
-    if (!isCounterResponse(card.stackEffectId)) {
+    if (card.play.targetMode !== "stack_item" || !isCounterResponse(card.play.stackEffectId)) {
       continue;
     }
     if (!canAffordCardCost(state, botPlayerId, card.cost)) {
@@ -435,20 +435,20 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
 
   for (const cardInstance of hand) {
     const card = getCardDefinition(cardInstance.cardId);
-    if (!card || card.kind !== "tactic" || !canAffordCardCost(state, botPlayerId, card.cost)) {
+    if (!card || card.play.requiresOpenBaseAdjacentTile || !canAffordCardCost(state, botPlayerId, card.cost)) {
       continue;
     }
 
-    const effect = getStackEffectDefinition(card.stackEffectId);
+    const effect = getStackEffectDefinition(card.play.stackEffectId);
     if (!effect) {
       continue;
     }
 
-    if (effect.targeting.type === "entity" || card.targetHint === "entity") {
+    if (card.play.targetMode === "entity") {
       for (const entity of Object.values(state.entities).sort((a, b) => a.id.localeCompare(b.id))) {
         // New path: card-level predicate
-        if (card.isValidTarget) {
-          if (!card.isValidTarget(state, entity, botPlayerId)) continue;
+        if (card.play.isValidTarget) {
+          if (!card.play.isValidTarget(state, entity, botPlayerId)) continue;
         } else {
           // Legacy fallback: enum-based checks
           if (effect.targeting.type === "entity") {

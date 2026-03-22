@@ -3,7 +3,6 @@ import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { decideMvpBotCommand } from "./ai/mvpBot";
 import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
 import { getCardDefinition } from "./content/cards/catalog";
-import { requiresEntityTarget } from "./content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
 import { findEntityAtHex } from "./model/queries";
 import { createInitialGameState } from "./model/state";
@@ -410,11 +409,7 @@ class GameRuntime {
     const playerId = this.state.priorityPlayerId ?? this.state.activePlayerId;
     const handCard = this.state.zones[playerId].hand.find((card) => card.instanceId === cardInstanceId);
     const definition = handCard ? getCardDefinition(handCard.cardId) : undefined;
-    const needsEntityTarget = definition?.kind === "tactic" && (
-      definition.targetHint === "entity" ||
-      definition.isValidTarget ||
-      requiresEntityTarget(definition.stackEffectId)
-    );
+    const needsEntityTarget = definition?.play.targetMode === "entity";
     if (needsEntityTarget && !targetEntityId) {
       this.pendingCardTargeting = {
         playerId,

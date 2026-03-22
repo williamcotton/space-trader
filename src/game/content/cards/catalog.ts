@@ -13,6 +13,8 @@ export type TargetPredicate = (
 ) => boolean;
 
 export type CardSpeed = "instant" | "main";
+export type CardTargetMode = "none" | "entity" | "stack_item";
+export type CardSourceDestination = "discard" | "hand" | "exile" | "none";
 
 export type CardCost = Partial<Record<ResourceType, number>>;
 
@@ -42,14 +44,16 @@ type CardBase = {
   speed: CardSpeed;
   cost: CardCost;
   text: string;
+  play: CardPlayProfile;
 };
 
-export type TacticCardDefinition = CardBase & {
-  kind: "tactic";
+export type CardPlayProfile = {
   stackEffectId: string;
-  onResolve?: (context: InstructionContext) => GameInstruction[];
+  targetMode: CardTargetMode;
+  sourceDestinationOnResolve: CardSourceDestination;
+  requiresOpenBaseAdjacentTile?: boolean;
+  reserveEntityId?: boolean;
   isValidTarget?: TargetPredicate;
-  targetHint?: "entity" | "stack_item" | "none";
 };
 
 export type AutoTargetStrategy = "weakest_enemy_unit";
@@ -68,11 +72,40 @@ export type UnitCardDefinition = CardBase & {
   trigger?: UnitTrigger;
   triggers?: CardTrigger[];
   onResolve?: (context: InstructionContext) => GameInstruction[];
-  isValidTarget?: TargetPredicate;
-  targetHint?: "entity" | "stack_item" | "none";
+};
+
+export type TacticCardDefinition = CardBase & {
+  kind: "tactic";
+  onResolve?: (context: InstructionContext) => GameInstruction[];
 };
 
 export type CardDefinition = TacticCardDefinition | UnitCardDefinition;
+
+function tacticPlay(
+  stackEffectId: string,
+  options?: {
+    targetMode?: CardTargetMode;
+    isValidTarget?: TargetPredicate;
+    sourceDestinationOnResolve?: CardSourceDestination;
+  }
+): CardPlayProfile {
+  return {
+    stackEffectId,
+    targetMode: options?.targetMode ?? "none",
+    sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
+    isValidTarget: options?.isValidTarget,
+  };
+}
+
+function unitPlay(stackEffectId = "deploy_unit_card"): CardPlayProfile {
+  return {
+    stackEffectId,
+    targetMode: "none",
+    sourceDestinationOnResolve: "none",
+    requiresOpenBaseAdjacentTile: true,
+    reserveEntityId: true,
+  };
+}
 
 function getOpponentPlayer(playerId: PlayerId): PlayerId {
   return playerId === "player_1" ? "player_2" : "player_1";
@@ -116,7 +149,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 1, flux: 1 },
     text: "Deal 2 damage to enemy base.",
-    stackEffectId: "damage_enemy_base_2",
+    play: tacticPlay("damage_enemy_base_2"),
     onResolve: damageEnemyBase(2, "Orbital Ping"),
   },
   slag_barrage: {
@@ -127,7 +160,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 1, alloy: 1 },
     text: "Deal 2 damage to enemy base.",
-    stackEffectId: "damage_enemy_base_2",
+    play: tacticPlay("damage_enemy_base_2"),
     onResolve: damageEnemyBase(2, "Slag Barrage"),
   },
   spore_burst: {
@@ -138,7 +171,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 1, biomass: 1 },
     text: "Deal 2 damage to enemy base.",
-    stackEffectId: "damage_enemy_base_2",
+    play: tacticPlay("damage_enemy_base_2"),
     onResolve: damageEnemyBase(2, "Spore Burst"),
   },
   counter_pulse: {
@@ -149,7 +182,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 1, flux: 1 },
     text: "Counter target top stack item.",
-    stackEffectId: "counter_top_item",
+    play: tacticPlay("counter_top_item", { targetMode: "stack_item" }),
     onResolve: counterStackItem("discard", "Counter Pulse"),
   },
   null_intercept: {
@@ -160,7 +193,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 2 },
     text: "Counter target top stack item.",
-    stackEffectId: "counter_top_item",
+    play: tacticPlay("counter_top_item", { targetMode: "stack_item" }),
     onResolve: counterStackItem("discard", "Null Intercept"),
   },
   echo_recall: {
@@ -171,7 +204,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 1, flux: 2 },
     text: "Counter target top stack item and return it to hand.",
-    stackEffectId: "counter_to_hand",
+    play: tacticPlay("counter_to_hand", { targetMode: "stack_item" }),
     onResolve: counterStackItem("hand", "Echo Recall"),
   },
   patchwork_barrier: {
@@ -182,7 +215,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 1, alloy: 1 },
     text: "Counter target top stack item.",
-    stackEffectId: "counter_top_item",
+    play: tacticPlay("counter_top_item", { targetMode: "stack_item" }),
     onResolve: counterStackItem("discard", "Patchwork Barrier"),
   },
   brace_protocol: {
@@ -193,10 +226,10 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 1, alloy: 1 },
     text: "Target allied unit gets +2 ARM until end of turn.",
-    stackEffectId: "armor_ally_unit_2_eot",
-    isValidTarget: (_state, target, pid) =>
-      target.kind === "unit" && target.ownerId === pid,
-    targetHint: "entity",
+    play: tacticPlay("armor_ally_unit_2_eot", {
+      targetMode: "entity",
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId === pid,
+    }),
     onResolve: (ctx) => {
       if (!ctx.targetEntityId) return [{ type: "LOG", text: "Brace Protocol: no target." }];
       return [{
@@ -220,11 +253,11 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 1, alloy: 1 },
     text: "Deal 2 damage to target enemy unit or base.",
-    stackEffectId: "damage_enemy_entity_2",
+    play: tacticPlay("damage_enemy_entity_2", {
+      targetMode: "entity",
+      isValidTarget: (_state, target, pid) => target.ownerId !== pid,
+    }),
     onResolve: damageTargetEntity(2, "Rivet Volley"),
-    isValidTarget: (_state, target, pid) =>
-      target.ownerId !== pid,
-    targetHint: "entity",
   },
   neural_echo: {
     id: "neural_echo",
@@ -234,7 +267,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 1, biomass: 1 },
     text: "Counter target top stack item and return it to hand.",
-    stackEffectId: "counter_to_hand",
+    play: tacticPlay("counter_to_hand", { targetMode: "stack_item" }),
     onResolve: counterStackItem("hand", "Neural Echo"),
   },
   emergency_thrust: {
@@ -245,7 +278,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 1 },
     text: "Deal 2 damage to enemy base.",
-    stackEffectId: "damage_enemy_base_2",
+    play: tacticPlay("damage_enemy_base_2"),
     onResolve: damageEnemyBase(2, "Emergency Thrust"),
   },
   jammer_cloud: {
@@ -256,7 +289,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 2 },
     text: "Counter target top stack item.",
-    stackEffectId: "counter_top_item",
+    play: tacticPlay("counter_top_item", { targetMode: "stack_item" }),
     onResolve: counterStackItem("discard", "Jammer Cloud"),
   },
   failsafe_redirect: {
@@ -267,7 +300,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 2 },
     text: "Counter target top stack item and return it to hand.",
-    stackEffectId: "counter_to_hand",
+    play: tacticPlay("counter_to_hand", { targetMode: "stack_item" }),
     onResolve: counterStackItem("hand", "Failsafe Redirect"),
   },
   scrap_burst: {
@@ -278,7 +311,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 2 },
     text: "Deal 2 damage to enemy base.",
-    stackEffectId: "damage_enemy_base_2",
+    play: tacticPlay("damage_enemy_base_2"),
     onResolve: damageEnemyBase(2, "Scrap Burst"),
   },
   holdfast_protocol: {
@@ -289,7 +322,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 2 },
     text: "Counter target top stack item.",
-    stackEffectId: "counter_top_item",
+    play: tacticPlay("counter_top_item", { targetMode: "stack_item" }),
     onResolve: counterStackItem("discard", "Holdfast Protocol"),
   },
   arc_snap: {
@@ -300,11 +333,11 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 1, flux: 1 },
     text: "Deal 2 damage to target enemy unit.",
-    stackEffectId: "damage_enemy_unit_2",
+    play: tacticPlay("damage_enemy_unit_2", {
+      targetMode: "entity",
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId !== pid,
+    }),
     onResolve: damageTargetEntity(2, "Arc Snap"),
-    isValidTarget: (_state, target, pid) =>
-      target.kind === "unit" && target.ownerId !== pid,
-    targetHint: "entity",
   },
   overload_finish: {
     id: "overload_finish",
@@ -314,10 +347,10 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 2, flux: 1 },
     text: "Destroy target damaged enemy unit.",
-    stackEffectId: "destroy_damaged_enemy_unit",
-    isValidTarget: (_state, target, pid) =>
-      target.kind === "unit" && target.ownerId !== pid && target.hp < target.maxHp,
-    targetHint: "entity",
+    play: tacticPlay("destroy_damaged_enemy_unit", {
+      targetMode: "entity",
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId !== pid && target.hp < target.maxHp,
+    }),
     onResolve: (ctx) => {
       if (!ctx.targetEntityId) return [{ type: "LOG", text: "Overload Finish: no target." }];
       const target = ctx.state.entities[ctx.targetEntityId];
@@ -335,6 +368,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 2, alloy: 1 },
     text: "Deploy a combat scout near your base.",
+    play: unitPlay(),
     onResolve: deployUnit("frontline_scout_card"),
     unit: {
       role: "combat",
@@ -355,6 +389,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 3, alloy: 2 },
     text: "Deploy an armored combat unit near your base.",
+    play: unitPlay(),
     onResolve: deployUnit("alloy_guard_card"),
     unit: {
       role: "combat",
@@ -375,6 +410,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 2, flux: 1 },
     text: "Deploy a fast combat skirmisher near your base.",
+    play: unitPlay(),
     onResolve: deployUnit("flux_runner_card"),
     unit: {
       role: "combat",
@@ -395,6 +431,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 2, alloy: 1 },
     text: "Adjacent allied combat units get +1 ATK.",
+    play: unitPlay(),
     onResolve: deployUnit("forge_captain_card"),
     unit: {
       role: "utility",
@@ -416,6 +453,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 2, flux: 1 },
     text: "Whenever you cast a tactic, Relay Savant deals 1 damage to an enemy unit.",
+    play: unitPlay(),
     onResolve: deployUnit("relay_savant_card"),
     unit: {
       role: "utility",
@@ -442,6 +480,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 2, biomass: 1 },
     text: "Deploy a resource unit near your base.",
+    play: unitPlay(),
     onResolve: deployUnit("swarm_harvester_card"),
     unit: {
       role: "resource",
@@ -462,6 +501,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 2, biomass: 1 },
     text: "Deploy a biomass skirmisher near your base.",
+    play: unitPlay(),
     onResolve: deployUnit("support_drone_card"),
     unit: {
       role: "combat",
@@ -482,6 +522,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 2 },
     text: "Deploy a light combat escort near your base.",
+    play: unitPlay(),
     onResolve: deployUnit("escort_drone_card"),
     unit: {
       role: "combat",
@@ -502,6 +543,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 1 },
     text: "Deploy a light resource unit near your base.",
+    play: unitPlay(),
     onResolve: deployUnit("expedition_harvester_card"),
     unit: {
       role: "resource",
@@ -522,6 +564,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 2 },
     text: "Deploy a durable resource unit near your base.",
+    play: unitPlay(),
     onResolve: deployUnit("salvage_hauler_card"),
     unit: {
       role: "resource",
@@ -542,6 +585,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 3 },
     text: "Deploy a durable utility drone near your base.",
+    play: unitPlay(),
     onResolve: deployUnit("bulwark_drone_card"),
     unit: {
       role: "utility",
@@ -562,6 +606,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "main",
     cost: { credits: 2 },
     text: "Deploy a scouting combat unit near your base.",
+    play: unitPlay(),
     onResolve: deployUnit("pathfinder_buggy_card"),
     unit: {
       role: "combat",

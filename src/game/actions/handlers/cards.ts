@@ -173,7 +173,7 @@ function applyResolvedStackEffect(state: GameState, resolvedItem: StackItem): Co
     : definition!.createInstructions(context);
   executeInstructions(state, instructions);
 
-  return sourceCard?.kind === "tactic" ? "discard" : "none";
+  return sourceCard?.play.sourceDestinationOnResolve ?? "discard";
 }
 
 export function handleRespondStack(
@@ -222,7 +222,7 @@ export function handlePlayCard(
     return [];
   }
 
-  const effectId = card.kind === "tactic" ? card.stackEffectId : "deploy_unit_card";
+  const effectId = card.play.stackEffectId;
   const effectDefinition = getStackEffectDefinition(effectId);
   if (!effectDefinition) {
     return [];
@@ -245,7 +245,7 @@ export function handlePlayCard(
       counterable: effectDefinition.object.counterable,
       defaultCounterDestination: effectDefinition.object.defaultCounterDestination,
       nextPriorityPlayerId: getOpponentPlayer(command.playerId),
-      pendingUnitEntityId: card.kind === "unit" ? createSummonedUnitId(state, command.playerId, card.id) : null,
+      pendingUnitEntityId: card.play.reserveEntityId ? createSummonedUnitId(state, command.playerId, card.id) : null,
     },
   ];
 

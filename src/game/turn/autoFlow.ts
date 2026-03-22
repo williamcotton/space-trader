@@ -17,7 +17,10 @@ function hasAnyPlayableCard(state: GameState, playerId: PlayerId): boolean {
       continue;
     }
 
-    const targetStackItemId = card.kind === "tactic" && isCounterResponse(card.stackEffectId) ? topStackItemId : undefined;
+    const targetStackItemId =
+      card.play.targetMode === "stack_item" && isCounterResponse(card.play.stackEffectId)
+        ? topStackItemId
+        : undefined;
     const result = validateCommand(state, {
       type: "PLAY_CARD",
       playerId,

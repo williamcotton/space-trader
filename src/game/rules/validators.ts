@@ -1,5 +1,5 @@
 import type { GameCommand } from "../actions/commands";
-import { getCardDefinition, type CardDefinition, type TacticCardDefinition } from "../content/cards/catalog";
+import { getCardDefinition, type CardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import { MAX_HAND_SIZE, type EntityState, type GameState } from "../model/state";
@@ -50,10 +50,10 @@ function validateEntityTargetForEffect(
   playerId: PlayerId,
   targetEntityId: string | undefined,
   effectId: string,
-  card?: TacticCardDefinition
+  card?: CardDefinition
 ): CommandValidationResult {
   // New path: card-level predicate
-  if (card?.isValidTarget) {
+  if (card?.play.isValidTarget) {
     if (!targetEntityId) {
       return { ok: false, reason: "This card requires a battlefield target." };
     }
@@ -61,7 +61,7 @@ function validateEntityTargetForEffect(
     if (!target) {
       return { ok: false, reason: "Target entity does not exist." };
     }
-    if (!card.isValidTarget(state, target, playerId)) {
+    if (!card.play.isValidTarget(state, target, playerId)) {
       return { ok: false, reason: "Target does not meet card requirements." };
     }
     return { ok: true };
@@ -273,17 +273,15 @@ function validateCardSpeed(
   return { ok: true };
 }
 
-function validateTacticTargeting(
+function validateCardTargeting(
   state: GameState,
   command: Extract<GameCommand, { type: "PLAY_CARD" }>,
-  card: Extract<CardDefinition, { kind: "tactic" }>
+  card: CardDefinition
 ): CommandValidationResult {
-  // Determine targeting mode: card-level targetHint takes priority, then legacy effect definition
-  const targetHint = card.targetHint;
-  const effect = getStackEffectDefinition(card.stackEffectId);
-  if (!effect) return { ok: false, reason: `Unknown stack effect: ${card.stackEffectId}` };
+  const effect = getStackEffectDefinition(card.play.stackEffectId);
+  if (!effect) return { ok: false, reason: `Unknown stack effect: ${card.play.stackEffectId}` };
 
-  const targetingType = targetHint ?? effect.targeting.type;
+  const targetingType = card.play.targetMode;
 
   if (targetingType === "stack_item") {
     if (!command.targetStackItemId) return { ok: false, reason: "Counter cards require a target stack item." };
@@ -297,21 +295,16 @@ function validateTacticTargeting(
 
   if (targetingType === "entity") {
     if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };
-    return validateEntityTargetForEffect(state, command.playerId, command.targetEntityId, card.stackEffectId, card);
+    return validateEntityTargetForEffect(state, command.playerId, command.targetEntityId, card.play.stackEffectId, card);
   }
 
   if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };
   if (command.targetEntityId) return { ok: false, reason: "This card does not accept a battlefield target." };
-  return { ok: true };
-}
 
-function validateUnitTargeting(
-  state: GameState,
-  command: Extract<GameCommand, { type: "PLAY_CARD" }>
-): CommandValidationResult {
-  if (command.targetStackItemId) return { ok: false, reason: "Unit cards do not accept stack targets." };
-  if (command.targetEntityId) return { ok: false, reason: "Unit cards do not accept battlefield targets." };
-  if (!getFirstOpenBaseAdjacentTile(state, command.playerId)) return { ok: false, reason: "No open base-adjacent tile to deploy unit." };
+  if (card.play.requiresOpenBaseAdjacentTile && !getFirstOpenBaseAdjacentTile(state, command.playerId)) {
+    return { ok: false, reason: "No open base-adjacent tile to deploy unit." };
+  }
+
   return { ok: true };
 }
 
@@ -330,8 +323,7 @@ function validatePlayCard(state: GameState, command: Extract<GameCommand, { type
   const speedResult = validateCardSpeed(state, command, card);
   if (!speedResult.ok) return speedResult;
 
-  if (card.kind === "tactic") return validateTacticTargeting(state, command, card);
-  return validateUnitTargeting(state, command);
+  return validateCardTargeting(state, command, card);
 }
 
 function validateDiscardCard(state: GameState, command: Extract<GameCommand, { type: "DISCARD_CARD" }>): CommandValidationResult {

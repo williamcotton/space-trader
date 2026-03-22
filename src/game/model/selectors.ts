@@ -118,15 +118,15 @@ export function isCardPlayable(state: GameState, playerId: PlayerId, definition:
     if (state.priorityPlayerId !== playerId) return false;
   }
 
-  if (definition.kind === "unit" && !getFirstOpenBaseAdjacentTile(state, playerId)) return false;
+  if (definition.play.requiresOpenBaseAdjacentTile && !getFirstOpenBaseAdjacentTile(state, playerId)) return false;
 
-  if (definition.kind === "tactic" && isCounterResponse(definition.stackEffectId)) {
+  if (definition.play.targetMode === "stack_item" && isCounterResponse(definition.play.stackEffectId)) {
     if (state.stack.length === 0) return false;
   }
 
-  if (definition.kind === "tactic" && definition.isValidTarget) {
+  if (definition.play.isValidTarget) {
     const hasValidTarget = Object.values(state.entities).some(
-      (entity) => definition.isValidTarget!(state, entity, playerId)
+      (entity) => definition.play.isValidTarget!(state, entity, playerId)
     );
     if (!hasValidTarget) return false;
   }
@@ -135,7 +135,7 @@ export function isCardPlayable(state: GameState, playerId: PlayerId, definition:
 }
 
 export function getCounterTarget(definition: CardDefinition, stack: GameState["stack"]): string | undefined {
-  if (definition.kind !== "tactic" || !isCounterResponse(definition.stackEffectId)) return undefined;
+  if (definition.play.targetMode !== "stack_item" || !isCounterResponse(definition.play.stackEffectId)) return undefined;
   return stack[stack.length - 1]?.id;
 }
 
