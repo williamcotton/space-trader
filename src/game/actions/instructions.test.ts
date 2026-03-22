@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { createInitialGameState, type UnitEntity } from "../model/state";
 import { executeInstructions } from "./instructionHandlers";
@@ -129,6 +130,31 @@ describe("executeInstructions", () => {
         e.payload.type === "stat_modifier" &&
         e.payload.stat === "attackDamage"
       )).toBe(true);
+    });
+
+    it("copies unit keywords from the source card definition", () => {
+      const scoutCard = CARD_DEFINITIONS.frontline_scout_card as UnitCardDefinition;
+      const original = scoutCard.unit.keywords;
+      scoutCard.unit.keywords = ["stealth"];
+
+      try {
+        const state = createState();
+
+        executeInstructions(state, [
+          { type: "DEPLOY_UNIT", cardId: "frontline_scout_card", controllerId: "player_1" },
+        ]);
+
+        const newUnit = Object.values(state.entities).find(
+          (e) => e.kind === "unit" && e.name === "Frontline Scout" && e.id !== "unit_player_1_scout"
+        );
+        expect(newUnit?.kind).toBe("unit");
+        if (!newUnit || newUnit.kind !== "unit") {
+          throw new Error("Expected deployed scout.");
+        }
+        expect(newUnit.keywords).toEqual(["stealth"]);
+      } finally {
+        scoutCard.unit.keywords = original;
+      }
     });
   });
 

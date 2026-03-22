@@ -1,7 +1,7 @@
 import type { ResourceType } from "./enums";
 import type { GameState, StackItem } from "./state";
 import type { PlayerId } from "./ids";
-import { getCardDefinition, type CardCost, type CardDefinition } from "../content/cards/catalog";
+import { getCardDefinition, getCardKeywords, type CardCost, type CardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
 import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleTheme } from "../presentation";
 import { canAffordCardCost, getFirstOpenBaseAdjacentTile } from "./queries";
@@ -147,6 +147,9 @@ export function getCardTags(definition: CardDefinition): CardTag[] {
   if (definition.kind === "unit") {
     const roleTheme = getUnitRoleTheme(definition.unit.role);
     tags.push({ label: `${roleTheme.label} Unit`, tone: "role", accent: roleTheme.accent });
+  }
+  for (const keyword of getCardKeywords(definition)) {
+    tags.push({ label: keyword.replace(/_/g, " "), tone: "neutral" });
   }
   tags.push({ label: definition.speed === "instant" ? "Instant" : "Main", tone: "speed" });
   return tags;

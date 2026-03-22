@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { getStarterDeckCardIds } from "../content/decks/starterDecks";
 import {
@@ -55,5 +56,23 @@ describe("createInitialGameState", () => {
       flux: STARTING_PRIMARY_RESOURCE,
       biomass: 0,
     });
+  });
+
+  it("hydrates starting unit keywords from source card definitions", () => {
+    const scoutCard = CARD_DEFINITIONS.frontline_scout_card as UnitCardDefinition;
+    const original = scoutCard.unit.keywords;
+    scoutCard.unit.keywords = ["ambush"];
+
+    try {
+      const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+      const scout = state.entities.unit_player_1_scout;
+      expect(scout?.kind).toBe("unit");
+      if (!scout || scout.kind !== "unit") {
+        throw new Error("Expected starting scout unit.");
+      }
+      expect(scout.keywords).toEqual(["ambush"]);
+    } finally {
+      scoutCard.unit.keywords = original;
+    }
   });
 });

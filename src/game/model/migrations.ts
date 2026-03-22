@@ -1,10 +1,10 @@
-import { getCardDefinition } from "../content/cards/catalog";
+import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
 import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/stackEffects";
 import { ensureEntityPresentation } from "../presentation";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
 
-export const CURRENT_STATE_VERSION = 17;
+export const CURRENT_STATE_VERSION = 18;
 
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
@@ -27,6 +27,7 @@ function migratePhaseFourHarvesters(state: GameState): void {
       attackRange: 1,
       attackActionsPerTurn: 1,
       coord: { q: spawn.q, r: spawn.r + 1 },
+      keywords: getUnitCardKeywords("expedition_harvester_card"),
       carries: null,
       sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,
@@ -54,6 +55,7 @@ function migratePhaseFourHarvesters(state: GameState): void {
       attackRange: 1,
       attackActionsPerTurn: 1,
       coord: { q: spawn.q, r: spawn.r - 1 },
+      keywords: getUnitCardKeywords("expedition_harvester_card"),
       carries: null,
       sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,
@@ -152,6 +154,9 @@ export function migrateRuntimeState(state: GameState): void {
       if (typeof entity.carries === "undefined") {
         entity.carries = null;
       }
+      if (!Array.isArray(entity.keywords)) {
+        entity.keywords = getUnitCardKeywords(entity.sourceCardId);
+      }
       if (typeof entity.temporaryAttackBonus !== "number") {
         entity.temporaryAttackBonus = 0;
       }
@@ -206,7 +211,7 @@ export function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v17 (continuous effects layering system).",
+      text: "State migrated to v18 (unit keyword support).",
     });
   }
 }

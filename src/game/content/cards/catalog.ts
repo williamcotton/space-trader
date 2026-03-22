@@ -12,6 +12,7 @@ export type TargetPredicate = (
   sourcePlayerId: PlayerId
 ) => boolean;
 
+export type CardKeyword = string;
 export type CardSpeed = "instant" | "main";
 export type CardTargetMode = "none" | "entity" | "stack_item";
 export type CardSourceDestination = "discard" | "hand" | "exile" | "none";
@@ -34,6 +35,7 @@ export type UnitTemplate = {
   moveRange: number;
   attackRange: number;
   attackActionsPerTurn: number;
+  keywords?: CardKeyword[];
   auras?: UnitAura[];
 };
 
@@ -44,6 +46,7 @@ type CardBase = {
   speed: CardSpeed;
   cost: CardCost;
   text: string;
+  keywords?: CardKeyword[];
   play: CardPlayProfile;
 };
 
@@ -648,4 +651,27 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
 
 export function getCardDefinition(cardId: string): CardDefinition | undefined {
   return CARD_DEFINITIONS[cardId];
+}
+
+function cloneKeywords(keywords?: readonly CardKeyword[]): CardKeyword[] {
+  return keywords ? [...keywords] : [];
+}
+
+export function getCardKeywords(definition: CardDefinition): CardKeyword[] {
+  const merged = definition.kind === "unit"
+    ? [...cloneKeywords(definition.keywords), ...cloneKeywords(definition.unit.keywords)]
+    : cloneKeywords(definition.keywords);
+
+  return [...new Set(merged)];
+}
+
+export function getUnitCardKeywords(cardId: string | null | undefined): CardKeyword[] {
+  if (!cardId) return [];
+  const definition = getCardDefinition(cardId);
+  if (!definition || definition.kind !== "unit") return [];
+  return cloneKeywords(definition.unit.keywords);
+}
+
+export function cardHasKeyword(definition: CardDefinition, keyword: CardKeyword): boolean {
+  return getCardKeywords(definition).includes(keyword);
 }

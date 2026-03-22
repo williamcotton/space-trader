@@ -1,6 +1,7 @@
 import type { Faction, GamePhase, ResourceType, UnitRole } from "./enums";
 import { PLAYER_ONE, PLAYER_TWO, type EntityId, type NodeId, type PlayerId } from "./ids";
 import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
+import { getUnitCardKeywords } from "../content/cards/catalog";
 import type { ContinuousEffect } from "../systems/continuousEffects";
 
 export const OPENING_HAND_SIZE = 5;
@@ -82,6 +83,7 @@ export type UnitEntity = {
   attackRange: number;
   attackActionsPerTurn: number;
   coord: HexCoord;
+  keywords?: string[];
   carries: ResourceType | null;
   sourceCardId: string | null;
   hasSummoningSickness: boolean;
@@ -139,6 +141,14 @@ export type GameState = {
   tacticalHarvestEligibleUnitIds: EntityId[];
   tacticalHarvestedUnitIds: EntityId[];
 };
+
+export function getUnitKeywords(unit: UnitEntity): string[] {
+  return unit.keywords ? [...unit.keywords] : [];
+}
+
+export function unitHasKeyword(unit: UnitEntity, keyword: string): boolean {
+  return getUnitKeywords(unit).includes(keyword);
+}
 
 type CreateInitialGameStateOptions = {
   map: MapState;
@@ -261,6 +271,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
         q: map.spawnPoints.player_1.q + 1,
         r: map.spawnPoints.player_1.r,
       },
+      keywords: getUnitCardKeywords("frontline_scout_card"),
       carries: null,
       sourceCardId: "frontline_scout_card",
       hasSummoningSickness: false,
@@ -287,6 +298,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
         q: map.spawnPoints.player_2.q - 1,
         r: map.spawnPoints.player_2.r,
       },
+      keywords: getUnitCardKeywords("flux_runner_card"),
       carries: null,
       sourceCardId: "flux_runner_card",
       hasSummoningSickness: false,
@@ -313,6 +325,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
         q: map.spawnPoints.player_1.q,
         r: map.spawnPoints.player_1.r + 1,
       },
+      keywords: getUnitCardKeywords("expedition_harvester_card"),
       carries: null,
       sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,
@@ -339,6 +352,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
         q: map.spawnPoints.player_2.q,
         r: map.spawnPoints.player_2.r - 1,
       },
+      keywords: getUnitCardKeywords("expedition_harvester_card"),
       carries: null,
       sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,

@@ -1,6 +1,6 @@
 import type { GameCommand } from "../commands";
 import type { GameEvent } from "../events";
-import { getCardDefinition, type CardCost } from "../../content/cards/catalog";
+import { getCardDefinition, getUnitCardKeywords, type CardCost } from "../../content/cards/catalog";
 import { getStackEffectDefinition, getStackEffectMagnitude, type CounterDestination } from "../../content/stackEffects";
 import { createStackItemId, getOpponentPlayer, popTopStackItem } from "../../turn/stack";
 import type { PlayerId } from "../../model/ids";
@@ -83,6 +83,7 @@ function deployUnitToBattlefield(
     attackRange: cardDefinition.unit.attackRange,
     attackActionsPerTurn: cardDefinition.unit.attackActionsPerTurn,
     coord: { ...spawnCoord },
+    keywords: getUnitCardKeywords(cardId),
     carries: null,
     sourceCardId: cardId,
     hasSummoningSickness: true,

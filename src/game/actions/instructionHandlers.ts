@@ -1,4 +1,4 @@
-import { getCardDefinition } from "../content/cards/catalog";
+import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
 import type { CounterDestination } from "../content/stackEffects";
 import type { GameState, CardInstance } from "../model/state";
 import { syncPlayerZoneCounts } from "../model/state";
@@ -72,6 +72,7 @@ function deployUnitInternal(
     attackRange: cardDefinition.unit.attackRange,
     attackActionsPerTurn: cardDefinition.unit.attackActionsPerTurn,
     coord: { ...coord },
+    keywords: getUnitCardKeywords(cardId),
     carries: null,
     sourceCardId: cardId,
     hasSummoningSickness: true,
