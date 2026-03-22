@@ -25,7 +25,7 @@ export function renderGame(state: GameState, frame: GameFrame): void {
   drawResourceNodes(state, context, originX, originY, hexSize);
   drawHoverHexAndTargetPreview(state, context, originX, originY, hexSize);
   const stackActivityLevel = frame.transients.animations.some((animation) => {
-    return animation.kind === "stack_cast" || animation.kind === "stack_counter" || animation.kind === "spell_resolve";
+    return animation.kind === "stack_cast" || animation.kind === "stack_counter" || animation.kind === "spell_resolve" || animation.kind === "hex_shower";
   })
     ? 1
     : 0;

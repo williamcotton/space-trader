@@ -102,4 +102,49 @@ describe("buildAnimationsFromEvents", () => {
       returnToHand: false,
     });
   });
+
+  it("uses a card-owned resolve animation profile for Ion Shower", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const before = captureAnimationSnapshot(state);
+    const targetHex = { q: 0, r: 0 };
+
+    const animations = buildAnimationsFromEvents(
+      [
+        {
+          type: "STACK_ITEM_RESOLVED",
+          itemId: "stack_1_7",
+          label: "Ion Shower",
+          controllerId: "player_2",
+          ownerId: "player_2",
+          effectId: "cascade_attack_buff_1_waves_2",
+          effectMagnitude: 1,
+          targetStackItemId: null,
+          targetEntityId: null,
+          targetHex,
+          objectKind: "spell",
+          counterable: true,
+          defaultCounterDestination: "discard",
+          sourceCardInstanceId: "player_2_card_12",
+          sourceCardId: "ion_shower",
+          sourceCardOwnerId: "player_2",
+          pendingUnitEntityId: null,
+        },
+      ],
+      before,
+      state
+    );
+
+    expect(animations).toHaveLength(1);
+    expect(animations[0]).toMatchObject({
+      kind: "hex_shower",
+      playerId: "player_2",
+      origin: targetHex,
+      label: "Ion Shower",
+      accent: "flux",
+    });
+    if (animations[0]?.kind !== "hex_shower") {
+      throw new Error("Expected hex shower animation.");
+    }
+    expect(animations[0].hexes.length).toBeGreaterThan(0);
+  });
 });

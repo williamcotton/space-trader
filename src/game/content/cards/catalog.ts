@@ -24,8 +24,21 @@ export type CardKeyword = string;
 export type CardSpeed = "instant" | "main";
 export type CardTargetMode = "none" | "entity" | "stack_item" | "hex";
 export type CardSourceDestination = "discard" | "hand" | "exile" | "none";
+export type CardAnimationAccent = "alloy" | "flux" | "biomass" | "neutral";
 
 export type CardCost = Partial<Record<ResourceType, number>>;
+
+export type CardResolveAnimationProfile =
+  | {
+      kind: "hex_shower";
+      label: string;
+      waves: number;
+      accent: CardAnimationAccent;
+    };
+
+export type CardAnimationProfile = {
+  resolve?: CardResolveAnimationProfile;
+};
 
 export type UnitAura = {
   type: "adjacent_ally_buff";
@@ -56,6 +69,7 @@ type CardBase = {
   text: string;
   keywords?: CardKeyword[];
   play: CardPlayProfile;
+  animation?: CardAnimationProfile;
 };
 
 type CardPlayBase = {
@@ -435,6 +449,14 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       targetMode: "hex",
       isValidHexTarget: (state, target, pid) => isWithinMapBounds(target, state.map) && hasFriendlyUnitNearHex(state, pid, target),
     }),
+    animation: {
+      resolve: {
+        kind: "hex_shower",
+        label: "Ion Shower",
+        waves: 2,
+        accent: "flux",
+      },
+    },
     onResolve: createCascadeAttackBuffInstructions(1, 2),
   },
   frontline_scout_card: {

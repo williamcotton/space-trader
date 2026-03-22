@@ -4,6 +4,7 @@ import { getStackEffectDefinition } from "../content/stackEffects";
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, HexCoord } from "../model/state";
 import type { CanvasAnimation } from "../types";
+import { getCascadeAffectedHexes } from "../systems/cascade";
 
 type EntitySnapshot = {
   kind: EntityState["kind"];
@@ -72,12 +73,53 @@ function getStackAnimationVisual(effectId: string, sourceCardId: string | null):
   return "generic";
 }
 
+function buildHexShowerAnimation(
+  event: Extract<GameEvent, { type: "STACK_ITEM_RESOLVED" }>,
+  state: GameState,
+  baseId: string,
+  label: string,
+  waves: number,
+  accent: "alloy" | "flux" | "biomass" | "neutral"
+): CanvasAnimation | null {
+  if (!event.targetHex) {
+    return null;
+  }
+
+  return {
+    id: baseId,
+    kind: "hex_shower",
+    playerId: event.controllerId,
+    ageSeconds: 0,
+    durationSeconds: 1.05,
+    origin: event.targetHex,
+    hexes: getCascadeAffectedHexes(state, event.controllerId, event.targetHex, waves),
+    label,
+    accent,
+  };
+}
+
 function buildStackResolutionAnimation(
   event: Extract<GameEvent, { type: "STACK_ITEM_RESOLVED" }>,
   before: AnimationCapture,
   state: GameState,
   baseId: string
 ): CanvasAnimation | null {
+  const sourceCard = event.sourceCardId ? getCardDefinition(event.sourceCardId) : undefined;
+  const cardResolveAnimation = sourceCard?.animation?.resolve;
+  if (cardResolveAnimation?.kind === "hex_shower") {
+    const customAnimation = buildHexShowerAnimation(
+      event,
+      state,
+      baseId,
+      cardResolveAnimation.label,
+      cardResolveAnimation.waves,
+      cardResolveAnimation.accent
+    );
+    if (customAnimation) {
+      return customAnimation;
+    }
+  }
+
   const definition = getStackEffectDefinition(event.effectId);
 
   if (definition?.behavior.type === "counter") {
@@ -194,6 +236,10 @@ function buildStackResolutionAnimation(
       visual: "buff",
       label: buffLabelParts.join(" · ") || event.label,
     };
+  }
+
+  if (definition?.behavior.type === "cascade_attack_buff") {
+    return buildHexShowerAnimation(event, state, baseId, event.label, definition.behavior.waves, "neutral");
   }
 
   if (definition?.behavior.type === "damage_enemy_base") {

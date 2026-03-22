@@ -81,6 +81,17 @@ export type CanvasAnimation =
       visual: "damage" | "destroy" | "buff" | "base_damage";
       amount?: number;
       label: string;
+    }
+  | {
+      id: string;
+      kind: "hex_shower";
+      playerId: PlayerId;
+      ageSeconds: number;
+      durationSeconds: number;
+      origin: HexCoord;
+      hexes: HexCoord[];
+      label: string;
+      accent: "alloy" | "flux" | "biomass" | "neutral";
     };
 
 export type FrameTransients = {

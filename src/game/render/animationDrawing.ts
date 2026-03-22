@@ -1,6 +1,6 @@
 import type { CanvasAnimation, GameFrame } from "../types";
 import { getPlayerTheme, getResourceTheme } from "../presentation";
-import { toPixel, clamp, drawResourceGlyph, truncateLabel } from "./primitives";
+import { toPixel, clamp, drawHexOutline, drawResourceGlyph, truncateLabel } from "./primitives";
 import { getStackAnchor, drawStackGlyph } from "./overlays";
 
 export type AnimationDrawContext = {
@@ -238,6 +238,65 @@ function drawSpellResolveAnimation(d: AnimationDrawContext, animation: Extract<C
   d.ctx.fillText(`-${animation.amount ?? 0}`, target.x, target.y - d.hexSize * (0.5 + d.progress * 0.3));
 }
 
+function drawHexShowerAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "hex_shower" }>): void {
+  const origin = toPixel(animation.origin, d.originX, d.originY, d.hexSize);
+  const accentColors = {
+    alloy: { stroke: "255, 178, 118", fill: "255, 223, 194" },
+    flux: { stroke: "104, 223, 255", fill: "197, 246, 255" },
+    biomass: { stroke: "122, 246, 165", fill: "209, 255, 224" },
+    neutral: { stroke: "214, 227, 255", fill: "241, 246, 255" },
+  } as const;
+  const colors = accentColors[animation.accent];
+
+  for (const [index, hex] of animation.hexes.entries()) {
+    const position = toPixel(hex, d.originX, d.originY, d.hexSize);
+    const stagger = (index % 4) * 0.06;
+    const localProgress = clamp((d.progress - stagger) / (1 - stagger || 1), 0, 1);
+    if (localProgress <= 0) {
+      continue;
+    }
+
+    d.ctx.beginPath();
+    drawHexOutline(d.ctx, position.x, position.y, d.hexSize * (0.42 + localProgress * 0.08));
+    d.ctx.strokeStyle = `rgba(${colors.stroke}, ${0.72 - localProgress * 0.4})`;
+    d.ctx.lineWidth = 1.8;
+    d.ctx.stroke();
+
+    d.ctx.beginPath();
+    d.ctx.arc(position.x, position.y, d.hexSize * (0.12 + localProgress * 0.22), 0, Math.PI * 2);
+    d.ctx.fillStyle = `rgba(${colors.fill}, ${0.18 - localProgress * 0.1})`;
+    d.ctx.fill();
+
+    const streakAlpha = 0.86 - localProgress * 0.56;
+    for (let streakIndex = 0; streakIndex < 3; streakIndex += 1) {
+      const offset = (streakIndex - 1) * d.hexSize * 0.18;
+      d.ctx.beginPath();
+      d.ctx.moveTo(position.x + offset, position.y - d.hexSize * (0.82 - localProgress * 0.18));
+      d.ctx.lineTo(position.x + offset * 0.72, position.y - d.hexSize * (0.12 - localProgress * 0.1));
+      d.ctx.strokeStyle = `rgba(${colors.stroke}, ${streakAlpha})`;
+      d.ctx.lineWidth = 1.5 + (1 - localProgress) * 1.2;
+      d.ctx.stroke();
+    }
+  }
+
+  d.ctx.beginPath();
+  d.ctx.arc(origin.x, origin.y, d.hexSize * (0.2 + d.progress * 0.52), 0, Math.PI * 2);
+  d.ctx.strokeStyle = `rgba(${colors.stroke}, ${0.9 - d.progress * 0.5})`;
+  d.ctx.lineWidth = 2.4;
+  d.ctx.stroke();
+
+  d.ctx.beginPath();
+  d.ctx.arc(origin.x, origin.y, d.hexSize * (0.06 + d.progress * 0.18), 0, Math.PI * 2);
+  d.ctx.fillStyle = `rgba(${colors.fill}, ${0.34 - d.progress * 0.2})`;
+  d.ctx.fill();
+
+  d.ctx.fillStyle = `rgba(${colors.fill}, ${0.92 - d.progress * 0.54})`;
+  d.ctx.font = `${clamp(d.hexSize * 0.3, 10, 14)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+  d.ctx.textAlign = "center";
+  d.ctx.textBaseline = "bottom";
+  d.ctx.fillText(animation.label, origin.x, origin.y - d.hexSize * (0.78 + d.progress * 0.14));
+}
+
 export function drawAnimations(context: CanvasRenderingContext2D, frame: GameFrame, originX: number, originY: number, hexSize: number): void {
   for (const animation of frame.transients.animations) {
     const d: AnimationDrawContext = {
@@ -273,6 +332,9 @@ export function drawAnimations(context: CanvasRenderingContext2D, frame: GameFra
         break;
       case "spell_resolve":
         drawSpellResolveAnimation(d, animation);
+        break;
+      case "hex_shower":
+        drawHexShowerAnimation(d, animation);
         break;
     }
   }
