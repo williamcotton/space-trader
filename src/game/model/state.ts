@@ -1,9 +1,10 @@
 import type { Faction, GamePhase, ResourceType, UnitRole } from "./enums";
 import { PLAYER_ONE, PLAYER_TWO, type EntityId, type NodeId, type PlayerId } from "./ids";
 import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
+import type { ContinuousEffect } from "../systems/continuousEffects";
 
 export const OPENING_HAND_SIZE = 5;
-export const MAX_HAND_SIZE = 7;
+export const PASSIVE_DRAW_CAP = 7;
 export const BASE_STARTING_HP = 20;
 
 export type HexCoord = {
@@ -127,6 +128,8 @@ export type GameState = {
   zones: Record<PlayerId, PlayerZones>;
   entities: Record<EntityId, EntityState>;
   stack: StackItem[];
+  continuousEffects: ContinuousEffect[];
+  effectTimestampCounter: number;
   log: MatchLogEntry[];
   winner: PlayerId | null;
   lastRejectedReason: string | null;
@@ -382,6 +385,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     zones,
     entities,
     stack: [],
+    continuousEffects: [],
+    effectTimestampCounter: 0,
     log: [
       {
         turn: 1,

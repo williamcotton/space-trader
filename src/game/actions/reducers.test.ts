@@ -3,6 +3,7 @@ import type { GameCommand } from "./commands";
 import { dispatchCommand } from "./reducers";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
+import { getEffectiveUnitArmor } from "../systems/unitStats";
 
 function setupState() {
   return createInitialGameState({ map: FRONTIER_BELT_MAP });
@@ -493,12 +494,35 @@ describe("dispatchCommand", () => {
     expect(state.players.player_1.deckSize).toBe(state.zones.player_1.deck.length);
   });
 
-  it("skips start-phase draw when the active player is already at the hand cap", () => {
+  it("still draws at the soft cap of seven cards in hand", () => {
     const state = setupState();
 
     moveCardFromDeckToHand(state, "player_2", "expedition_harvester_card");
     moveCardFromDeckToHand(state, "player_2", "null_intercept");
     expect(state.zones.player_2.hand).toHaveLength(7);
+
+    advanceToPhase(state, "end");
+    const beforeHand = state.zones.player_2.hand.length;
+    const beforeDeck = state.zones.player_2.deck.length;
+    const handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+
+    expect(handoff.ok).toBe(true);
+    expect(state.phase).toBe("start");
+    expect(state.activePlayerId).toBe("player_2");
+    expect(state.zones.player_2.hand.length).toBe(beforeHand + 1);
+    expect(state.zones.player_2.deck.length).toBe(beforeDeck - 1);
+  });
+
+  it("skips start-phase draw only when the active player is already above the soft cap", () => {
+    const state = setupState();
+
+    moveCardFromDeckToHand(state, "player_2", "expedition_harvester_card");
+    moveCardFromDeckToHand(state, "player_2", "null_intercept");
+    moveCardFromDeckToHand(state, "player_2", "relay_savant_card");
+    expect(state.zones.player_2.hand).toHaveLength(8);
 
     advanceToPhase(state, "end");
     const beforeHand = state.zones.player_2.hand.length;
@@ -910,10 +934,11 @@ describe("dispatchCommand", () => {
     if (!buffed || buffed.kind !== "unit") {
       throw new Error("Expected buffed unit after Brace Protocol resolves.");
     }
-    expect(buffed.temporaryArmorBonus).toBe(2);
+    expect(getEffectiveUnitArmor(state, buffed)).toBe(buffed.armor + 2);
+    expect(state.continuousEffects.some(e => e.payload.type === "stat_modifier" && e.payload.stat === "armor" && e.payload.amount === 2)).toBe(true);
 
     advanceToPhase(state, "end");
-    expect((state.entities[target.id] as typeof buffed).temporaryArmorBonus).toBe(2);
+    expect(getEffectiveUnitArmor(state, state.entities[target.id] as typeof buffed)).toBe((state.entities[target.id] as typeof buffed).armor + 2);
 
     const handoff = dispatchCommand(state, {
       type: "END_PHASE",
@@ -926,7 +951,7 @@ describe("dispatchCommand", () => {
     if (!afterHandoff || afterHandoff.kind !== "unit") {
       throw new Error("Expected unit after Brace Protocol turn rollover.");
     }
-    expect(afterHandoff.temporaryArmorBonus).toBe(0);
+    expect(getEffectiveUnitArmor(state, afterHandoff)).toBe(afterHandoff.armor);
   });
 
   it("adds a Relay Savant trigger to the stack when its controller casts a tactic", () => {

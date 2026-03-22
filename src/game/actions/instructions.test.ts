@@ -1,0 +1,240 @@
+import { describe, expect, it } from "vitest";
+import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { createInitialGameState, type UnitEntity } from "../model/state";
+import { executeInstructions } from "./instructionHandlers";
+import { LAYER } from "../systems/continuousEffects";
+
+function createState() {
+  return createInitialGameState({ map: FRONTIER_BELT_MAP });
+}
+
+function getUnit(state: ReturnType<typeof createState>, id: string): UnitEntity {
+  const entity = state.entities[id];
+  if (!entity || entity.kind !== "unit") throw new Error(`Expected unit: ${id}`);
+  return entity;
+}
+
+describe("executeInstructions", () => {
+  describe("DEAL_DAMAGE", () => {
+    it("reduces target HP and destroys unit at 0", () => {
+      const state = createState();
+      const unit = getUnit(state, "unit_player_2_scout");
+      const initialHp = unit.hp;
+
+      executeInstructions(state, [
+        { type: "DEAL_DAMAGE", targetEntityId: unit.id, amount: initialHp, sourceLabel: "Test" },
+      ]);
+
+      expect(state.entities[unit.id]).toBeUndefined();
+    });
+
+    it("deals partial damage without destroying", () => {
+      const state = createState();
+      const unit = getUnit(state, "unit_player_2_scout");
+      const initialHp = unit.hp;
+
+      executeInstructions(state, [
+        { type: "DEAL_DAMAGE", targetEntityId: unit.id, amount: 1, sourceLabel: "Test" },
+      ]);
+
+      expect((state.entities[unit.id] as UnitEntity).hp).toBe(initialHp - 1);
+    });
+
+    it("deals damage to a base", () => {
+      const state = createState();
+      const base = state.entities["base_player_2"];
+      expect(base?.kind).toBe("base");
+      const initialHp = base!.hp;
+
+      executeInstructions(state, [
+        { type: "DEAL_DAMAGE", targetEntityId: "base_player_2", amount: 3, sourceLabel: "Test" },
+      ]);
+
+      expect(state.entities["base_player_2"]!.hp).toBe(initialHp - 3);
+    });
+
+    it("logs when target does not exist", () => {
+      const state = createState();
+      const logBefore = state.log.length;
+
+      executeInstructions(state, [
+        { type: "DEAL_DAMAGE", targetEntityId: "nonexistent", amount: 1, sourceLabel: "Ghost" },
+      ]);
+
+      expect(state.log.length).toBeGreaterThan(logBefore);
+      expect(state.log[state.log.length - 1].text).toContain("target entity not found");
+    });
+  });
+
+  describe("DESTROY_ENTITY", () => {
+    it("removes a unit from the board", () => {
+      const state = createState();
+      expect(state.entities["unit_player_1_scout"]).toBeDefined();
+
+      executeInstructions(state, [
+        { type: "DESTROY_ENTITY", targetEntityId: "unit_player_1_scout", sourceLabel: "Test" },
+      ]);
+
+      expect(state.entities["unit_player_1_scout"]).toBeUndefined();
+    });
+
+    it("cleans up continuous effects when destroying a unit", () => {
+      const state = createState();
+      state.continuousEffects.push({
+        id: "test_effect",
+        sourceEntityId: "unit_player_1_scout",
+        sourceCardId: null,
+        controllerId: "player_1",
+        payload: { type: "stat_modifier", stat: "attackDamage", amount: 1 },
+        target: { type: "adjacent_allies", sourceEntityId: "unit_player_1_scout" },
+        expiry: { type: "while_source_alive", sourceEntityId: "unit_player_1_scout" },
+        layer: LAYER.STATIC,
+        timestamp: 1,
+      });
+
+      executeInstructions(state, [
+        { type: "DESTROY_ENTITY", targetEntityId: "unit_player_1_scout", sourceLabel: "Test" },
+      ]);
+
+      expect(state.continuousEffects).toHaveLength(0);
+    });
+  });
+
+  describe("DEPLOY_UNIT", () => {
+    it("creates a unit entity on the board", () => {
+      const state = createState();
+      const entitiesBefore = Object.keys(state.entities).length;
+
+      executeInstructions(state, [
+        { type: "DEPLOY_UNIT", cardId: "frontline_scout_card", controllerId: "player_1" },
+      ]);
+
+      expect(Object.keys(state.entities).length).toBe(entitiesBefore + 1);
+      const newUnit = Object.values(state.entities).find(
+        (e) => e.kind === "unit" && e.name === "Frontline Scout" && e.id !== "unit_player_1_scout"
+      );
+      expect(newUnit).toBeDefined();
+      expect(newUnit!.kind).toBe("unit");
+    });
+
+    it("registers aura effects when deploying a unit with auras", () => {
+      const state = createState();
+
+      executeInstructions(state, [
+        { type: "DEPLOY_UNIT", cardId: "forge_captain_card", controllerId: "player_1" },
+      ]);
+
+      expect(state.continuousEffects.some(e =>
+        e.sourceCardId === "forge_captain_card" &&
+        e.payload.type === "stat_modifier" &&
+        e.payload.stat === "attackDamage"
+      )).toBe(true);
+    });
+  });
+
+  describe("APPLY_CONTINUOUS_EFFECT", () => {
+    it("pushes an effect to the continuousEffects array", () => {
+      const state = createState();
+
+      executeInstructions(state, [{
+        type: "APPLY_CONTINUOUS_EFFECT",
+        effectId: "test_ce",
+        sourceEntityId: null,
+        sourceCardId: null,
+        controllerId: "player_1",
+        payload: { type: "stat_modifier", stat: "armor", amount: 3 },
+        target: { type: "specific_entity", entityId: "unit_player_1_scout" },
+        expiry: { type: "permanent" },
+        layer: LAYER.TEMPORARY,
+      }]);
+
+      expect(state.continuousEffects).toHaveLength(1);
+      expect(state.continuousEffects[0].id).toBe("test_ce");
+    });
+  });
+
+  describe("COUNTER_STACK_ITEM", () => {
+    it("removes a stack item and moves its source card", () => {
+      const state = createState();
+      state.stack.push({
+        id: "stack_1",
+        label: "Test Spell",
+        controllerId: "player_2",
+        ownerId: "player_2",
+        effectId: "damage_enemy_base_2",
+        effectMagnitude: 2,
+        targetStackItemId: null,
+        targetEntityId: null,
+        objectKind: "spell",
+        counterable: true,
+        defaultCounterDestination: "discard",
+        sourceCardInstanceId: "player_2_card_1",
+        sourceCardId: "orbital_ping",
+        sourceCardOwnerId: "player_2",
+        pendingUnitEntityId: null,
+      });
+
+      executeInstructions(state, [
+        { type: "COUNTER_STACK_ITEM", targetStackItemId: "stack_1", destination: "discard", sourceLabel: "Counter" },
+      ]);
+
+      expect(state.stack).toHaveLength(0);
+    });
+  });
+
+  describe("LOG", () => {
+    it("appends a message to the game log", () => {
+      const state = createState();
+      const logBefore = state.log.length;
+
+      executeInstructions(state, [
+        { type: "LOG", text: "Hello from instructions!" },
+      ]);
+
+      expect(state.log.length).toBe(logBefore + 1);
+      expect(state.log[state.log.length - 1].text).toBe("Hello from instructions!");
+    });
+  });
+
+  describe("multi-instruction composition", () => {
+    it("executes multiple instructions in order", () => {
+      const state = createState();
+      const unit = getUnit(state, "unit_player_2_scout");
+
+      executeInstructions(state, [
+        { type: "DEAL_DAMAGE", targetEntityId: unit.id, amount: 1, sourceLabel: "First" },
+        { type: "LOG", text: "Between instructions" },
+        { type: "DEAL_DAMAGE", targetEntityId: unit.id, amount: 1, sourceLabel: "Second" },
+      ]);
+
+      expect((state.entities[unit.id] as UnitEntity).hp).toBe(unit.maxHp - 2);
+      expect(state.log.some(e => e.text === "Between instructions")).toBe(true);
+    });
+
+    it("handles deal damage + destroy in sequence", () => {
+      const state = createState();
+      const unitId = "unit_player_2_scout";
+
+      executeInstructions(state, [
+        { type: "DEAL_DAMAGE", targetEntityId: unitId, amount: 1, sourceLabel: "Weaken" },
+        { type: "DESTROY_ENTITY", targetEntityId: unitId, sourceLabel: "Finish" },
+      ]);
+
+      expect(state.entities[unitId]).toBeUndefined();
+    });
+  });
+
+  describe("GAIN_RESOURCES", () => {
+    it("adds resources to a player's pool", () => {
+      const state = createState();
+      const creditsBefore = state.players.player_1.resources.credits;
+
+      executeInstructions(state, [
+        { type: "GAIN_RESOURCES", playerId: "player_1", resources: { credits: 3, alloy: 1 } },
+      ]);
+
+      expect(state.players.player_1.resources.credits).toBe(creditsBefore + 3);
+      expect(state.players.player_1.resources.alloy).toBeGreaterThanOrEqual(1);
+    });
+  });
+});

@@ -4,9 +4,12 @@ import { getCardDefinition, type CardCost } from "../../content/cards/catalog";
 import { getStackEffectDefinition, type CounterDestination, type StackResolutionRules } from "../../content/stackEffects";
 import { createStackItemId, getOpponentPlayer, popTopStackItem, removeStackItemById } from "../../turn/stack";
 import type { PlayerId } from "../../model/ids";
-import { MAX_HAND_SIZE, syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../../model/state";
+import { PASSIVE_DRAW_CAP, syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../../model/state";
 import { getPlayerBase, getFirstOpenBaseAdjacentTile } from "../../model/queries";
 import { evaluateTriggers, getStackEffectMagnitude } from "../../systems/triggers";
+import { createContinuousEffectId, LAYER, nextEffectTimestamp, removeEffectsForEntity } from "../../systems/continuousEffects";
+import type { InstructionContext } from "../instructions";
+import { executeInstructions } from "../instructionHandlers";
 
 function applyCardCost(state: GameState, playerId: PlayerId, cost: CardCost): void {
   const pool = state.players[playerId].resources;
@@ -30,10 +33,10 @@ function addCardToZone(state: GameState, playerId: PlayerId, zone: "hand" | "dis
 }
 
 export function drawCardForPlayer(state: GameState, playerId: PlayerId, drawReason: "opening_hand" | "start_phase_draw"): void {
-  if (state.zones[playerId].hand.length >= MAX_HAND_SIZE) {
+  if (state.zones[playerId].hand.length > PASSIVE_DRAW_CAP) {
     state.log.push({
       turn: state.turn,
-      text: `${playerId} skipped satellite download (${drawReason}) at hand limit ${MAX_HAND_SIZE}.`,
+      text: `${playerId} skipped satellite download (${drawReason}) above passive draw cap ${PASSIVE_DRAW_CAP}.`,
     });
     syncPlayerZoneCounts(state);
     return;
@@ -99,6 +102,40 @@ function deployUnitToBattlefield(
     temporaryAttackBonus: 0,
     temporaryArmorBonus: 0,
   };
+
+  if (cardDefinition.unit.auras) {
+    for (const aura of cardDefinition.unit.auras) {
+      if (aura.attackBonus) {
+        const ts = nextEffectTimestamp(state);
+        state.continuousEffects.push({
+          id: createContinuousEffectId(state, `${unitEntityId}_aura_atk`),
+          sourceEntityId: unitEntityId,
+          sourceCardId: cardId,
+          controllerId: playerId,
+          payload: { type: "stat_modifier", stat: "attackDamage", amount: aura.attackBonus },
+          target: { type: "adjacent_allies", sourceEntityId: unitEntityId, roleFilter: aura.targetRole },
+          expiry: { type: "while_source_alive", sourceEntityId: unitEntityId },
+          layer: LAYER.STATIC,
+          timestamp: ts,
+        });
+      }
+      if (aura.armorBonus) {
+        const ts = nextEffectTimestamp(state);
+        state.continuousEffects.push({
+          id: createContinuousEffectId(state, `${unitEntityId}_aura_arm`),
+          sourceEntityId: unitEntityId,
+          sourceCardId: cardId,
+          controllerId: playerId,
+          payload: { type: "stat_modifier", stat: "armor", amount: aura.armorBonus },
+          target: { type: "adjacent_allies", sourceEntityId: unitEntityId, roleFilter: aura.targetRole },
+          expiry: { type: "while_source_alive", sourceEntityId: unitEntityId },
+          layer: LAYER.STATIC,
+          timestamp: ts,
+        });
+      }
+    }
+  }
+
   state.log.push({
     turn: state.turn,
     text: `${playerId} deployed ${cardName} to (${spawnCoord.q}, ${spawnCoord.r}).`,
@@ -120,6 +157,7 @@ function destroyUnit(state: GameState, unitId: string, reasonText: string): void
   if (state.selectedEntityId === target.id) {
     state.selectedEntityId = null;
   }
+  removeEffectsForEntity(state, target.id);
   delete state.entities[target.id];
   state.log.push({
     turn: state.turn,
@@ -296,8 +334,38 @@ function resolveModifyUnitUntilEndOfTurn(state: GameState, item: StackItem, reso
     return "discard";
   }
 
-  target.temporaryAttackBonus += resolution.attackBonus;
-  target.temporaryArmorBonus += resolution.armorBonus;
+  const expiry = { type: "end_of_turn" as const, turn: state.turn };
+
+  if (resolution.attackBonus !== 0) {
+    const ts = nextEffectTimestamp(state);
+    state.continuousEffects.push({
+      id: createContinuousEffectId(state, `${item.id}_atk`),
+      sourceEntityId: null,
+      sourceCardId: item.sourceCardId,
+      controllerId: item.controllerId,
+      payload: { type: "stat_modifier", stat: "attackDamage", amount: resolution.attackBonus },
+      target: { type: "specific_entity", entityId: targetId },
+      expiry,
+      layer: LAYER.TEMPORARY,
+      timestamp: ts,
+    });
+  }
+
+  if (resolution.armorBonus !== 0) {
+    const ts = nextEffectTimestamp(state);
+    state.continuousEffects.push({
+      id: createContinuousEffectId(state, `${item.id}_arm`),
+      sourceEntityId: null,
+      sourceCardId: item.sourceCardId,
+      controllerId: item.controllerId,
+      payload: { type: "stat_modifier", stat: "armor", amount: resolution.armorBonus },
+      target: { type: "specific_entity", entityId: targetId },
+      expiry,
+      layer: LAYER.TEMPORARY,
+      timestamp: ts,
+    });
+  }
+
   state.log.push({
     turn: state.turn,
     text: `Resolved ${item.label}: ${targetId} gains +${resolution.attackBonus} ATK and +${resolution.armorBonus} ARM until end of turn.`,
@@ -351,6 +419,21 @@ const EFFECT_RESOLVERS: Record<string, EffectResolver> = {
 };
 
 function applyResolvedStackEffect(state: GameState, resolvedItem: StackItem): CounterDestination {
+  const sourceCard = resolvedItem.sourceCardId ? getCardDefinition(resolvedItem.sourceCardId) : undefined;
+
+  if (sourceCard?.onResolve) {
+    const context: InstructionContext = {
+      state,
+      item: resolvedItem,
+      controllerId: resolvedItem.controllerId,
+      targetEntityId: resolvedItem.targetEntityId,
+      targetStackItemId: resolvedItem.targetStackItemId,
+    };
+    const instructions = sourceCard.onResolve(context);
+    executeInstructions(state, instructions);
+    return sourceCard.kind === "tactic" ? "discard" : "none";
+  }
+
   const definition = getStackEffectDefinition(resolvedItem.effectId);
   if (!definition) {
     state.log.push({

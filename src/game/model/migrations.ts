@@ -4,7 +4,7 @@ import { ensureEntityPresentation } from "../presentation";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
 
-export const CURRENT_STATE_VERSION = 16;
+export const CURRENT_STATE_VERSION = 17;
 
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
@@ -199,11 +199,18 @@ export function migrateRuntimeState(state: GameState): void {
     state.players[playerId].deckSize = state.zones[playerId].deck.length;
   }
 
+  if (!Array.isArray(state.continuousEffects)) {
+    state.continuousEffects = [];
+  }
+  if (typeof state.effectTimestampCounter !== "number") {
+    state.effectTimestampCounter = 0;
+  }
+
   if (state.stateVersion < CURRENT_STATE_VERSION) {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v16 (entity-targeting tactics and support-unit bonuses).",
+      text: "State migrated to v17 (continuous effects layering system).",
     });
   }
 }

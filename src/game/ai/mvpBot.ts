@@ -332,20 +332,31 @@ function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId, targe
 
   let preventedDamage = 0;
   let preventsKill = false;
-  target.temporaryArmorBonus += 2;
+  const hypotheticalEffect = {
+    id: `hyp_brace_${target.id}`,
+    sourceEntityId: null,
+    sourceCardId: null,
+    controllerId: botPlayerId,
+    payload: { type: "stat_modifier" as const, stat: "armor" as const, amount: 2 },
+    target: { type: "specific_entity" as const, entityId: target.id },
+    expiry: { type: "permanent" as const },
+    layer: 4,
+    timestamp: 0,
+  };
   try {
     for (const enemy of threateningEnemies) {
-      target.temporaryArmorBonus -= 2;
       const before = resolveCombatAttack(state, enemy, target);
-      target.temporaryArmorBonus += 2;
+      state.continuousEffects.push(hypotheticalEffect);
       const after = resolveCombatAttack(state, enemy, target);
+      state.continuousEffects.pop();
       preventedDamage += before.finalDamage - after.finalDamage;
       if (before.targetDestroyed && !after.targetDestroyed) {
         preventsKill = true;
       }
     }
   } finally {
-    target.temporaryArmorBonus -= 2;
+    const idx = state.continuousEffects.indexOf(hypotheticalEffect);
+    if (idx >= 0) state.continuousEffects.splice(idx, 1);
   }
 
   if (preventedDamage <= 0) {

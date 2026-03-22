@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { createInitialGameState } from "../model/state";
 import { resolveCombatAttack } from "./combat";
+import { LAYER } from "./continuousEffects";
 
 describe("resolveCombatAttack", () => {
   it("applies attack, defense, and supply penalty in locked order", () => {
@@ -95,6 +96,18 @@ describe("resolveCombatAttack", () => {
     forgeCaptain.role = "utility";
     forgeCaptain.name = "Forge Captain";
     forgeCaptain.sourceCardId = "forge_captain_card";
+
+    state.continuousEffects.push({
+      id: "ce_forge_captain_aura_atk",
+      sourceEntityId: forgeCaptain.id,
+      sourceCardId: "forge_captain_card",
+      controllerId: "player_1",
+      payload: { type: "stat_modifier", stat: "attackDamage", amount: 1 },
+      target: { type: "adjacent_allies", sourceEntityId: forgeCaptain.id, roleFilter: "combat" },
+      expiry: { type: "while_source_alive", sourceEntityId: forgeCaptain.id },
+      layer: LAYER.STATIC,
+      timestamp: 1,
+    });
 
     const result = resolveCombatAttack(state, attacker, target);
 
