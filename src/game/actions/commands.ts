@@ -62,6 +62,7 @@ export type PlayCardCommand = {
   playerId: PlayerId;
   cardInstanceId: string;
   targetStackItemId?: string;
+  targetEntityId?: EntityId;
 };
 
 export type GameCommand =

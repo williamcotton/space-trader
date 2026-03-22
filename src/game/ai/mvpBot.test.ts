@@ -43,6 +43,7 @@ describe("decideMvpBotCommand", () => {
       effectId: "damage_enemy_base_2",
       effectMagnitude: 2,
       targetStackItemId: null,
+      targetEntityId: null,
       objectKind: "spell",
       counterable: true,
       defaultCounterDestination: "discard",

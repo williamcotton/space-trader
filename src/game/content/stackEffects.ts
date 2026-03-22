@@ -1,11 +1,27 @@
 export type CounterDestination = "discard" | "hand" | "exile" | "none";
 export type StackObjectKind = "spell" | "ability";
+export type StackEntityTargetKind = "unit" | "entity";
+export type StackEntityTargetRelation = "ally" | "enemy" | "any";
 
 export type StackObjectRules = {
   kind: StackObjectKind;
   counterable: boolean;
   defaultCounterDestination: CounterDestination;
 };
+
+export type StackTargetingRules =
+  | {
+      type: "none";
+    }
+  | {
+      type: "stack_item";
+    }
+  | {
+      type: "entity";
+      entityKind: StackEntityTargetKind;
+      relation: StackEntityTargetRelation;
+      requireDamaged?: boolean;
+    };
 
 export type StackResolutionRules =
   | {
@@ -19,6 +35,19 @@ export type StackResolutionRules =
       amount: number;
     }
   | {
+      type: "damage_entity";
+      amount: number;
+    }
+  | {
+      type: "destroy_entity";
+      requireDamaged: boolean;
+    }
+  | {
+      type: "modify_unit_until_end_of_turn";
+      attackBonus: number;
+      armorBonus: number;
+    }
+  | {
       type: "counter";
       destination: CounterDestination;
     };
@@ -27,6 +56,7 @@ export type StackEffectDefinition = {
   id: string;
   label: string;
   object: StackObjectRules;
+  targeting: StackTargetingRules;
   resolution: StackResolutionRules;
 };
 
@@ -38,6 +68,9 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
       kind: "ability",
       counterable: false,
       defaultCounterDestination: "none",
+    },
+    targeting: {
+      type: "none",
     },
     resolution: {
       type: "noop_log",
@@ -51,6 +84,9 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
       counterable: true,
       defaultCounterDestination: "discard",
     },
+    targeting: {
+      type: "none",
+    },
     resolution: {
       type: "deploy_unit",
     },
@@ -62,6 +98,9 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
       kind: "spell",
       counterable: true,
       defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "none",
     },
     resolution: {
       type: "damage_enemy_base",
@@ -76,6 +115,9 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
       counterable: true,
       defaultCounterDestination: "discard",
     },
+    targeting: {
+      type: "stack_item",
+    },
     resolution: {
       type: "counter",
       destination: "discard",
@@ -89,9 +131,104 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
       counterable: true,
       defaultCounterDestination: "discard",
     },
+    targeting: {
+      type: "stack_item",
+    },
     resolution: {
       type: "counter",
       destination: "hand",
+    },
+  },
+  damage_enemy_unit_2: {
+    id: "damage_enemy_unit_2",
+    label: "Arc Snap",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "entity",
+      entityKind: "unit",
+      relation: "enemy",
+    },
+    resolution: {
+      type: "damage_entity",
+      amount: 2,
+    },
+  },
+  damage_enemy_entity_2: {
+    id: "damage_enemy_entity_2",
+    label: "Rivet Volley",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "entity",
+      entityKind: "entity",
+      relation: "enemy",
+    },
+    resolution: {
+      type: "damage_entity",
+      amount: 2,
+    },
+  },
+  destroy_damaged_enemy_unit: {
+    id: "destroy_damaged_enemy_unit",
+    label: "Overload Finish",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "entity",
+      entityKind: "unit",
+      relation: "enemy",
+      requireDamaged: true,
+    },
+    resolution: {
+      type: "destroy_entity",
+      requireDamaged: true,
+    },
+  },
+  armor_ally_unit_2_eot: {
+    id: "armor_ally_unit_2_eot",
+    label: "Brace Protocol",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "entity",
+      entityKind: "unit",
+      relation: "ally",
+    },
+    resolution: {
+      type: "modify_unit_until_end_of_turn",
+      attackBonus: 0,
+      armorBonus: 2,
+    },
+  },
+  damage_enemy_unit_1_uncounterable: {
+    id: "damage_enemy_unit_1_uncounterable",
+    label: "Relay Savant",
+    object: {
+      kind: "ability",
+      counterable: false,
+      defaultCounterDestination: "none",
+    },
+    targeting: {
+      type: "entity",
+      entityKind: "unit",
+      relation: "enemy",
+    },
+    resolution: {
+      type: "damage_entity",
+      amount: 1,
     },
   },
 };
@@ -107,4 +244,9 @@ export function isKnownStackEffect(effectId: string): boolean {
 export function isCounterResponse(effectId: string): boolean {
   const effect = getStackEffectDefinition(effectId);
   return effect?.resolution.type === "counter";
+}
+
+export function requiresEntityTarget(effectId: string): boolean {
+  const effect = getStackEffectDefinition(effectId);
+  return effect?.targeting.type === "entity";
 }

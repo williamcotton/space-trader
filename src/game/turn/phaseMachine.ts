@@ -1,6 +1,7 @@
 import type { GamePhase } from "../model/enums";
 import type { GameState } from "../model/state";
 import type { PlayerId } from "../model/ids";
+import { clearTemporaryUnitModifiers } from "../systems/unitStats";
 
 const PHASE_SEQUENCE: GamePhase[] = ["start", "economy", "main", "tactical", "end"];
 
@@ -38,6 +39,7 @@ export function advancePhase(state: GameState): void {
   const previousPhase = state.phase;
 
   if (movingToNewTurn) {
+    clearTemporaryUnitModifiers(state);
     state.turn += 1;
     state.activePlayerId = getNextActivePlayer(state.activePlayerId);
     resetUnitActionBudgetsForPlayer(state, state.activePlayerId);

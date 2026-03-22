@@ -35,6 +35,8 @@ type HandSnapshot = {
   stackSize: number;
   winner: GameState["winner"];
   hasOpenBaseAdjacentTile: boolean;
+  pendingTargetingCardInstanceId: string | null;
+  pendingTargetingPrompt: string | null;
 };
 
 function getCostEntries(cost: CardCost): Array<{ resource: ResourceType; amount: number }> {
@@ -85,6 +87,7 @@ function hasOpenBaseAdjacentTile(state: GameState, playerId: "player_1" | "playe
 function readSnapshot(): HandSnapshot {
   const runtime = getGameRuntime();
   const state = runtime.state;
+  const pendingTargeting = runtime.getPendingCardTargeting();
   const visiblePlayerId = state.activePlayerId as "player_1" | "player_2";
   const hand = [...state.zones[visiblePlayerId].hand].reverse().map((card) => ({
     instanceId: card.instanceId,
@@ -103,6 +106,8 @@ function readSnapshot(): HandSnapshot {
     stackSize: state.stack.length,
     winner: state.winner,
     hasOpenBaseAdjacentTile: hasOpenBaseAdjacentTile(state, visiblePlayerId),
+    pendingTargetingCardInstanceId: pendingTargeting?.cardInstanceId ?? null,
+    pendingTargetingPrompt: pendingTargeting?.prompt ?? null,
   };
 }
 
@@ -204,6 +209,7 @@ export function HandTray() {
           Hand {snapshot.hand.length} | Deck {snapshot.deckCount}
         </span>
       </header>
+      {snapshot.pendingTargetingPrompt ? <p className="hand-tray-targeting-hint">{snapshot.pendingTargetingPrompt}</p> : null}
       <div className="hand-tray-cards">
         {cards.length === 0 ? (
           <p className="hand-tray-empty">No cards in hand.</p>
@@ -212,7 +218,11 @@ export function HandTray() {
             <button
               key={card.instanceId}
               type="button"
-              className={["hand-card", card.playable ? "playable" : "blocked"].join(" ")}
+              className={[
+                "hand-card",
+                card.playable ? "playable" : "blocked",
+                snapshot.pendingTargetingCardInstanceId === card.instanceId ? "targeting" : "",
+              ].join(" ")}
               onClick={() => runtime.playCardFromHand(card.instanceId, card.counterTarget)}
             >
               <span className="hand-card-title">{card.title}</span>

@@ -581,6 +581,13 @@ body {
   text-transform: uppercase;
 }
 
+.hand-tray-targeting-hint {
+  margin: 0 0 8px;
+  color: #9ce7d1;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+
 .hand-tray-cards {
   min-width: 0;
   display: grid;
@@ -611,6 +618,11 @@ body {
 
 .hand-card.playable:hover {
   background: rgba(20, 31, 74, 0.95);
+}
+
+.hand-card.targeting {
+  border-color: #8be5cb;
+  box-shadow: 0 0 0 1px rgba(139, 229, 203, 0.32), 0 0 18px rgba(73, 192, 154, 0.18);
 }
 
 .hand-card.blocked {

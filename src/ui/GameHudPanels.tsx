@@ -5,6 +5,7 @@ import type { EntityState, GameState, UnitEntity } from "../game/model/state";
 import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleTheme } from "../game/presentation";
 import { getGameRuntime } from "../game/runtime";
 import { resolveCombatAttack } from "../game/systems/combat";
+import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "../game/systems/unitStats";
 
 type SelectedUnitSnapshot = {
   id: string;
@@ -115,8 +116,8 @@ function readSnapshot(): TacticalHudSnapshot {
           factionLabel: formatFactionName(state.players[selected.ownerId].faction),
           role: selected.role,
           hp: selected.hp,
-          armor: selected.armor,
-          attackDamage: selected.attackDamage,
+          armor: getEffectiveUnitArmor(state, selected),
+          attackDamage: getEffectiveUnitAttackDamage(state, selected),
           siegeDamageBonus: selected.siegeDamageBonus,
           attackRange: selected.attackRange,
           movesRemaining: selected.movesRemaining,

@@ -3,7 +3,7 @@ import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { decideMvpBotCommand } from "./ai/mvpBot";
 import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
 import { getCardDefinition } from "./content/cards/catalog";
-import { getStackEffectDefinition } from "./content/stackEffects";
+import { getStackEffectDefinition, requiresEntityTarget } from "./content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createInitialGameState, createInitialZonesForPlayer } from "./model/state";
 import type { PlayerId } from "./model/ids";
@@ -20,10 +20,18 @@ const INITIAL_VIEWPORT: GameViewport = {
   height: 768,
 };
 
-const CURRENT_STATE_VERSION = 15;
+const CURRENT_STATE_VERSION = 16;
 const BOT_ACTION_INTERVAL_SECONDS = 0.16;
 
 type BotDecisionSystem = typeof decideMvpBotCommand;
+
+type PendingCardTargeting = {
+  playerId: PlayerId;
+  cardInstanceId: string;
+  cardName: string;
+  targetStackItemId?: string;
+  prompt: string;
+};
 
 function createRuntimeMatchId(): string {
   return `match_frontier_belt_${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffff)
@@ -57,6 +65,8 @@ function migratePhaseFourHarvesters(state: GameState): void {
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
     };
   }
 
@@ -82,6 +92,8 @@ function migratePhaseFourHarvesters(state: GameState): void {
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
     };
   }
 }
@@ -121,6 +133,9 @@ function migrateRuntimeState(state: GameState): void {
     }
     if (typeof stackItem.targetStackItemId === "undefined") {
       stackItem.targetStackItemId = null;
+    }
+    if (typeof stackItem.targetEntityId === "undefined") {
+      stackItem.targetEntityId = null;
     }
     if (typeof stackItem.ownerId === "undefined") {
       stackItem.ownerId = stackItem.controllerId;
@@ -174,6 +189,12 @@ function migrateRuntimeState(state: GameState): void {
       if (typeof entity.carries === "undefined") {
         entity.carries = null;
       }
+      if (typeof entity.temporaryAttackBonus !== "number") {
+        entity.temporaryAttackBonus = 0;
+      }
+      if (typeof entity.temporaryArmorBonus !== "number") {
+        entity.temporaryArmorBonus = 0;
+      }
     }
   }
 
@@ -215,7 +236,7 @@ function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v15 (tactical auto-end now waits for a harvest before auto-skipping).",
+      text: "State migrated to v16 (entity-targeting tactics and support-unit bonuses).",
     });
   }
 }
@@ -300,6 +321,7 @@ class GameRuntime {
     player_1: false,
     player_2: true,
   };
+  private pendingCardTargeting: PendingCardTargeting | null = null;
   readonly state: GameState;
 
   constructor(
@@ -331,6 +353,9 @@ class GameRuntime {
         player_1: false,
         player_2: true,
       };
+    }
+    if (!this.pendingCardTargeting) {
+      this.pendingCardTargeting = null;
     }
   }
 
@@ -364,6 +389,23 @@ class GameRuntime {
     return next;
   }
 
+  getPendingCardTargeting(): PendingCardTargeting | null {
+    return this.pendingCardTargeting ? { ...this.pendingCardTargeting } : null;
+  }
+
+  private clearPendingCardTargeting(logText?: string): void {
+    if (!this.pendingCardTargeting) {
+      return;
+    }
+    if (logText) {
+      this.state.log.push({
+        turn: this.state.turn,
+        text: logText,
+      });
+    }
+    this.pendingCardTargeting = null;
+  }
+
   private findResourceNodeAtHex(coord: { q: number; r: number }): GameState["map"]["resourceNodes"][number] | undefined {
     return this.state.map.resourceNodes.find((node) => areSameHex(node.coord, coord));
   }
@@ -388,6 +430,31 @@ class GameRuntime {
   selectUnitFromScreenPoint(pixelX: number, pixelY: number): void {
     const hoveredHex = this.getHexAtScreenPoint(pixelX, pixelY);
     this.state.hoveredHex = hoveredHex;
+    if (this.pendingCardTargeting) {
+      if (!hoveredHex) {
+        this.clearPendingCardTargeting(`Cancelled targeting for ${this.pendingCardTargeting.cardName}.`);
+        return;
+      }
+
+      const targetEntity = findEntityAtHex(this.state, hoveredHex);
+      if (!targetEntity) {
+        this.clearPendingCardTargeting(`Cancelled targeting for ${this.pendingCardTargeting.cardName}.`);
+        return;
+      }
+
+      const result = this.dispatch({
+        type: "PLAY_CARD",
+        playerId: this.pendingCardTargeting.playerId,
+        cardInstanceId: this.pendingCardTargeting.cardInstanceId,
+        targetStackItemId: this.pendingCardTargeting.targetStackItemId,
+        targetEntityId: targetEntity.id,
+      });
+      if (result.ok) {
+        this.pendingCardTargeting = null;
+      }
+      return;
+    }
+
     const command = getBoardClickCommand(this.state, hoveredHex);
     if (!command) {
       return;
@@ -498,14 +565,39 @@ class GameRuntime {
     });
   }
 
-  playCardFromHand(cardInstanceId: string, targetStackItemId?: string): DispatchResult {
+  playCardFromHand(cardInstanceId: string, targetStackItemId?: string, targetEntityId?: string): DispatchResult {
     const playerId = this.state.priorityPlayerId ?? this.state.activePlayerId;
-    return this.dispatch({
+    const handCard = this.state.zones[playerId].hand.find((card) => card.instanceId === cardInstanceId);
+    const definition = handCard ? getCardDefinition(handCard.cardId) : undefined;
+    if (definition?.kind === "tactic" && requiresEntityTarget(definition.stackEffectId) && !targetEntityId) {
+      this.pendingCardTargeting = {
+        playerId,
+        cardInstanceId,
+        cardName: definition.name,
+        targetStackItemId,
+        prompt: `Select target for ${definition.name}.`,
+      };
+      this.state.log.push({
+        turn: this.state.turn,
+        text: `Select target for ${definition.name}.`,
+      });
+      return {
+        ok: true,
+        events: [],
+      };
+    }
+
+    const result = this.dispatch({
       type: "PLAY_CARD",
       playerId,
       cardInstanceId,
       targetStackItemId,
+      targetEntityId,
     });
+    if (result.ok) {
+      this.pendingCardTargeting = null;
+    }
+    return result;
   }
 
   debugPassPriority(): void {

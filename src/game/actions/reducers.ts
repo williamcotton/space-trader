@@ -29,7 +29,7 @@ function getStackEffectMagnitude(effectId: string): number {
   if (!definition) {
     return 0;
   }
-  if (definition.resolution.type === "damage_enemy_base") {
+  if (definition.resolution.type === "damage_enemy_base" || definition.resolution.type === "damage_entity") {
     return definition.resolution.amount;
   }
   return 0;
@@ -196,11 +196,101 @@ function deployUnitToBattlefield(
     hasSummoningSickness: true,
     movesRemaining: 0,
     attacksRemaining: 0,
+    temporaryAttackBonus: 0,
+    temporaryArmorBonus: 0,
   };
   state.log.push({
     turn: state.turn,
     text: `${playerId} deployed ${cardName} to (${spawnCoord.q}, ${spawnCoord.r}).`,
   });
+}
+
+function destroyUnit(state: GameState, unitId: string, reasonText: string): void {
+  const target = state.entities[unitId];
+  if (!target || target.kind !== "unit") {
+    return;
+  }
+
+  if (target.carries) {
+    state.log.push({
+      turn: state.turn,
+      text: `${target.id} was destroyed and cargo lost (${target.carries}).`,
+    });
+  }
+  if (state.selectedEntityId === target.id) {
+    state.selectedEntityId = null;
+  }
+  delete state.entities[target.id];
+  state.log.push({
+    turn: state.turn,
+    text: reasonText,
+  });
+}
+
+function chooseRelaySavantTargetEntityId(state: GameState, controllerId: PlayerId, preferredTargetId: string | null): string | null {
+  const preferredTarget = preferredTargetId ? state.entities[preferredTargetId] : null;
+  if (preferredTarget && preferredTarget.kind === "unit" && preferredTarget.ownerId !== controllerId) {
+    return preferredTarget.id;
+  }
+
+  const enemyUnits = Object.values(state.entities)
+    .filter((entity): entity is Extract<GameState["entities"][string], { kind: "unit" }> => entity.kind === "unit" && entity.ownerId !== controllerId)
+    .sort((a, b) => {
+      const damagedDelta = Number(a.hp < a.maxHp) - Number(b.hp < b.maxHp);
+      if (damagedDelta !== 0) {
+        return damagedDelta > 0 ? -1 : 1;
+      }
+      if (a.hp !== b.hp) {
+        return a.hp - b.hp;
+      }
+      return a.id.localeCompare(b.id);
+    });
+
+  return enemyUnits[0]?.id ?? null;
+}
+
+function createRelaySavantTriggerEvents(
+  state: GameState,
+  playerId: PlayerId,
+  preferredTargetId: string | null,
+  idOffset: number
+): GameEvent[] {
+  const savants = Object.values(state.entities)
+    .filter((entity): entity is Extract<GameState["entities"][string], { kind: "unit" }> => {
+      return entity.kind === "unit" && entity.ownerId === playerId && entity.sourceCardId === "relay_savant_card";
+    })
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  const events: GameEvent[] = [];
+  for (const [index, savant] of savants.entries()) {
+    const targetEntityId = chooseRelaySavantTargetEntityId(state, playerId, preferredTargetId);
+    if (!targetEntityId) {
+      continue;
+    }
+
+    events.push({
+      type: "STACK_ITEM_PUSHED",
+      playerId,
+      itemId: createStackItemId(state.turn, state.log.length + idOffset + index),
+      label: `${savant.name} Pulse`,
+      controllerId: playerId,
+      ownerId: playerId,
+      effectId: "damage_enemy_unit_1_uncounterable",
+      effectMagnitude: getStackEffectMagnitude("damage_enemy_unit_1_uncounterable"),
+      targetStackItemId: null,
+      targetEntityId,
+      objectKind: "ability",
+      counterable: false,
+      defaultCounterDestination: "none",
+      sourceCardInstanceId: null,
+      sourceCardId: null,
+      sourceCardOwnerId: null,
+      nextPriorityPlayerId: getOpponentPlayer(playerId),
+      pendingUnitEntityId: null,
+    });
+  }
+
+  return events;
 }
 
 function moveStackSourceCardToZone(state: GameState, stackItem: GameState["stack"][number], destination: "hand" | "discard" | "exile" | "none"): void {
@@ -277,6 +367,96 @@ function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["sta
       state.log.push({
         turn: state.turn,
         text: `Resolved ${resolvedItem.label}: dealt ${damage} to ${enemyPlayerId} base (${beforeHp} -> ${targetBase.hp}).`,
+      });
+      return "discard";
+    }
+    case "damage_entity": {
+      const targetId = resolvedItem.targetEntityId;
+      if (!targetId) {
+        state.log.push({
+          turn: state.turn,
+          text: `Resolved ${resolvedItem.label}: no battlefield target configured.`,
+        });
+        return "discard";
+      }
+
+      const target = state.entities[targetId];
+      if (!target) {
+        state.log.push({
+          turn: state.turn,
+          text: `Resolved ${resolvedItem.label}: target entity not found.`,
+        });
+        return "discard";
+      }
+
+      const damage = definition.resolution.amount;
+      const beforeHp = target.hp;
+      target.hp = Math.max(0, target.hp - damage);
+      state.log.push({
+        turn: state.turn,
+        text: `Resolved ${resolvedItem.label}: dealt ${damage} to ${targetId} (${beforeHp} -> ${target.hp}).`,
+      });
+
+      if (target.kind === "unit" && target.hp === 0) {
+        destroyUnit(state, target.id, `${target.id} was destroyed.`);
+      }
+
+      return "discard";
+    }
+    case "destroy_entity": {
+      const targetId = resolvedItem.targetEntityId;
+      if (!targetId) {
+        state.log.push({
+          turn: state.turn,
+          text: `Resolved ${resolvedItem.label}: no battlefield target configured.`,
+        });
+        return "discard";
+      }
+
+      const target = state.entities[targetId];
+      if (!target || target.kind !== "unit") {
+        state.log.push({
+          turn: state.turn,
+          text: `Resolved ${resolvedItem.label}: target unit not found.`,
+        });
+        return "discard";
+      }
+
+      if (definition.resolution.requireDamaged && target.hp >= target.maxHp) {
+        state.log.push({
+          turn: state.turn,
+          text: `Resolved ${resolvedItem.label}: target ${targetId} was no longer damaged.`,
+        });
+        return "discard";
+      }
+
+      destroyUnit(state, target.id, `${resolvedItem.label} destroyed ${target.id}.`);
+      return "discard";
+    }
+    case "modify_unit_until_end_of_turn": {
+      const targetId = resolvedItem.targetEntityId;
+      if (!targetId) {
+        state.log.push({
+          turn: state.turn,
+          text: `Resolved ${resolvedItem.label}: no battlefield target configured.`,
+        });
+        return "discard";
+      }
+
+      const target = state.entities[targetId];
+      if (!target || target.kind !== "unit") {
+        state.log.push({
+          turn: state.turn,
+          text: `Resolved ${resolvedItem.label}: target unit not found.`,
+        });
+        return "discard";
+      }
+
+      target.temporaryAttackBonus += definition.resolution.attackBonus;
+      target.temporaryArmorBonus += definition.resolution.armorBonus;
+      state.log.push({
+        turn: state.turn,
+        text: `Resolved ${resolvedItem.label}: ${targetId} gains +${definition.resolution.attackBonus} ATK and +${definition.resolution.armorBonus} ARM until end of turn.`,
       });
       return "discard";
     }
@@ -361,6 +541,7 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
           effectId: topItem.effectId,
           effectMagnitude: topItem.effectMagnitude,
           targetStackItemId: topItem.targetStackItemId,
+          targetEntityId: topItem.targetEntityId,
           objectKind: topItem.objectKind,
           counterable: topItem.counterable,
           defaultCounterDestination: topItem.defaultCounterDestination,
@@ -389,6 +570,7 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
           effectId: command.effectId,
           effectMagnitude: getStackEffectMagnitude(command.effectId),
           targetStackItemId: command.targetStackItemId ?? null,
+          targetEntityId: null,
           objectKind: definition.object.kind,
           counterable: definition.object.counterable,
           defaultCounterDestination: definition.object.defaultCounterDestination,
@@ -493,7 +675,7 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
         return [];
       }
 
-      return [
+      const events: GameEvent[] = [
         {
           type: "CARD_PLAYED_TO_STACK",
           playerId: command.playerId,
@@ -505,6 +687,7 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
           effectId,
           effectMagnitude: getStackEffectMagnitude(effectId),
           targetStackItemId: command.targetStackItemId ?? null,
+          targetEntityId: command.targetEntityId ?? null,
           objectKind: effectDefinition.object.kind,
           counterable: effectDefinition.object.counterable,
           defaultCounterDestination: effectDefinition.object.defaultCounterDestination,
@@ -512,6 +695,12 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
           pendingUnitEntityId: card.kind === "unit" ? createSummonedUnitId(state, command.playerId, card.id) : null,
         },
       ];
+
+      if (card.kind === "tactic") {
+        events.push(...createRelaySavantTriggerEvents(state, command.playerId, command.targetEntityId ?? null, events.length));
+      }
+
+      return events;
     }
     default:
       return [];
@@ -568,6 +757,7 @@ function reduceEvent(state: GameState, event: GameEvent): void {
         effectId: event.effectId,
         effectMagnitude: event.effectMagnitude,
         targetStackItemId: event.targetStackItemId,
+        targetEntityId: event.targetEntityId,
         objectKind: event.objectKind,
         counterable: event.counterable,
         defaultCounterDestination: event.defaultCounterDestination,
@@ -612,6 +802,7 @@ function reduceEvent(state: GameState, event: GameEvent): void {
         effectId: event.effectId,
         effectMagnitude: event.effectMagnitude,
         targetStackItemId: event.targetStackItemId,
+        targetEntityId: event.targetEntityId,
         objectKind: event.objectKind,
         counterable: event.counterable,
         defaultCounterDestination: event.defaultCounterDestination,

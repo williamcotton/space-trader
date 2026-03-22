@@ -1,6 +1,7 @@
 import { hexDistance } from "../model/hex";
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, UnitEntity } from "../model/state";
+import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "./unitStats";
 
 export type CombatBreakdown = {
   attackerId: string;
@@ -58,14 +59,16 @@ function getBaseSiegeBonus(attacker: UnitEntity, target: EntityState): number {
 export function resolveCombatAttack(state: GameState, attacker: UnitEntity, target: EntityState): CombatResolution {
   const attackerBase = getPlayerBase(state, attacker.ownerId);
   const distanceFromFriendlyBase = attackerBase ? hexDistance(attacker.coord, attackerBase.coord) : 0;
+  const effectiveAttackDamage = getEffectiveUnitAttackDamage(state, attacker);
+  const effectiveTargetArmor = target.kind === "unit" ? getEffectiveUnitArmor(state, target) : 0;
 
   const rawAttack =
-    attacker.attackDamage +
+    effectiveAttackDamage +
     getTemporaryAttackBuffs(state, attacker, target) +
     getFactionAttackBonus(state, attacker) +
     getBaseSiegeBonus(attacker, target);
   const defense =
-    (target.kind === "unit" ? target.armor : 0) +
+    effectiveTargetArmor +
     getTerrainDefenseBonus(state, target) +
     getTileDefenseBonus(state, target) +
     getFactionDefenseBonus(state, target);

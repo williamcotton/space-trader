@@ -12,10 +12,11 @@ function expandToSixty(uniqueCardIds: string[]): string[] {
 const ALLOY_STARTER_UNIQUE: string[] = [
   "frontline_scout_card",
   "alloy_guard_card",
-  "slag_barrage",
+  "forge_captain_card",
+  "brace_protocol",
+  "rivet_volley",
   "patchwork_barrier",
   "expedition_harvester_card",
-  "support_drone_card",
   "escort_drone_card",
   "salvage_hauler_card",
   "bulwark_drone_card",
@@ -23,17 +24,17 @@ const ALLOY_STARTER_UNIQUE: string[] = [
   "null_intercept",
   "jammer_cloud",
   "failsafe_redirect",
-  "emergency_thrust",
-  "scrap_burst",
+  "slag_barrage",
 ];
 
 const FLUX_STARTER_UNIQUE: string[] = [
   "flux_runner_card",
-  "orbital_ping",
+  "relay_savant_card",
+  "arc_snap",
+  "overload_finish",
   "counter_pulse",
   "echo_recall",
   "expedition_harvester_card",
-  "support_drone_card",
   "escort_drone_card",
   "salvage_hauler_card",
   "bulwark_drone_card",
@@ -41,8 +42,7 @@ const FLUX_STARTER_UNIQUE: string[] = [
   "null_intercept",
   "jammer_cloud",
   "failsafe_redirect",
-  "emergency_thrust",
-  "scrap_burst",
+  "orbital_ping",
 ];
 
 const BIOMASS_STARTER_UNIQUE: string[] = [

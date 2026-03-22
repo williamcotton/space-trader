@@ -76,4 +76,30 @@ describe("resolveCombatAttack", () => {
     expect(result.finalDamage).toBe(3);
     expect(result.targetHpAfter).toBe(target.hp - 3);
   });
+
+  it("adds Forge Captain adjacency aura to allied combat attack damage", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const attacker = state.entities.unit_player_1_scout;
+    const target = state.entities.unit_player_2_scout;
+    const forgeCaptain = state.entities.unit_player_1_harvester;
+    expect(attacker?.kind).toBe("unit");
+    expect(target?.kind).toBe("unit");
+    expect(forgeCaptain?.kind).toBe("unit");
+    if (!attacker || attacker.kind !== "unit" || !target || target.kind !== "unit" || !forgeCaptain || forgeCaptain.kind !== "unit") {
+      throw new Error("Expected units for Forge Captain aura test.");
+    }
+
+    attacker.coord = { q: -1, r: 0 };
+    target.coord = { q: 0, r: 0 };
+    forgeCaptain.coord = { q: -1, r: -1 };
+    forgeCaptain.role = "utility";
+    forgeCaptain.name = "Forge Captain";
+    forgeCaptain.sourceCardId = "forge_captain_card";
+
+    const result = resolveCombatAttack(state, attacker, target);
+
+    expect(result.rawAttack).toBe(attacker.attackDamage + 1);
+    expect(result.finalDamage).toBe(3);
+    expect(result.targetHpAfter).toBe(target.hp - 3);
+  });
 });

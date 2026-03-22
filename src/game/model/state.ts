@@ -83,6 +83,8 @@ export type UnitEntity = {
   hasSummoningSickness: boolean;
   movesRemaining: number;
   attacksRemaining: number;
+  temporaryAttackBonus: number;
+  temporaryArmorBonus: number;
 };
 
 export type EntityState = BaseEntity | UnitEntity;
@@ -95,6 +97,7 @@ export type StackItem = {
   effectId: string;
   effectMagnitude: number;
   targetStackItemId: string | null;
+  targetEntityId: EntityId | null;
   objectKind: "spell" | "ability";
   counterable: boolean;
   defaultCounterDestination: "discard" | "hand" | "exile" | "none";
@@ -257,6 +260,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
     },
     [unitTwoId]: {
       id: unitTwoId,
@@ -281,6 +286,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
     },
     [harvesterOneId]: {
       id: harvesterOneId,
@@ -305,6 +312,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
     },
     [harvesterTwoId]: {
       id: harvesterTwoId,
@@ -329,6 +338,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       hasSummoningSickness: false,
       movesRemaining: 2,
       attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
     },
   };
 
@@ -338,7 +349,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   } satisfies Record<PlayerId, PlayerZones>;
 
   return {
-    stateVersion: 15,
+    stateVersion: 16,
     matchId: options.matchId ?? "match_frontier_belt",
     turn: 1,
     phase: "start",

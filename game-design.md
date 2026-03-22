@@ -380,6 +380,209 @@ Example cards:
 - `Tendril Lash`: small unit damage with rider payoff
 - `Feeding Frenzy`: bonus against damaged enemies
 
+## Concrete Card Pass - Wave 1
+This is the first concrete content pass to make the game more fun.
+It is intentionally small and focused.
+
+Goals of this wave:
+- give each faction at least one support/synergy card
+- add direct damage that hits battlefield units
+- create simple two-card and three-card combo lines
+- stay within an ability vocabulary that the rules engine can plausibly support next
+
+Implementation priority:
+- first implement the `Alloy Clan` and `Flux Collective` cards
+- keep the `Biomass Swarm` cards as the next faction package unless Biomass becomes active immediately
+
+### Alloy Clan - Wave 1
+#### Forge Captain
+- Faction: `Alloy Clan`
+- Type: `Unit`
+- Speed: `Main`
+- Role: `utility`
+- Cost: `C2 A1`
+- Suggested stats:
+  - HP 5
+  - ATK 1
+  - ARM 1
+  - MOV 2
+  - RNG 1
+- Rules text:
+  - Adjacent allied combat units get `+1 ATK`.
+- Design job:
+  - First real formation-support unit for Alloy.
+  - Makes clustered combat lines rewarding.
+- Combo hooks:
+  - pairs with `Frontline Scout` to turn cheap attackers into real threats
+  - pairs with `Alloy Guard` to create stronger base-pressure turns
+
+#### Brace Protocol
+- Faction: `Alloy Clan`
+- Type: `Tactic`
+- Speed: `Instant`
+- Cost: `C1 A1`
+- Rules text:
+  - Target allied unit gets `+2 ARM` until end of turn.
+- Design job:
+  - First Alloy combat trick.
+  - Lets Alloy win trades and protect key support pieces.
+- Combo hooks:
+  - strong with `Forge Captain`
+  - strong with `Alloy Guard` when holding a chokepoint
+
+#### Rivet Volley
+- Faction: `Alloy Clan`
+- Type: `Tactic`
+- Speed: `Instant`
+- Cost: `C1 A1`
+- Rules text:
+  - Deal `2` damage to target unit or base.
+- Design job:
+  - Gives Alloy direct tactical reach instead of only base pings.
+  - Helps finish damaged units or push final base damage.
+- Combo hooks:
+  - combines with `Forge Captain`-buffed attacks to finish defenders
+  - softens blockers so `Alloy Guard` can punch through
+
+### Flux Collective - Wave 1
+#### Relay Savant
+- Faction: `Flux Collective`
+- Type: `Unit`
+- Speed: `Main`
+- Role: `utility`
+- Cost: `C2 F1`
+- Suggested stats:
+  - HP 4
+  - ATK 1
+  - ARM 0
+  - MOV 2
+  - RNG 1
+- Rules text:
+  - Whenever you cast a tactic, deal `1` damage to target enemy unit.
+- Design job:
+  - First spell-matter engine card.
+  - Turns reactive play into board control.
+- Combo hooks:
+  - makes every tactic better
+  - enables damage-based setup for finishers
+
+#### Arc Snap
+- Faction: `Flux Collective`
+- Type: `Tactic`
+- Speed: `Instant`
+- Cost: `C1 F1`
+- Rules text:
+  - Deal `2` damage to target unit.
+- Design job:
+  - Clean precision removal tool.
+  - Gives Flux a concrete answer to support units and damaged frontliners.
+- Combo hooks:
+  - with `Relay Savant`, this effectively becomes a 3-damage sequence
+  - sets up `Overload Finish`
+
+#### Overload Finish
+- Faction: `Flux Collective`
+- Type: `Tactic`
+- Speed: `Instant`
+- Cost: `C2 F1`
+- Rules text:
+  - Destroy target damaged unit.
+- Design job:
+  - First payoff card for damage-marking and spell sequencing.
+  - Gives Flux an actual combo closer instead of pure tempo stalls.
+- Combo hooks:
+  - ideal follow-up to `Arc Snap`
+  - also turns `Relay Savant` pings into meaningful setup
+
+### Biomass Swarm - Wave 1
+#### Spore Matron
+- Faction: `Biomass Swarm`
+- Type: `Unit`
+- Speed: `Main`
+- Role: `utility`
+- Cost: `C2 B1`
+- Suggested stats:
+  - HP 5
+  - ATK 1
+  - ARM 0
+  - MOV 2
+  - RNG 1
+- Rules text:
+  - Whenever an allied unit is destroyed, another allied unit gets `+1 ATK` until end of turn.
+- Design job:
+  - Establishes Biomass as the death-trigger faction.
+  - Makes trading disposable bodies feel productive.
+- Combo hooks:
+  - rewards swarm attacks and sacrificial blocking
+  - creates chain-attack turns when several units collide
+
+#### Tendril Lash
+- Faction: `Biomass Swarm`
+- Type: `Tactic`
+- Speed: `Instant`
+- Cost: `C1 B1`
+- Rules text:
+  - Deal `1` damage to target unit.
+  - If that unit is already damaged, deal `2` instead.
+- Design job:
+  - Simple damage card that naturally cares about prior combat.
+  - Establishes Biomass as a faction that piles pressure onto wounded targets.
+- Combo hooks:
+  - combines with ordinary combat to finish units efficiently
+  - works well with death-trigger support pieces
+
+#### Feeding Frenzy
+- Faction: `Biomass Swarm`
+- Type: `Tactic`
+- Speed: `Instant`
+- Cost: `C1 B1`
+- Rules text:
+  - Target allied unit gets `+2 ATK` until end of turn.
+  - If it attacks a damaged unit this turn, it also gets `+1 ARM`.
+- Design job:
+  - First aggressive Biomass combat trick.
+  - Pushes the faction toward opportunistic finishing blows.
+- Combo hooks:
+  - works with `Tendril Lash`
+  - works with `Spore Matron`-style attrition turns
+
+### Wave 1 Combo Lines
+These are the intended first combo patterns created by the above cards.
+
+#### Alloy Combo Line
+- `Forge Captain` + `Frontline Scout`
+  - Scout attacks above rate because of adjacency buff.
+- `Forge Captain` + `Alloy Guard` + `Brace Protocol`
+  - Alloy creates a durable front line that wins trades and keeps pressure on the base.
+- `Rivet Volley` + any buffed attacker
+  - direct damage clears the last blocker or finishes a weakened base.
+
+#### Flux Combo Line
+- `Relay Savant` + `Arc Snap`
+  - one tactic cast turns into layered unit damage.
+- `Arc Snap` + `Overload Finish`
+  - clean two-card removal combo.
+- `Relay Savant` + `Counter Pulse` / `Echo Recall`
+  - even reactive stack play contributes to battlefield advantage.
+
+#### Biomass Combo Line
+- `Tendril Lash` + `Feeding Frenzy`
+  - wound a unit, then send in a buffed attacker for the kill.
+- `Spore Matron` + swarm attacks
+  - dead allies turn into more pressure instead of lost tempo.
+
+### Narrow-Scope Implementation Order
+If we need to implement these in smaller slices, do it in this order:
+1. `Rivet Volley`
+2. `Arc Snap`
+3. `Overload Finish`
+4. `Brace Protocol`
+5. `Forge Captain`
+6. `Relay Savant`
+7. Biomass package
+
+This order gets battlefield-targeting tactics online first, then adds support engines.
+
 ## Economy Design Principles
 - Resource gathering should continue to feel StarCraft-like, not abstract
 - Harvesters should create meaningful route and escort decisions
@@ -455,6 +658,7 @@ Readable feedback is part of the fun. If a combo happens, the player should feel
 - 2026-03-21: Base HP target updated from old draft `100` to current build `20`.
 - 2026-03-21: Siege reframed as a unit stat, not a global combat rule.
 - 2026-03-21: Design direction shifted toward support units, synergy engines, battlefield-targeting tactics, and small combo lines.
+- 2026-03-21: First concrete content wave drafted with 9 cards across Alloy, Flux, and Biomass, prioritizing support units, direct unit damage, and simple combo lines.
 
 ## Backlog Seeds
 - Add battlefield-targeting tactic rules and UI targeting flow

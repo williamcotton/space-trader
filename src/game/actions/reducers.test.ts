@@ -45,6 +45,24 @@ function moveCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: 
   return card.instanceId;
 }
 
+function resolveStackByPassing(state: ReturnType<typeof setupState>): void {
+  let guard = 0;
+  while (state.stack.length > 0 && guard < 12) {
+    const priorityPlayerId = state.priorityPlayerId;
+    if (!priorityPlayerId) {
+      throw new Error("Expected priority player while stack is unresolved.");
+    }
+    const result = dispatchCommand(state, {
+      type: "PASS_PRIORITY",
+      playerId: priorityPlayerId,
+    });
+    expect(result.ok).toBe(true);
+    guard += 1;
+  }
+
+  expect(state.stack).toHaveLength(0);
+}
+
 describe("dispatchCommand", () => {
   it("supports first unit selection + movement path", () => {
     const state = setupState();
@@ -741,6 +759,236 @@ describe("dispatchCommand", () => {
     expect(state.zones.player_1.hand.some((card) => card.instanceId === unitCardInstanceId)).toBe(true);
     expect(state.zones.player_1.discard.some((card) => card.instanceId === unitCardInstanceId)).toBe(false);
     expect(state.zones.player_2.discard.some((card) => card.instanceId === recallInstanceId)).toBe(true);
+  });
+
+  it("allows Rivet Volley to target and damage an enemy base through entity targeting", () => {
+    const state = setupState();
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "rivet_volley");
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.alloy = 4;
+
+    const targetBase = state.entities.base_player_2;
+    expect(targetBase?.kind).toBe("base");
+    if (!targetBase || targetBase.kind !== "base") {
+      throw new Error("Expected enemy base for Rivet Volley.");
+    }
+    const beforeHp = targetBase.hp;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetEntityId: targetBase.id,
+    });
+    expect(play.ok).toBe(true);
+    expect(state.stack).toHaveLength(1);
+    expect(state.stack[0]?.targetEntityId).toBe(targetBase.id);
+
+    resolveStackByPassing(state);
+
+    expect(targetBase.hp).toBe(beforeHp - 2);
+    expect(state.zones.player_1.discard.some((card) => card.instanceId === cardInstanceId)).toBe(true);
+  });
+
+  it("requires Arc Snap to target an enemy unit and deals 2 damage on resolve", () => {
+    const state = setupState();
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_2", "arc_snap");
+    state.priorityPlayerId = "player_2";
+    state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 4;
+
+    const missingTarget = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+    });
+    expect(expectRejected(missingTarget)).toContain("battlefield target");
+
+    const wrongKind = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetEntityId: "base_player_1",
+    });
+    expect(expectRejected(wrongKind)).toContain("must target a unit");
+
+    const wrongOwner = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetEntityId: "unit_player_2_scout",
+    });
+    expect(expectRejected(wrongOwner)).toContain("enemy entity");
+
+    const target = state.entities.unit_player_1_scout;
+    expect(target?.kind).toBe("unit");
+    if (!target || target.kind !== "unit") {
+      throw new Error("Expected enemy unit for Arc Snap.");
+    }
+    const beforeHp = target.hp;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetEntityId: target.id,
+    });
+    expect(play.ok).toBe(true);
+    expect(state.stack[0]?.targetEntityId).toBe(target.id);
+
+    resolveStackByPassing(state);
+
+    const updatedTarget = state.entities[target.id];
+    expect(updatedTarget?.kind).toBe("unit");
+    if (!updatedTarget || updatedTarget.kind !== "unit") {
+      throw new Error("Expected Arc Snap target to remain after 2 damage.");
+    }
+    expect(updatedTarget.hp).toBe(beforeHp - 2);
+    expect(state.zones.player_2.discard.some((card) => card.instanceId === cardInstanceId)).toBe(true);
+  });
+
+  it("requires Overload Finish to target a damaged enemy unit and destroys it on resolve", () => {
+    const state = setupState();
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_2", "overload_finish");
+    state.priorityPlayerId = "player_2";
+    state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 4;
+
+    const invalidUndamaged = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetEntityId: "unit_player_1_scout",
+    });
+    expect(expectRejected(invalidUndamaged)).toContain("damaged target");
+
+    const target = state.entities.unit_player_1_scout;
+    expect(target?.kind).toBe("unit");
+    if (!target || target.kind !== "unit") {
+      throw new Error("Expected enemy unit for Overload Finish.");
+    }
+    target.hp = target.maxHp - 1;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetEntityId: target.id,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    expect(state.entities[target.id]).toBeUndefined();
+    expect(state.zones.player_2.discard.some((card) => card.instanceId === cardInstanceId)).toBe(true);
+  });
+
+  it("applies Brace Protocol until end of turn and then clears the armor bonus", () => {
+    const state = setupState();
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "brace_protocol");
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.alloy = 4;
+
+    const target = state.entities.unit_player_1_scout;
+    expect(target?.kind).toBe("unit");
+    if (!target || target.kind !== "unit") {
+      throw new Error("Expected allied unit for Brace Protocol.");
+    }
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetEntityId: target.id,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    const buffed = state.entities[target.id];
+    expect(buffed?.kind).toBe("unit");
+    if (!buffed || buffed.kind !== "unit") {
+      throw new Error("Expected buffed unit after Brace Protocol resolves.");
+    }
+    expect(buffed.temporaryArmorBonus).toBe(2);
+
+    advanceToPhase(state, "end");
+    expect((state.entities[target.id] as typeof buffed).temporaryArmorBonus).toBe(2);
+
+    const handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(handoff.ok).toBe(true);
+
+    const afterHandoff = state.entities[target.id];
+    expect(afterHandoff?.kind).toBe("unit");
+    if (!afterHandoff || afterHandoff.kind !== "unit") {
+      throw new Error("Expected unit after Brace Protocol turn rollover.");
+    }
+    expect(afterHandoff.temporaryArmorBonus).toBe(0);
+  });
+
+  it("adds a Relay Savant trigger to the stack when its controller casts a tactic", () => {
+    const state = setupState();
+    state.priorityPlayerId = "player_2";
+    state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 4;
+    const relaySavantId = "unit_player_2_relay_savant";
+    state.entities[relaySavantId] = {
+      id: relaySavantId,
+      kind: "unit",
+      name: "Relay Savant",
+      ownerId: "player_2",
+      role: "utility",
+      hp: 4,
+      maxHp: 4,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 3, r: 0 },
+      carries: null,
+      sourceCardId: "relay_savant_card",
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_2", "arc_snap");
+    const target = state.entities.unit_player_1_scout;
+    expect(target?.kind).toBe("unit");
+    if (!target || target.kind !== "unit") {
+      throw new Error("Expected enemy unit target for Relay Savant trigger test.");
+    }
+    target.hp = 5;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetEntityId: target.id,
+    });
+    expect(play.ok).toBe(true);
+    expect(state.stack).toHaveLength(2);
+    expect(state.stack[0]?.effectId).toBe("damage_enemy_unit_2");
+    expect(state.stack[0]?.targetEntityId).toBe(target.id);
+    expect(state.stack[1]?.effectId).toBe("damage_enemy_unit_1_uncounterable");
+    expect(state.stack[1]?.targetEntityId).toBe(target.id);
+
+    resolveStackByPassing(state);
+
+    const updatedTarget = state.entities[target.id];
+    expect(updatedTarget?.kind).toBe("unit");
+    if (!updatedTarget || updatedTarget.kind !== "unit") {
+      throw new Error("Expected Relay Savant target to survive total damage.");
+    }
+    expect(updatedTarget.hp).toBe(2);
+    expect(state.zones.player_2.discard.some((card) => card.instanceId === cardInstanceId)).toBe(true);
   });
 
   it("rejects card play when resources are insufficient", () => {

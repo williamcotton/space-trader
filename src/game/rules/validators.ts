@@ -62,6 +62,45 @@ function hasUnresolvedStack(state: GameState): boolean {
   return state.stack.length > 0;
 }
 
+function validateEntityTargetForEffect(
+  state: GameState,
+  playerId: PlayerId,
+  targetEntityId: string | undefined,
+  effectId: string
+): CommandValidationResult {
+  const effect = getStackEffectDefinition(effectId);
+  if (!effect || effect.targeting.type !== "entity") {
+    return { ok: true };
+  }
+
+  if (!targetEntityId) {
+    return { ok: false, reason: "This card requires a battlefield target." };
+  }
+
+  const target = getEntity(state, targetEntityId);
+  if (!target) {
+    return { ok: false, reason: "Target entity does not exist." };
+  }
+
+  if (effect.targeting.entityKind === "unit" && target.kind !== "unit") {
+    return { ok: false, reason: "This card must target a unit." };
+  }
+
+  if (effect.targeting.relation === "ally" && target.ownerId !== playerId) {
+    return { ok: false, reason: "This card must target an allied unit." };
+  }
+
+  if (effect.targeting.relation === "enemy" && target.ownerId === playerId) {
+    return { ok: false, reason: "This card must target an enemy entity." };
+  }
+
+  if (effect.targeting.requireDamaged && target.hp >= target.maxHp) {
+    return { ok: false, reason: "This card requires a damaged target." };
+  }
+
+  return { ok: true };
+}
+
 function validateAdvancePhase(state: GameState, playerId: string): CommandValidationResult {
   if (state.activePlayerId !== playerId) {
     return { ok: false, reason: "Only the active player can advance the phase." };
@@ -380,7 +419,7 @@ function validatePlayCard(state: GameState, command: Extract<GameCommand, { type
       return { ok: false, reason: `Unknown stack effect: ${card.stackEffectId}` };
     }
 
-    if (effect.resolution.type === "counter") {
+    if (effect.targeting.type === "stack_item") {
       if (!command.targetStackItemId) {
         return { ok: false, reason: "Counter cards require a target stack item." };
       }
@@ -397,12 +436,32 @@ function validatePlayCard(state: GameState, command: Extract<GameCommand, { type
       if (!topItem.counterable) {
         return { ok: false, reason: "Target stack item is uncounterable." };
       }
-    } else if (command.targetStackItemId) {
-      return { ok: false, reason: "This card does not accept a stack target." };
+      if (command.targetEntityId) {
+        return { ok: false, reason: "This card does not accept a battlefield target." };
+      }
+    } else if (effect.targeting.type === "entity") {
+      if (command.targetStackItemId) {
+        return { ok: false, reason: "This card does not accept a stack target." };
+      }
+
+      const targetResult = validateEntityTargetForEffect(state, command.playerId, command.targetEntityId, card.stackEffectId);
+      if (!targetResult.ok) {
+        return targetResult;
+      }
+    } else {
+      if (command.targetStackItemId) {
+        return { ok: false, reason: "This card does not accept a stack target." };
+      }
+      if (command.targetEntityId) {
+        return { ok: false, reason: "This card does not accept a battlefield target." };
+      }
     }
   } else {
     if (command.targetStackItemId) {
       return { ok: false, reason: "Unit cards do not accept stack targets." };
+    }
+    if (command.targetEntityId) {
+      return { ok: false, reason: "Unit cards do not accept battlefield targets." };
     }
 
     if (!getFirstOpenBaseAdjacentTile(state, command.playerId)) {
