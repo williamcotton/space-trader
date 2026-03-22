@@ -116,6 +116,8 @@ class GameRuntime {
     player_2: true,
   };
   private pendingCardTargeting: PendingCardTargeting | null = null;
+  private listeners: Set<() => void> = new Set();
+  private stateVersion = 0;
   readonly state: GameState;
 
   constructor(
@@ -151,6 +153,28 @@ class GameRuntime {
     if (!this.pendingCardTargeting) {
       this.pendingCardTargeting = null;
     }
+    if (!this.listeners) {
+      this.listeners = new Set();
+    }
+    if (typeof this.stateVersion !== "number") {
+      this.stateVersion = 0;
+    }
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  getStateVersion(): number {
+    return this.stateVersion;
+  }
+
+  private notifyListeners(): void {
+    this.stateVersion++;
+    for (const listener of this.listeners) {
+      listener();
+    }
   }
 
   dispatch(command: GameCommand): DispatchResult {
@@ -162,6 +186,7 @@ class GameRuntime {
         this.animations = this.animations.slice(-32);
       }
     }
+    this.notifyListeners();
     return result;
   }
 
@@ -175,6 +200,7 @@ class GameRuntime {
       turn: this.state.turn,
       text: `${playerId} bot autopilot ${enabled ? "enabled" : "disabled"}.`,
     });
+    this.notifyListeners();
   }
 
   toggleBotAutoplay(playerId: PlayerId): boolean {
@@ -214,11 +240,20 @@ class GameRuntime {
   }
 
   setHoveredHexFromScreenPoint(pixelX: number, pixelY: number): void {
-    this.state.hoveredHex = this.getHexAtScreenPoint(pixelX, pixelY);
+    const next = this.getHexAtScreenPoint(pixelX, pixelY);
+    if (next?.q === this.state.hoveredHex?.q && next?.r === this.state.hoveredHex?.r) {
+      return;
+    }
+    this.state.hoveredHex = next;
+    this.notifyListeners();
   }
 
   clearHoveredHex(): void {
+    if (!this.state.hoveredHex) {
+      return;
+    }
     this.state.hoveredHex = null;
+    this.notifyListeners();
   }
 
   selectUnitFromScreenPoint(pixelX: number, pixelY: number): void {
@@ -227,12 +262,14 @@ class GameRuntime {
     if (this.pendingCardTargeting) {
       if (!hoveredHex) {
         this.clearPendingCardTargeting(`Cancelled targeting for ${this.pendingCardTargeting.cardName}.`);
+        this.notifyListeners();
         return;
       }
 
       const targetEntity = findEntityAtHex(this.state, hoveredHex);
       if (!targetEntity) {
         this.clearPendingCardTargeting(`Cancelled targeting for ${this.pendingCardTargeting.cardName}.`);
+        this.notifyListeners();
         return;
       }
 
@@ -251,6 +288,7 @@ class GameRuntime {
 
     const command = getBoardClickCommand(this.state, hoveredHex);
     if (!command) {
+      this.notifyListeners();
       return;
     }
     void this.dispatch(command);
@@ -375,6 +413,7 @@ class GameRuntime {
         turn: this.state.turn,
         text: `Select target for ${definition.name}.`,
       });
+      this.notifyListeners();
       return {
         ok: true,
         events: [],

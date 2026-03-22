@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { getCardDefinition, type CardCost } from "../game/content/cards/catalog";
 import { isCounterResponse } from "../game/content/stackEffects";
 import type { ResourceType } from "../game/model/enums";
@@ -7,6 +7,7 @@ import { getGameRuntime } from "../game/runtime";
 import type { GameState } from "../game/model/state";
 import { canAffordCost, getFirstOpenBaseAdjacentTile } from "../game/model/queries";
 import { ResourceIcon } from "./ResourceIcon";
+import { useGameSnapshot } from "./useGameSnapshot";
 
 type HandCardView = {
   instanceId: string;
@@ -78,18 +79,7 @@ function readSnapshot(): HandSnapshot {
 
 export function HandTray() {
   const runtime = getGameRuntime();
-  const [snapshot, setSnapshot] = useState<HandSnapshot>(() => readSnapshot());
-
-  useEffect(() => {
-    const refresh = () => {
-      setSnapshot(readSnapshot());
-    };
-
-    const timer = window.setInterval(refresh, 120);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, []);
+  const snapshot = useGameSnapshot(readSnapshot);
 
   const cards = useMemo(
     () =>

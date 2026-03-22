@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { getGameRuntime } from "../game/runtime";
+import { useGameSnapshot } from "./useGameSnapshot";
 import type { Faction, GamePhase, ResourceType } from "../game/model/enums";
 import type { PlayerId } from "../game/model/ids";
 import { formatFactionName, getPlayerLabel, getResourceTheme } from "../game/presentation";
@@ -63,16 +64,7 @@ function readSnapshot(): TopBarSnapshot {
 
 export function GameTopBar() {
   const runtime = getGameRuntime();
-  const [snapshot, setSnapshot] = useState<TopBarSnapshot>(() => readSnapshot());
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setSnapshot(readSnapshot());
-    }, 120);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, []);
+  const snapshot = useGameSnapshot(readSnapshot);
 
   const phaseIndex = PHASE_ORDER.indexOf(snapshot.phase);
   const statusMessage = useMemo(() => {

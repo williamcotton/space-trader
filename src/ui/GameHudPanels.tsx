@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import type { GamePhase } from "../game/model/enums";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../game/model/hex";
 import type { EntityState, GameState, UnitEntity } from "../game/model/state";
@@ -6,6 +5,7 @@ import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleThe
 import { getGameRuntime } from "../game/runtime";
 import { resolveCombatAttack } from "../game/systems/combat";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "../game/systems/unitStats";
+import { useGameSnapshot } from "./useGameSnapshot";
 
 type SelectedUnitSnapshot = {
   id: string;
@@ -134,17 +134,7 @@ function readSnapshot(): TacticalHudSnapshot {
 }
 
 export function GameHudPanels() {
-  const [snapshot, setSnapshot] = useState<TacticalHudSnapshot>(() => readSnapshot());
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setSnapshot(readSnapshot());
-    }, 120);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, []);
+  const snapshot = useGameSnapshot(readSnapshot);
 
   const roleAccent = snapshot.selectedUnit ? getUnitRoleTheme(snapshot.selectedUnit.role).accent : undefined;
   const roleLabel = snapshot.selectedUnit ? getUnitRoleTheme(snapshot.selectedUnit.role).label : null;

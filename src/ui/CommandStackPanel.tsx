@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { getCardDefinition } from "../game/content/cards/catalog";
 import { getStackEffectDefinition } from "../game/content/stackEffects";
 import { getEntityDisplayName, getPlayerLabel } from "../game/presentation";
 import { getGameRuntime } from "../game/runtime";
+import { useGameSnapshot } from "./useGameSnapshot";
 
 type StackPreviewItem = {
   id: string;
@@ -99,19 +100,8 @@ function readPanelSnapshot(): CommandStackSnapshot {
 }
 
 export function CommandStackPanel() {
-  const [snapshot, setSnapshot] = useState<CommandStackSnapshot>(() => readPanelSnapshot());
+  const snapshot = useGameSnapshot(readPanelSnapshot);
   const [viewMode, setViewMode] = useState<"stack" | "history">("stack");
-
-  useEffect(() => {
-    const refresh = () => {
-      setSnapshot(readPanelSnapshot());
-    };
-
-    const timer = window.setInterval(refresh, 120);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, []);
 
   return (
     <aside className="command-stack-panel">
