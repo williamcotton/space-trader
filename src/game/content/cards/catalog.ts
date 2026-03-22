@@ -4,6 +4,13 @@ export type CardSpeed = "instant" | "main";
 
 export type CardCost = Partial<Record<ResourceType, number>>;
 
+export type UnitAura = {
+  type: "adjacent_ally_buff";
+  targetRole?: UnitRole;
+  attackBonus?: number;
+  armorBonus?: number;
+};
+
 export type UnitTemplate = {
   role: UnitRole;
   hp: number;
@@ -13,6 +20,7 @@ export type UnitTemplate = {
   moveRange: number;
   attackRange: number;
   attackActionsPerTurn: number;
+  auras?: UnitAura[];
 };
 
 type CardBase = {
@@ -291,6 +299,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       moveRange: 2,
       attackRange: 1,
       attackActionsPerTurn: 1,
+      auras: [{ type: "adjacent_ally_buff", targetRole: "combat", attackBonus: 1 }],
     },
   },
   relay_savant_card: {

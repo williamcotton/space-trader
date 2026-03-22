@@ -1,7 +1,7 @@
 import { getCardDefinition } from "./content/cards/catalog";
 import type { Faction, ResourceType, UnitRole } from "./model/enums";
 import type { PlayerId } from "./model/ids";
-import type { EntityState, GameState, UnitEntity } from "./model/state";
+import type { EntityState, GameState } from "./model/state";
 
 type PlayerTheme = {
   label: string;
@@ -88,6 +88,12 @@ const ROLE_THEMES: Record<UnitRole, RoleTheme> = {
   },
 };
 
+const ROLE_FALLBACK_NAMES: Record<UnitRole, string> = {
+  combat: "Combat Unit",
+  resource: "Resource Unit",
+  utility: "Utility Unit",
+};
+
 function formatWords(value: string): string {
   return value
     .split("_")
@@ -118,88 +124,26 @@ export function formatFactionName(faction: Faction | "neutral"): string {
   return formatWords(faction);
 }
 
-function parseCardIdFromUnitId(unitId: string): string | null {
-  const prefixMatch = unitId.match(/^unit_player_[12]_(.+)_\d+$/);
-  if (!prefixMatch) {
-    return null;
-  }
-  return prefixMatch[1] ?? null;
-}
-
-export function inferUnitSourceCardId(
-  unit: Pick<UnitEntity, "id" | "sourceCardId" | "ownerId">,
-  state?: Pick<GameState, "players">
-): string | null {
-  if (unit.sourceCardId) {
-    return unit.sourceCardId;
-  }
-
-  const parsedCardId = parseCardIdFromUnitId(unit.id);
-  if (parsedCardId) {
-    return parsedCardId;
-  }
-
-  if (unit.id.includes("harvester")) {
-    return "expedition_harvester_card";
-  }
-
-  if (unit.id.includes("scout")) {
-    const faction = state?.players[unit.ownerId]?.faction;
-    if (faction === "flux_collective") {
-      return "flux_runner_card";
-    }
-    return "frontline_scout_card";
-  }
-
-  return null;
-}
-
-export function inferUnitName(unit: Pick<UnitEntity, "id" | "role" | "sourceCardId" | "ownerId">, state?: Pick<GameState, "players">): string {
-  const sourceCardId = inferUnitSourceCardId(unit, state);
-  const definition = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
-  if (definition?.kind === "unit") {
-    return definition.name;
-  }
-
-  if (unit.id.includes("harvester")) {
-    return "Expedition Harvester";
-  }
-
-  if (unit.id.includes("scout")) {
-    const faction = state?.players[unit.ownerId]?.faction;
-    if (faction === "flux_collective") {
-      return "Command Runner";
-    }
-    if (faction === "biomass_swarm") {
-      return "Brood Scout";
-    }
-    return "Frontline Scout";
-  }
-
-  if (unit.role === "combat") {
-    return "Combat Unit";
-  }
-  if (unit.role === "resource") {
-    return "Resource Unit";
-  }
-  return "Utility Unit";
-}
-
-export function ensureEntityPresentation(entity: EntityState, state: Pick<GameState, "players">): void {
+export function ensureEntityPresentation(entity: EntityState, _state: Pick<GameState, "players">): void {
   if (!entity.name) {
     if (entity.kind === "base") {
       entity.name = `${getPlayerLabel(entity.ownerId)} Base`;
       return;
     }
-    entity.name = inferUnitName(entity, state);
-  }
 
-  if (entity.kind === "unit" && typeof entity.sourceCardId === "undefined") {
-    entity.sourceCardId = inferUnitSourceCardId(entity, state);
+    if (entity.sourceCardId) {
+      const card = getCardDefinition(entity.sourceCardId);
+      if (card?.kind === "unit") {
+        entity.name = card.name;
+        return;
+      }
+    }
+
+    entity.name = ROLE_FALLBACK_NAMES[entity.role] ?? "Unit";
   }
 }
 
-export function getEntityDisplayName(entity: EntityState, state: Pick<GameState, "players">): string {
+export function getEntityDisplayName(entity: EntityState, _state: Pick<GameState, "players">): string {
   if (entity.name) {
     return entity.name;
   }
@@ -208,5 +152,12 @@ export function getEntityDisplayName(entity: EntityState, state: Pick<GameState,
     return `${getPlayerLabel(entity.ownerId)} Base`;
   }
 
-  return inferUnitName(entity, state);
+  if (entity.sourceCardId) {
+    const card = getCardDefinition(entity.sourceCardId);
+    if (card?.kind === "unit") {
+      return card.name;
+    }
+  }
+
+  return ROLE_FALLBACK_NAMES[entity.role] ?? "Unit";
 }

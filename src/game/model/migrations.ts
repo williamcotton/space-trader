@@ -1,6 +1,6 @@
 import { getCardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
-import { ensureEntityPresentation, inferUnitSourceCardId } from "../presentation";
+import { ensureEntityPresentation } from "../presentation";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
 
@@ -145,7 +145,7 @@ export function migrateRuntimeState(state: GameState): void {
     }
 
     if (entity.kind === "unit") {
-      const sourceCardId = entity.sourceCardId ?? inferUnitSourceCardId(entity, state);
+      const sourceCardId = entity.sourceCardId;
       const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
       const defaultSiegeDamageBonus =
         sourceCard && sourceCard.kind === "unit" ? sourceCard.unit.siegeDamageBonus : entity.role === "combat" ? 1 : 0;
