@@ -93,7 +93,7 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
   },
   damage_enemy_base_2: {
     id: "damage_enemy_base_2",
-    label: "Orbital Ping",
+    label: "Deal 2 Base Damage",
     object: {
       kind: "spell",
       counterable: true,
@@ -109,7 +109,7 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
   },
   counter_top_item: {
     id: "counter_top_item",
-    label: "Counter Pulse",
+    label: "Counter Spell",
     object: {
       kind: "spell",
       counterable: true,
@@ -125,7 +125,7 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
   },
   counter_to_hand: {
     id: "counter_to_hand",
-    label: "Echo Recall",
+    label: "Counter to Hand",
     object: {
       kind: "spell",
       counterable: true,
@@ -141,7 +141,7 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
   },
   damage_enemy_unit_2: {
     id: "damage_enemy_unit_2",
-    label: "Arc Snap",
+    label: "Deal 2 Unit Damage",
     object: {
       kind: "spell",
       counterable: true,
@@ -159,7 +159,7 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
   },
   damage_enemy_entity_2: {
     id: "damage_enemy_entity_2",
-    label: "Rivet Volley",
+    label: "Deal 2 Damage",
     object: {
       kind: "spell",
       counterable: true,
@@ -177,7 +177,7 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
   },
   destroy_damaged_enemy_unit: {
     id: "destroy_damaged_enemy_unit",
-    label: "Overload Finish",
+    label: "Destroy Damaged Unit",
     object: {
       kind: "spell",
       counterable: true,
@@ -196,7 +196,7 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
   },
   armor_ally_unit_2_eot: {
     id: "armor_ally_unit_2_eot",
-    label: "Brace Protocol",
+    label: "Grant +2 Armor",
     object: {
       kind: "spell",
       counterable: true,
@@ -215,7 +215,7 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
   },
   damage_enemy_unit_1_uncounterable: {
     id: "damage_enemy_unit_1_uncounterable",
-    label: "Relay Savant",
+    label: "Deal 1 Unit Damage",
     object: {
       kind: "ability",
       counterable: false,

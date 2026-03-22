@@ -3,11 +3,12 @@ import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { decideMvpBotCommand } from "./ai/mvpBot";
 import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
 import { getCardDefinition } from "./content/cards/catalog";
-import { getStackEffectDefinition, requiresEntityTarget } from "./content/stackEffects";
+import { requiresEntityTarget } from "./content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
-import { BASE_STARTING_HP, OPENING_HAND_SIZE, createInitialGameState, createInitialZonesForPlayer } from "./model/state";
+import { findEntityAtHex } from "./model/queries";
+import { createInitialGameState } from "./model/state";
 import type { PlayerId } from "./model/ids";
-import { ensureEntityPresentation, inferUnitSourceCardId } from "./presentation";
+import { migrateRuntimeState } from "./model/migrations";
 import { captureAnimationSnapshot, buildAnimationsFromEvents, stepAnimations } from "./render/animations";
 import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
@@ -20,7 +21,6 @@ const INITIAL_VIEWPORT: GameViewport = {
   height: 768,
 };
 
-const CURRENT_STATE_VERSION = 16;
 const BOT_ACTION_INTERVAL_SECONDS = 0.16;
 
 type BotDecisionSystem = typeof decideMvpBotCommand;
@@ -37,212 +37,6 @@ function createRuntimeMatchId(): string {
   return `match_frontier_belt_${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffff)
     .toString(36)
     .padStart(4, "0")}`;
-}
-
-function migratePhaseFourHarvesters(state: GameState): void {
-  const playerOneHarvesterId = "unit_player_1_harvester";
-  const playerTwoHarvesterId = "unit_player_2_harvester";
-
-  if (!state.entities[playerOneHarvesterId]) {
-    const spawn = state.map.spawnPoints.player_1;
-    state.entities[playerOneHarvesterId] = {
-      id: playerOneHarvesterId,
-      kind: "unit",
-      name: "Expedition Harvester",
-      ownerId: "player_1",
-      role: "resource",
-      hp: 5,
-      maxHp: 5,
-      attackDamage: 1,
-      siegeDamageBonus: 0,
-      armor: 0,
-      moveRange: 2,
-      attackRange: 1,
-      attackActionsPerTurn: 1,
-      coord: { q: spawn.q, r: spawn.r + 1 },
-      carries: null,
-      sourceCardId: "expedition_harvester_card",
-      hasSummoningSickness: false,
-      movesRemaining: 2,
-      attacksRemaining: 1,
-      temporaryAttackBonus: 0,
-      temporaryArmorBonus: 0,
-    };
-  }
-
-  if (!state.entities[playerTwoHarvesterId]) {
-    const spawn = state.map.spawnPoints.player_2;
-    state.entities[playerTwoHarvesterId] = {
-      id: playerTwoHarvesterId,
-      kind: "unit",
-      name: "Expedition Harvester",
-      ownerId: "player_2",
-      role: "resource",
-      hp: 5,
-      maxHp: 5,
-      attackDamage: 1,
-      siegeDamageBonus: 0,
-      armor: 0,
-      moveRange: 2,
-      attackRange: 1,
-      attackActionsPerTurn: 1,
-      coord: { q: spawn.q, r: spawn.r - 1 },
-      carries: null,
-      sourceCardId: "expedition_harvester_card",
-      hasSummoningSickness: false,
-      movesRemaining: 2,
-      attacksRemaining: 1,
-      temporaryAttackBonus: 0,
-      temporaryArmorBonus: 0,
-    };
-  }
-}
-
-function migrateRuntimeState(state: GameState): void {
-  if (typeof state.stateVersion !== "number") {
-    state.stateVersion = 0;
-  }
-
-  if (typeof state.consecutivePriorityPasses !== "number") {
-    state.consecutivePriorityPasses = 0;
-  }
-
-  if (typeof state.hoveredHex === "undefined") {
-    state.hoveredHex = null;
-  }
-
-  if (!Array.isArray(state.tacticalHarvestEligibleUnitIds)) {
-    state.tacticalHarvestEligibleUnitIds = [];
-  }
-
-  if (!Array.isArray(state.tacticalHarvestedUnitIds)) {
-    state.tacticalHarvestedUnitIds = [];
-  }
-
-  for (const stackItem of state.stack) {
-    if (typeof stackItem.effectId === "undefined") {
-      stackItem.effectId = "noop_log";
-    }
-    const definition = getStackEffectDefinition(stackItem.effectId);
-    if (typeof stackItem.effectMagnitude !== "number") {
-      if (definition?.resolution.type === "damage_enemy_base") {
-        stackItem.effectMagnitude = definition.resolution.amount;
-      } else {
-        stackItem.effectMagnitude = 0;
-      }
-    }
-    if (typeof stackItem.targetStackItemId === "undefined") {
-      stackItem.targetStackItemId = null;
-    }
-    if (typeof stackItem.targetEntityId === "undefined") {
-      stackItem.targetEntityId = null;
-    }
-    if (typeof stackItem.ownerId === "undefined") {
-      stackItem.ownerId = stackItem.controllerId;
-    }
-    if (typeof stackItem.objectKind === "undefined") {
-      stackItem.objectKind = definition?.object.kind ?? "ability";
-    }
-    if (typeof stackItem.counterable === "undefined") {
-      stackItem.counterable = definition?.object.counterable ?? false;
-    }
-    if (typeof stackItem.defaultCounterDestination === "undefined") {
-      stackItem.defaultCounterDestination = definition?.object.defaultCounterDestination ?? "none";
-    }
-    if (typeof stackItem.sourceCardInstanceId === "undefined") {
-      stackItem.sourceCardInstanceId = null;
-    }
-    if (typeof stackItem.sourceCardId === "undefined") {
-      stackItem.sourceCardId = null;
-    }
-    if (typeof stackItem.sourceCardOwnerId === "undefined") {
-      stackItem.sourceCardOwnerId = null;
-    }
-    if (typeof stackItem.pendingUnitEntityId === "undefined") {
-      stackItem.pendingUnitEntityId = null;
-    }
-  }
-
-  for (const entity of Object.values(state.entities)) {
-    ensureEntityPresentation(entity, state);
-
-    if (typeof entity.maxHp !== "number") {
-      entity.maxHp = entity.hp;
-    }
-
-    if (state.stateVersion < CURRENT_STATE_VERSION && entity.kind === "base") {
-      const previousMaxHp = entity.maxHp > 0 ? entity.maxHp : entity.hp;
-      const hpRatio = previousMaxHp > 0 ? entity.hp / previousMaxHp : 1;
-      entity.maxHp = BASE_STARTING_HP;
-      entity.hp = entity.hp <= 0 ? 0 : Math.max(1, Math.round(BASE_STARTING_HP * hpRatio));
-    }
-
-    if (entity.kind === "unit") {
-      const sourceCardId = entity.sourceCardId ?? inferUnitSourceCardId(entity, state);
-      const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
-      const defaultSiegeDamageBonus =
-        sourceCard && sourceCard.kind === "unit" ? sourceCard.unit.siegeDamageBonus : entity.role === "combat" ? 1 : 0;
-
-      if (state.stateVersion < CURRENT_STATE_VERSION || typeof entity.siegeDamageBonus !== "number") {
-        entity.siegeDamageBonus = defaultSiegeDamageBonus;
-      }
-      if (typeof entity.carries === "undefined") {
-        entity.carries = null;
-      }
-      if (typeof entity.temporaryAttackBonus !== "number") {
-        entity.temporaryAttackBonus = 0;
-      }
-      if (typeof entity.temporaryArmorBonus !== "number") {
-        entity.temporaryArmorBonus = 0;
-      }
-    }
-  }
-
-  migratePhaseFourHarvesters(state);
-
-  if (typeof state.zones === "undefined") {
-    state.zones = {
-      player_1: createInitialZonesForPlayer("player_1", state.players.player_1.faction, state.players.player_1.handSize || OPENING_HAND_SIZE),
-      player_2: createInitialZonesForPlayer("player_2", state.players.player_2.faction, state.players.player_2.handSize || OPENING_HAND_SIZE),
-    };
-  }
-
-  for (const playerId of ["player_1", "player_2"] as const) {
-    if (!state.zones[playerId]) {
-      state.zones[playerId] = createInitialZonesForPlayer(
-        playerId,
-        state.players[playerId].faction,
-        state.players[playerId].handSize || OPENING_HAND_SIZE
-      );
-    }
-    if (!Array.isArray(state.zones[playerId].deck)) {
-      state.zones[playerId].deck = [];
-    }
-    if (!Array.isArray(state.zones[playerId].hand)) {
-      state.zones[playerId].hand = [];
-    }
-    if (!Array.isArray(state.zones[playerId].discard)) {
-      state.zones[playerId].discard = [];
-    }
-    if (!Array.isArray(state.zones[playerId].exile)) {
-      state.zones[playerId].exile = [];
-    }
-
-    state.players[playerId].handSize = state.zones[playerId].hand.length;
-    state.players[playerId].deckSize = state.zones[playerId].deck.length;
-  }
-
-  if (state.stateVersion < CURRENT_STATE_VERSION) {
-    state.stateVersion = CURRENT_STATE_VERSION;
-    state.log.push({
-      turn: state.turn,
-      text: "State migrated to v16 (entity-targeting tactics and support-unit bonuses).",
-    });
-  }
-}
-
-function findEntityAtHex(state: GameState, coord: { q: number; r: number }): GameState["entities"][string] | undefined {
-  return Object.values(state.entities).find((entity) => areSameHex(entity.coord, coord));
 }
 
 function getSelectedActiveUnit(state: GameState) {
@@ -635,7 +429,7 @@ class GameRuntime {
     void this.dispatch({
       type: "RESPOND_STACK",
       playerId: priorityPlayerId,
-      label: "Orbital Ping",
+      label: "Debug Base Strike",
       effectId: "damage_enemy_base_2",
     });
   }
@@ -651,7 +445,7 @@ class GameRuntime {
     void this.dispatch({
       type: "RESPOND_STACK",
       playerId: priorityPlayerId,
-      label: "Counter Pulse",
+      label: "Debug Counter",
       effectId: "counter_top_item",
       targetStackItemId: resolvedTargetId,
     });

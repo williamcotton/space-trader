@@ -29,9 +29,19 @@ export type TacticCardDefinition = CardBase & {
   stackEffectId: string;
 };
 
+export type AutoTargetStrategy = "weakest_enemy_unit";
+
+export type UnitTrigger = {
+  event: "on_owner_tactic_played";
+  effectId: string;
+  labelSuffix: string;
+  autoTarget: AutoTargetStrategy;
+};
+
 export type UnitCardDefinition = CardBase & {
   kind: "unit";
   unit: UnitTemplate;
+  trigger?: UnitTrigger;
 };
 
 export type CardDefinition = TacticCardDefinition | UnitCardDefinition;
@@ -300,6 +310,12 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       moveRange: 2,
       attackRange: 1,
       attackActionsPerTurn: 1,
+    },
+    trigger: {
+      event: "on_owner_tactic_played",
+      effectId: "damage_enemy_unit_1_uncounterable",
+      labelSuffix: "Pulse",
+      autoTarget: "weakest_enemy_unit",
     },
   },
   swarm_harvester_card: {

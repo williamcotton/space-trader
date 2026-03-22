@@ -1,7 +1,7 @@
 import { hexDistance } from "../model/hex";
-import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, UnitEntity } from "../model/state";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "./unitStats";
+import { getPlayerBase } from "../model/queries";
 
 export type CombatBreakdown = {
   attackerId: string;
@@ -18,15 +18,6 @@ export type CombatResolution = CombatBreakdown & {
   targetHpAfter: number;
   targetDestroyed: boolean;
 };
-
-function getPlayerBase(state: GameState, playerId: PlayerId) {
-  const baseId = state.players[playerId].baseEntityId;
-  const base = state.entities[baseId];
-  if (!base || base.kind !== "base") {
-    return null;
-  }
-  return base;
-}
 
 function getTemporaryAttackBuffs(_state: GameState, _attacker: UnitEntity, _target: EntityState): number {
   return 0;

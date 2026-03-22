@@ -2,10 +2,11 @@ import type { GameCommand } from "../actions/commands";
 import { getCardDefinition } from "../content/cards/catalog";
 import { isCounterResponse } from "../content/stackEffects";
 import { getMapAxialBounds, hexDistance, isWithinMapBounds } from "../model/hex";
-import type { GameState, HexCoord, UnitEntity } from "../model/state";
+import type { GameState, UnitEntity } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { validateCommand } from "../rules/validators";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../systems/harvesting";
+import { hasEntityAtCoord } from "../model/queries";
 
 function hasAnyPlayableCard(state: GameState, playerId: PlayerId): boolean {
   const topStackItemId = state.stack[state.stack.length - 1]?.id;
@@ -30,15 +31,6 @@ function hasAnyPlayableCard(state: GameState, playerId: PlayerId): boolean {
   }
 
   return false;
-}
-
-function hasEntityAtCoord(state: GameState, coord: HexCoord, ignoreEntityId?: string): boolean {
-  return Object.values(state.entities).some((entity) => {
-    if (ignoreEntityId && entity.id === ignoreEntityId) {
-      return false;
-    }
-    return entity.coord.q === coord.q && entity.coord.r === coord.r;
-  });
 }
 
 function hasAvailableMove(state: GameState, unit: UnitEntity): boolean {

@@ -5,6 +5,7 @@ import type { ResourceType } from "../game/model/enums";
 import { formatFactionName, getResourceTheme, getUnitRoleTheme } from "../game/presentation";
 import { getGameRuntime } from "../game/runtime";
 import type { GameState } from "../game/model/state";
+import { canAffordCost, getFirstOpenBaseAdjacentTile } from "../game/model/queries";
 import { ResourceIcon } from "./ResourceIcon";
 
 type HandCardView = {
@@ -48,42 +49,6 @@ function getCostEntries(cost: CardCost): Array<{ resource: ResourceType; amount:
     .filter((entry) => entry.amount > 0);
 }
 
-function canAfford(resources: HandSnapshot["resources"], cost: CardCost): boolean {
-  return (
-    resources.credits >= (cost.credits ?? 0) &&
-    resources.alloy >= (cost.alloy ?? 0) &&
-    resources.flux >= (cost.flux ?? 0) &&
-    resources.biomass >= (cost.biomass ?? 0)
-  );
-}
-
-function hasOpenBaseAdjacentTile(state: GameState, playerId: "player_1" | "player_2"): boolean {
-  const baseId = state.players[playerId].baseEntityId;
-  const base = state.entities[baseId];
-  if (!base || base.kind !== "base") {
-    return false;
-  }
-
-  const candidates = [
-    { q: base.coord.q + 1, r: base.coord.r },
-    { q: base.coord.q + 1, r: base.coord.r - 1 },
-    { q: base.coord.q, r: base.coord.r - 1 },
-    { q: base.coord.q - 1, r: base.coord.r },
-    { q: base.coord.q - 1, r: base.coord.r + 1 },
-    { q: base.coord.q, r: base.coord.r + 1 },
-  ];
-
-  return candidates.some((coord) => {
-    if (coord.q < -Math.floor(state.map.width / 2) || coord.q > Math.floor(state.map.width / 2)) {
-      return false;
-    }
-    if (coord.r < -Math.floor(state.map.height / 2) || coord.r > Math.floor(state.map.height / 2)) {
-      return false;
-    }
-    return !Object.values(state.entities).some((entity) => entity.coord.q === coord.q && entity.coord.r === coord.r);
-  });
-}
-
 function readSnapshot(): HandSnapshot {
   const runtime = getGameRuntime();
   const state = runtime.state;
@@ -105,7 +70,7 @@ function readSnapshot(): HandSnapshot {
     deckCount: state.zones[visiblePlayerId].deck.length,
     stackSize: state.stack.length,
     winner: state.winner,
-    hasOpenBaseAdjacentTile: hasOpenBaseAdjacentTile(state, visiblePlayerId),
+    hasOpenBaseAdjacentTile: !!getFirstOpenBaseAdjacentTile(state, visiblePlayerId),
     pendingTargetingCardInstanceId: pendingTargeting?.cardInstanceId ?? null,
     pendingTargetingPrompt: pendingTargeting?.prompt ?? null,
   };
@@ -144,7 +109,7 @@ export function HandTray() {
           };
         }
 
-        const affordable = canAfford(snapshot.resources, definition.cost);
+        const affordable = canAffordCost(snapshot.resources, definition.cost);
         const speedOk = definition.speed === "instant" ? snapshot.hasPriority : snapshot.activePlayerId === snapshot.visiblePlayerId && snapshot.phase === "main" && snapshot.stackSize === 0;
         const deploymentOk = definition.kind === "unit" ? snapshot.hasOpenBaseAdjacentTile : true;
         const counterTarget =

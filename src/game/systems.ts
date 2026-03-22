@@ -1,6 +1,7 @@
 import type { GameFrame } from "./types";
 import { areSameHex, axialToPixel, getMapAxialBounds, hexDistance, isWithinMapBounds } from "./model/hex";
 import type { EntityState, GameState, HexCoord, UnitEntity } from "./model/state";
+import { hasEntityAtCoord } from "./model/queries";
 import { getPlayerTheme, getResourceTheme, getUnitRoleTheme } from "./presentation";
 import { getHexMetrics } from "./render/layout";
 
@@ -242,15 +243,6 @@ function getSelectedUnit(state: GameState): UnitEntity | null {
   }
 
   return selected;
-}
-
-function hasEntityAtCoord(state: GameState, coord: HexCoord, ignoreEntityId?: string): boolean {
-  return Object.values(state.entities).some((entity) => {
-    if (ignoreEntityId && entity.id === ignoreEntityId) {
-      return false;
-    }
-    return areSameHex(entity.coord, coord);
-  });
 }
 
 function getEntityAtCoord(state: GameState, coord: HexCoord, ignoreEntityId?: string): EntityState | null {

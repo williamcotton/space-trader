@@ -2,6 +2,7 @@ import { areSameHex, hexDistance } from "../model/hex";
 import type { ResourceType } from "../model/enums";
 import type { HexCoord, GameState, UnitEntity } from "../model/state";
 import type { PlayerId } from "../model/ids";
+import { getPlayerBase } from "../model/queries";
 
 type ResourceTally = Record<ResourceType, number>;
 
@@ -16,15 +17,6 @@ function createEmptyResourceTally(): ResourceTally {
 
 function getDepositAmount(resourceType: ResourceType): number {
   return resourceType === "credits" ? 2 : 1;
-}
-
-function getPlayerBase(state: GameState, playerId: PlayerId) {
-  const baseId = state.players[playerId].baseEntityId;
-  const base = state.entities[baseId];
-  if (!base || base.kind !== "base") {
-    return null;
-  }
-  return base;
 }
 
 export function isBaseAdjacentDropoffTile(state: GameState, playerId: PlayerId, coord: HexCoord): boolean {

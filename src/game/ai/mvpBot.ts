@@ -6,15 +6,8 @@ import type { Faction, ResourceType } from "../model/enums";
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, HexCoord, UnitEntity } from "../model/state";
 import { resolveCombatAttack } from "../systems/combat";
-
-const HEX_DIRECTIONS: HexCoord[] = [
-  { q: 1, r: 0 },
-  { q: 1, r: -1 },
-  { q: 0, r: -1 },
-  { q: -1, r: 0 },
-  { q: -1, r: 1 },
-  { q: 0, r: 1 },
-];
+import { canAffordCardCost, getEnemyEntities, getFirstOpenBaseAdjacentTile, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../model/queries";
+import { getOpponentPlayer } from "../turn/stack";
 
 const RESOURCE_ORDER: ResourceType[] = ["credits", "alloy", "flux", "biomass"];
 const PRIMARY_RESOURCE_BY_FACTION: Record<Faction, ResourceType> = {
@@ -23,42 +16,94 @@ const PRIMARY_RESOURCE_BY_FACTION: Record<Faction, ResourceType> = {
   biomass_swarm: "biomass",
 };
 
+const AI_WEIGHTS = {
+  // scoreEnemyEntityThreat
+  threatCombatBase: 34,
+  threatResourceBase: 20,
+  threatUtilityBase: 15,
+  threatAttackMult: 4,
+  threatArmorMult: 4,
+  threatRangeMult: 2,
+  threatNearBaseBonus: 22,
+  threatNearBaseRadius: 2,
+  threatMedBaseBonus: 12,
+  threatMedBaseRadius: 4,
+
+  // scoreDamageSpellTarget
+  damageLethalBaseScore: 320,
+  damageBoardPressureBonus: 30,
+  damageBaseHpDeltaMult: 4,
+  damageBaseAmountMult: 5,
+  damageKillBonus: 96,
+  damageWoundedBonus: 12,
+  damageTimingPenalty: 30,
+  damageAppliedMult: 10,
+
+  // scoreDestroySpellTarget
+  destroyBase: 110,
+  destroyHpDeltaMult: 4,
+
+  // scoreBraceProtocolTarget
+  braceBase: 26,
+  bracePreventedDmgMult: 15,
+  bracePreventKillBonus: 80,
+  braceCombatBonus: 18,
+
+  // chooseTacticCardCommand thresholds
+  tacticMainThreshold: 90,
+  tacticTacticalThreshold: 55,
+  basePingLethalScore: 300,
+  basePingTacticalScore: 18,
+
+  // emergency combat scoring
+  emergencyFactionBonus: 12,
+  emergencyNeutralBonus: 4,
+  emergencyOffFactionPenalty: -8,
+  emergencyAttackMult: 4,
+  emergencyHpMult: 2,
+  emergencyArmorMult: 5,
+  emergencyCostMult: 3,
+
+  // main phase unit scoring - combat
+  combatBase: 34,
+  combatAttackMult: 5,
+  combatHpMult: 1.5,
+  combatArmorMult: 6,
+  combatSecondUnitBonus: 10,
+  combatFactionBonus: 10,
+  combatOffFactionPenalty: -8,
+
+  // main phase unit scoring - resource
+  resourceFirstDeploy: 50,
+  resourceAdditional: 22,
+  resourceMissingBonus: 12,
+  resourceExcessBase: -28,
+  resourceExcessPerUnit: 10,
+  resourceOutnumberedPenalty: -18,
+  resourceOffFactionPenalty: -16,
+
+  // main phase unit scoring - utility
+  utilityFirstDeploy: 16,
+  utilityAdditional: 8,
+  utilityOutnumberedPenalty: -10,
+
+  // main phase cost penalty
+  deployCostMult: 4,
+
+  // attack scoring
+  attackKillScore: 100,
+  attackBaseScore: 50,
+
+  // movement
+  nearbyEnemyRadius: 3,
+} as const;
+
 type ScoredCardCommand = {
   command: GameCommand;
   score: number;
   cardInstanceId: string;
   targetEntityId?: string;
 };
-
-function getOpponentPlayer(playerId: PlayerId): PlayerId {
-  return playerId === "player_1" ? "player_2" : "player_1";
-}
-
-function getPlayerUnits(state: GameState, playerId: PlayerId): UnitEntity[] {
-  return Object.values(state.entities)
-    .filter((entity): entity is UnitEntity => entity.kind === "unit" && entity.ownerId === playerId)
-    .sort((a, b) => a.id.localeCompare(b.id));
-}
-
-function getEnemyEntities(state: GameState, playerId: PlayerId): EntityState[] {
-  return Object.values(state.entities)
-    .filter((entity) => entity.ownerId !== playerId)
-    .sort((a, b) => a.id.localeCompare(b.id));
-}
-
-function isCoordOccupied(state: GameState, coord: HexCoord): boolean {
-  return Object.values(state.entities).some((entity) => areSameHex(entity.coord, coord));
-}
-
-function canAfford(state: GameState, playerId: PlayerId, cost: Partial<Record<"credits" | "alloy" | "flux" | "biomass", number>>): boolean {
-  const resources = state.players[playerId].resources;
-  return (
-    resources.credits >= (cost.credits ?? 0) &&
-    resources.alloy >= (cost.alloy ?? 0) &&
-    resources.flux >= (cost.flux ?? 0) &&
-    resources.biomass >= (cost.biomass ?? 0)
-  );
-}
 
 function getHandCardDefinitions(state: GameState, botPlayerId: PlayerId): CardDefinition[] {
   return state.zones[botPlayerId].hand
@@ -155,26 +200,6 @@ function shouldHarvestResourceType(state: GameState, botPlayerId: PlayerId, reso
   return new Set(priorityOrder.slice(0, 2)).has(resourceType);
 }
 
-function getFirstOpenBaseAdjacentTile(state: GameState, playerId: PlayerId): HexCoord | null {
-  const baseId = state.players[playerId].baseEntityId;
-  const base = state.entities[baseId];
-  if (!base || base.kind !== "base") {
-    return null;
-  }
-
-  const candidates = HEX_DIRECTIONS.map((dir) => ({ q: base.coord.q + dir.q, r: base.coord.r + dir.r }));
-  for (const coord of candidates) {
-    if (!isWithinMapBounds(coord, state.map)) {
-      continue;
-    }
-    if (!isCoordOccupied(state, coord)) {
-      return coord;
-    }
-  }
-
-  return null;
-}
-
 function getSelectedOwnedUnit(state: GameState, playerId: PlayerId): UnitEntity | null {
   if (!state.selectedEntityId) {
     return null;
@@ -223,7 +248,7 @@ function chooseCounterCommand(state: GameState, botPlayerId: PlayerId): GameComm
     if (!isCounterResponse(card.stackEffectId)) {
       continue;
     }
-    if (!canAfford(state, botPlayerId, card.cost)) {
+    if (!canAffordCardCost(state, botPlayerId, card.cost)) {
       continue;
     }
 
@@ -243,16 +268,16 @@ function scoreEnemyEntityThreat(state: GameState, botPlayerId: PlayerId, target:
     return 0;
   }
 
-  let score = target.role === "combat" ? 34 : target.role === "resource" ? 20 : 15;
-  score += target.attackDamage * 4 + target.armor * 4 + target.attackRange * 2;
+  let score = target.role === "combat" ? AI_WEIGHTS.threatCombatBase : target.role === "resource" ? AI_WEIGHTS.threatResourceBase : AI_WEIGHTS.threatUtilityBase;
+  score += target.attackDamage * AI_WEIGHTS.threatAttackMult + target.armor * AI_WEIGHTS.threatArmorMult + target.attackRange * AI_WEIGHTS.threatRangeMult;
 
   const botBase = state.entities[state.players[botPlayerId].baseEntityId];
   if (botBase && botBase.kind === "base") {
     const distanceToBase = hexDistance(target.coord, botBase.coord);
-    if (distanceToBase <= 2) {
-      score += 22;
-    } else if (distanceToBase <= 4) {
-      score += 12;
+    if (distanceToBase <= AI_WEIGHTS.threatNearBaseRadius) {
+      score += AI_WEIGHTS.threatNearBaseBonus;
+    } else if (distanceToBase <= AI_WEIGHTS.threatMedBaseRadius) {
+      score += AI_WEIGHTS.threatMedBaseBonus;
     }
   }
 
@@ -268,7 +293,7 @@ function scoreDamageSpellTarget(
 ): number {
   if (target.kind === "base") {
     if (amount >= target.hp) {
-      return 320;
+      return AI_WEIGHTS.damageLethalBaseScore;
     }
 
     if (phase !== "tactical") {
@@ -276,16 +301,16 @@ function scoreDamageSpellTarget(
     }
 
     const enemyUnits = getEnemyEntities(state, botPlayerId).filter((entity) => entity.kind === "unit");
-    const boardPressureBonus = enemyUnits.length === 0 ? 30 : 0;
-    return boardPressureBonus + (target.maxHp - target.hp) * 4 + amount * 5;
+    const boardPressureBonus = enemyUnits.length === 0 ? AI_WEIGHTS.damageBoardPressureBonus : 0;
+    return boardPressureBonus + (target.maxHp - target.hp) * AI_WEIGHTS.damageBaseHpDeltaMult + amount * AI_WEIGHTS.damageBaseAmountMult;
   }
 
   const appliedDamage = Math.min(amount, target.hp);
-  const killBonus = amount >= target.hp ? 96 : 0;
-  const woundedBonus = target.hp < target.maxHp ? 12 : 0;
-  const timingPenalty = phase === "main" && killBonus === 0 ? 30 : 0;
+  const killBonus = amount >= target.hp ? AI_WEIGHTS.damageKillBonus : 0;
+  const woundedBonus = target.hp < target.maxHp ? AI_WEIGHTS.damageWoundedBonus : 0;
+  const timingPenalty = phase === "main" && killBonus === 0 ? AI_WEIGHTS.damageTimingPenalty : 0;
 
-  return scoreEnemyEntityThreat(state, botPlayerId, target) + appliedDamage * 10 + killBonus + woundedBonus - timingPenalty;
+  return scoreEnemyEntityThreat(state, botPlayerId, target) + appliedDamage * AI_WEIGHTS.damageAppliedMult + killBonus + woundedBonus - timingPenalty;
 }
 
 function scoreDestroySpellTarget(state: GameState, botPlayerId: PlayerId, target: UnitEntity): number {
@@ -293,7 +318,7 @@ function scoreDestroySpellTarget(state: GameState, botPlayerId: PlayerId, target
     return -Infinity;
   }
 
-  return 110 + scoreEnemyEntityThreat(state, botPlayerId, target) + (target.maxHp - target.hp) * 4;
+  return AI_WEIGHTS.destroyBase + scoreEnemyEntityThreat(state, botPlayerId, target) + (target.maxHp - target.hp) * AI_WEIGHTS.destroyHpDeltaMult;
 }
 
 function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId, target: UnitEntity): number {
@@ -327,7 +352,7 @@ function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId, targe
     return -Infinity;
   }
 
-  return 26 + preventedDamage * 15 + (preventsKill ? 80 : 0) + (target.role === "combat" ? 18 : 0);
+  return AI_WEIGHTS.braceBase + preventedDamage * AI_WEIGHTS.bracePreventedDmgMult + (preventsKill ? AI_WEIGHTS.bracePreventKillBonus : 0) + (target.role === "combat" ? AI_WEIGHTS.braceCombatBonus : 0);
 }
 
 function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
@@ -340,7 +365,7 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
 
   for (const cardInstance of hand) {
     const card = getCardDefinition(cardInstance.cardId);
-    if (!card || card.kind !== "tactic" || !canAfford(state, botPlayerId, card.cost)) {
+    if (!card || card.kind !== "tactic" || !canAffordCardCost(state, botPlayerId, card.cost)) {
       continue;
     }
 
@@ -398,7 +423,7 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
         continue;
       }
 
-      const score = effect.resolution.amount >= enemyBase.hp ? 300 : state.phase === "tactical" ? 18 : -Infinity;
+      const score = effect.resolution.amount >= enemyBase.hp ? AI_WEIGHTS.basePingLethalScore : state.phase === "tactical" ? AI_WEIGHTS.basePingTacticalScore : -Infinity;
       if (score === -Infinity) {
         continue;
       }
@@ -431,7 +456,7 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
     return null;
   }
 
-  const threshold = state.phase === "main" ? 90 : 55;
+  const threshold = state.phase === "main" ? AI_WEIGHTS.tacticMainThreshold : AI_WEIGHTS.tacticTacticalThreshold;
   return best.score >= threshold ? best.command : null;
 }
 
@@ -456,7 +481,7 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
   const candidates = hand
     .map((cardInstance) => {
       const card = getCardDefinition(cardInstance.cardId);
-      if (!card || card.kind !== "unit" || !canAfford(state, botPlayerId, card.cost) || !deployOpen) {
+      if (!card || card.kind !== "unit" || !canAffordCardCost(state, botPlayerId, card.cost) || !deployOpen) {
         return null;
       }
 
@@ -495,17 +520,17 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
     .filter((entry) => entry.card.unit.role === "combat")
     .sort((a, b) => {
       const scoreA =
-        (a.isFactionCard ? 12 : a.isNeutralCard ? 4 : -8) +
-        a.card.unit.attackDamage * 4 +
-        a.card.unit.hp * 2 +
-        a.card.unit.armor * 5 -
-        a.totalCost * 3;
+        (a.isFactionCard ? AI_WEIGHTS.emergencyFactionBonus : a.isNeutralCard ? AI_WEIGHTS.emergencyNeutralBonus : AI_WEIGHTS.emergencyOffFactionPenalty) +
+        a.card.unit.attackDamage * AI_WEIGHTS.emergencyAttackMult +
+        a.card.unit.hp * AI_WEIGHTS.emergencyHpMult +
+        a.card.unit.armor * AI_WEIGHTS.emergencyArmorMult -
+        a.totalCost * AI_WEIGHTS.emergencyCostMult;
       const scoreB =
-        (b.isFactionCard ? 12 : b.isNeutralCard ? 4 : -8) +
-        b.card.unit.attackDamage * 4 +
-        b.card.unit.hp * 2 +
-        b.card.unit.armor * 5 -
-        b.totalCost * 3;
+        (b.isFactionCard ? AI_WEIGHTS.emergencyFactionBonus : b.isNeutralCard ? AI_WEIGHTS.emergencyNeutralBonus : AI_WEIGHTS.emergencyOffFactionPenalty) +
+        b.card.unit.attackDamage * AI_WEIGHTS.emergencyAttackMult +
+        b.card.unit.hp * AI_WEIGHTS.emergencyHpMult +
+        b.card.unit.armor * AI_WEIGHTS.emergencyArmorMult -
+        b.totalCost * AI_WEIGHTS.emergencyCostMult;
       return scoreB - scoreA || a.cardInstanceId.localeCompare(b.cardInstanceId);
     });
 
@@ -522,37 +547,37 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
       let score = 0;
 
       if (entry.card.unit.role === "combat") {
-        score += 34 + entry.card.unit.attackDamage * 5 + entry.card.unit.hp * 1.5 + entry.card.unit.armor * 6 + entry.card.unit.moveRange;
+        score += AI_WEIGHTS.combatBase + entry.card.unit.attackDamage * AI_WEIGHTS.combatAttackMult + entry.card.unit.hp * AI_WEIGHTS.combatHpMult + entry.card.unit.armor * AI_WEIGHTS.combatArmorMult + entry.card.unit.moveRange;
         if (boardCounts.combat === 1) {
-          score += 10;
+          score += AI_WEIGHTS.combatSecondUnitBonus;
         }
         if (entry.isFactionCard) {
-          score += 10;
+          score += AI_WEIGHTS.combatFactionBonus;
         } else if (!entry.isNeutralCard) {
-          score -= 8;
+          score += AI_WEIGHTS.combatOffFactionPenalty;
         }
       } else if (entry.card.unit.role === "resource") {
-        score += boardCounts.resource === 0 ? 50 : 22;
+        score += boardCounts.resource === 0 ? AI_WEIGHTS.resourceFirstDeploy : AI_WEIGHTS.resourceAdditional;
         if (hasMissingResourceForHand && boardCounts.resource < desiredResourceUnits) {
-          score += 12;
+          score += AI_WEIGHTS.resourceMissingBonus;
         }
         if (boardCounts.resource >= desiredResourceUnits) {
-          score -= 28 + (boardCounts.resource - desiredResourceUnits) * 10;
+          score += AI_WEIGHTS.resourceExcessBase - (boardCounts.resource - desiredResourceUnits) * AI_WEIGHTS.resourceExcessPerUnit;
         }
         if (enemyCombatCount > boardCounts.combat) {
-          score -= 18;
+          score += AI_WEIGHTS.resourceOutnumberedPenalty;
         }
         if (!entry.isNeutralCard && !entry.isFactionCard) {
-          score -= 16;
+          score += AI_WEIGHTS.resourceOffFactionPenalty;
         }
       } else {
-        score += boardCounts.utility === 0 ? 16 : 8;
+        score += boardCounts.utility === 0 ? AI_WEIGHTS.utilityFirstDeploy : AI_WEIGHTS.utilityAdditional;
         if (enemyCombatCount > boardCounts.combat) {
-          score -= 10;
+          score += AI_WEIGHTS.utilityOutnumberedPenalty;
         }
       }
 
-      score -= entry.totalCost * 4;
+      score -= entry.totalCost * AI_WEIGHTS.deployCostMult;
 
       return {
         cardInstanceId: entry.cardInstanceId,
@@ -582,8 +607,8 @@ function chooseAttackCommand(state: GameState, botPlayerId: PlayerId, unit: Unit
     .filter((target) => hexDistance(unit.coord, target.coord) <= unit.attackRange)
     .map((target) => {
       const preview = resolveCombatAttack(state, unit, target);
-      const killScore = preview.targetDestroyed ? 100 : 0;
-      const baseScore = target.kind === "base" ? 50 : 0;
+      const killScore = preview.targetDestroyed ? AI_WEIGHTS.attackKillScore : 0;
+      const baseScore = target.kind === "base" ? AI_WEIGHTS.attackBaseScore : 0;
       return {
         target,
         preview,
@@ -680,7 +705,7 @@ function chooseObjectiveCoord(state: GameState, botPlayerId: PlayerId, unit: Uni
   if (unit.role === "combat") {
     if (botBase && botBase.kind === "base") {
       const nearbyEnemies = getEnemyEntities(state, botPlayerId)
-        .filter((entity) => entity.kind === "unit" && hexDistance(entity.coord, botBase.coord) <= 3)
+        .filter((entity) => entity.kind === "unit" && hexDistance(entity.coord, botBase.coord) <= AI_WEIGHTS.nearbyEnemyRadius)
         .map((entity) => entity.coord);
       if (nearbyEnemies.length > 0) {
         return getClosestCoord(unit.coord, nearbyEnemies);
@@ -710,7 +735,7 @@ function chooseMoveCommand(state: GameState, botPlayerId: PlayerId, unit: UnitEn
 
   const candidateSteps = HEX_DIRECTIONS.map((dir) => ({ q: unit.coord.q + dir.q, r: unit.coord.r + dir.r }))
     .filter((coord) => isWithinMapBounds(coord, state.map))
-    .filter((coord) => !isCoordOccupied(state, coord))
+    .filter((coord) => !hasEntityAtCoord(state, coord))
     .map((coord) => ({
       coord,
       distance: hexDistance(coord, objective),

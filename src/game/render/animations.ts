@@ -72,6 +72,151 @@ function getStackAnimationVisual(effectId: string, sourceCardId: string | null):
   return "generic";
 }
 
+function buildStackResolutionAnimation(
+  event: Extract<GameEvent, { type: "STACK_ITEM_RESOLVED" }>,
+  before: AnimationCapture,
+  state: GameState,
+  baseId: string
+): CanvasAnimation | null {
+  const definition = getStackEffectDefinition(event.effectId);
+
+  if (definition?.resolution.type === "counter") {
+    const sourceBase = state.entities[state.players[event.controllerId].baseEntityId];
+    const targetItem = event.targetStackItemId ? before.stackItems[event.targetStackItemId] : undefined;
+    if (!sourceBase || sourceBase.kind !== "base" || !targetItem) {
+      return null;
+    }
+
+    return {
+      id: baseId,
+      kind: "stack_counter",
+      playerId: event.controllerId,
+      ageSeconds: 0,
+      durationSeconds: 0.88,
+      from: sourceBase.coord,
+      label: event.label,
+      targetLabel: targetItem.label,
+      targetVisual: getStackAnimationVisual(targetItem.effectId, targetItem.sourceCardId),
+      returnToHand: definition.resolution.destination === "hand",
+    };
+  }
+
+  if (definition?.resolution.type === "deploy_unit") {
+    if (!event.pendingUnitEntityId) {
+      return null;
+    }
+
+    const resolvedUnit = state.entities[event.pendingUnitEntityId];
+    if (!resolvedUnit || resolvedUnit.kind !== "unit") {
+      return null;
+    }
+
+    return {
+      id: baseId,
+      kind: "deploy",
+      playerId: resolvedUnit.ownerId,
+      ageSeconds: 0,
+      durationSeconds: 0.66,
+      coord: resolvedUnit.coord,
+    };
+  }
+
+  if (definition?.resolution.type === "damage_entity") {
+    const targetId = event.targetEntityId;
+    if (!targetId) {
+      return null;
+    }
+    const target = before.entities[targetId] ?? state.entities[targetId];
+    if (!target) {
+      return null;
+    }
+
+    return {
+      id: baseId,
+      kind: "spell_resolve",
+      playerId: event.controllerId,
+      ageSeconds: 0,
+      durationSeconds: 0.78,
+      coord: target.coord,
+      visual: target.kind === "base" ? "base_damage" : "damage",
+      amount: definition.resolution.amount,
+      label: event.label,
+    };
+  }
+
+  if (definition?.resolution.type === "destroy_entity") {
+    const targetId = event.targetEntityId;
+    if (!targetId) {
+      return null;
+    }
+    const target = before.entities[targetId] ?? state.entities[targetId];
+    if (!target) {
+      return null;
+    }
+
+    return {
+      id: baseId,
+      kind: "spell_resolve",
+      playerId: event.controllerId,
+      ageSeconds: 0,
+      durationSeconds: 0.84,
+      coord: target.coord,
+      visual: "destroy",
+      label: event.label,
+    };
+  }
+
+  if (definition?.resolution.type === "modify_unit_until_end_of_turn") {
+    const targetId = event.targetEntityId;
+    if (!targetId) {
+      return null;
+    }
+    const target = before.entities[targetId] ?? state.entities[targetId];
+    if (!target) {
+      return null;
+    }
+
+    const buffLabelParts: string[] = [];
+    if (definition.resolution.attackBonus !== 0) {
+      buffLabelParts.push(`${definition.resolution.attackBonus > 0 ? "+" : ""}${definition.resolution.attackBonus} ATK`);
+    }
+    if (definition.resolution.armorBonus !== 0) {
+      buffLabelParts.push(`${definition.resolution.armorBonus > 0 ? "+" : ""}${definition.resolution.armorBonus} ARM`);
+    }
+
+    return {
+      id: baseId,
+      kind: "spell_resolve",
+      playerId: event.controllerId,
+      ageSeconds: 0,
+      durationSeconds: 0.86,
+      coord: target.coord,
+      visual: "buff",
+      label: buffLabelParts.join(" · ") || event.label,
+    };
+  }
+
+  if (definition?.resolution.type === "damage_enemy_base") {
+    const targetPlayerId = event.controllerId === "player_1" ? "player_2" : "player_1";
+    const targetBase = state.entities[state.players[targetPlayerId].baseEntityId];
+    if (!targetBase || targetBase.kind !== "base") {
+      return null;
+    }
+
+    return {
+      id: baseId,
+      kind: "base_hit",
+      playerId: targetPlayerId,
+      ageSeconds: 0,
+      durationSeconds: 0.7,
+      coord: targetBase.coord,
+      damage: definition.resolution.amount,
+    };
+  }
+
+  return null;
+}
+
 export function buildAnimationsFromEvents(events: GameEvent[], before: AnimationCapture, state: GameState): CanvasAnimation[] {
   const animations: CanvasAnimation[] = [];
 
@@ -174,147 +319,10 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
         });
         break;
       case "STACK_ITEM_RESOLVED": {
-        const definition = getStackEffectDefinition(event.effectId);
-        if (definition?.resolution.type === "counter") {
-          const sourceBase = state.entities[state.players[event.controllerId].baseEntityId];
-          const targetItem = event.targetStackItemId ? before.stackItems[event.targetStackItemId] : undefined;
-          if (!sourceBase || sourceBase.kind !== "base" || !targetItem) {
-            break;
-          }
-
-          animations.push({
-            id: baseId,
-            kind: "stack_counter",
-            playerId: event.controllerId,
-            ageSeconds: 0,
-            durationSeconds: 0.88,
-            from: sourceBase.coord,
-            label: event.label,
-            targetLabel: targetItem.label,
-            targetVisual: getStackAnimationVisual(targetItem.effectId, targetItem.sourceCardId),
-            returnToHand: definition.resolution.destination === "hand",
-          });
-          break;
+        const animation = buildStackResolutionAnimation(event, before, state, baseId);
+        if (animation) {
+          animations.push(animation);
         }
-
-        if (definition?.resolution.type === "deploy_unit") {
-          if (!event.pendingUnitEntityId) {
-            break;
-          }
-
-          const resolvedUnit = state.entities[event.pendingUnitEntityId];
-          if (!resolvedUnit || resolvedUnit.kind !== "unit") {
-            break;
-          }
-
-          animations.push({
-            id: baseId,
-            kind: "deploy",
-            playerId: resolvedUnit.ownerId,
-            ageSeconds: 0,
-            durationSeconds: 0.66,
-            coord: resolvedUnit.coord,
-          });
-          break;
-        }
-
-        if (definition?.resolution.type !== "damage_enemy_base") {
-          if (definition?.resolution.type === "damage_entity") {
-            const targetId = event.targetEntityId;
-            if (!targetId) {
-              break;
-            }
-            const target = before.entities[targetId] ?? state.entities[targetId];
-            if (!target) {
-              break;
-            }
-
-            animations.push({
-              id: baseId,
-              kind: "spell_resolve",
-              playerId: event.controllerId,
-              ageSeconds: 0,
-              durationSeconds: 0.78,
-              coord: target.coord,
-              visual: target.kind === "base" ? "base_damage" : "damage",
-              amount: definition.resolution.amount,
-              label: event.label,
-            });
-            break;
-          }
-
-          if (definition?.resolution.type === "destroy_entity") {
-            const targetId = event.targetEntityId;
-            if (!targetId) {
-              break;
-            }
-            const target = before.entities[targetId] ?? state.entities[targetId];
-            if (!target) {
-              break;
-            }
-
-            animations.push({
-              id: baseId,
-              kind: "spell_resolve",
-              playerId: event.controllerId,
-              ageSeconds: 0,
-              durationSeconds: 0.84,
-              coord: target.coord,
-              visual: "destroy",
-              label: event.label,
-            });
-            break;
-          }
-
-          if (definition?.resolution.type === "modify_unit_until_end_of_turn") {
-            const targetId = event.targetEntityId;
-            if (!targetId) {
-              break;
-            }
-            const target = before.entities[targetId] ?? state.entities[targetId];
-            if (!target) {
-              break;
-            }
-
-            const buffLabelParts: string[] = [];
-            if (definition.resolution.attackBonus !== 0) {
-              buffLabelParts.push(`${definition.resolution.attackBonus > 0 ? "+" : ""}${definition.resolution.attackBonus} ATK`);
-            }
-            if (definition.resolution.armorBonus !== 0) {
-              buffLabelParts.push(`${definition.resolution.armorBonus > 0 ? "+" : ""}${definition.resolution.armorBonus} ARM`);
-            }
-
-            animations.push({
-              id: baseId,
-              kind: "spell_resolve",
-              playerId: event.controllerId,
-              ageSeconds: 0,
-              durationSeconds: 0.86,
-              coord: target.coord,
-              visual: "buff",
-              label: buffLabelParts.join(" · ") || event.label,
-            });
-            break;
-          }
-
-          break;
-        }
-
-        const targetPlayerId = event.controllerId === "player_1" ? "player_2" : "player_1";
-        const targetBase = state.entities[state.players[targetPlayerId].baseEntityId];
-        if (!targetBase || targetBase.kind !== "base") {
-          break;
-        }
-
-        animations.push({
-          id: baseId,
-          kind: "base_hit",
-          playerId: targetPlayerId,
-          ageSeconds: 0,
-          durationSeconds: 0.7,
-          coord: targetBase.coord,
-          damage: definition.resolution.amount,
-        });
         break;
       }
       default:
