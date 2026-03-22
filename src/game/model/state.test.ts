@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { getStarterDeckCardIds } from "../content/decks/starterDecks";
-import { OPENING_HAND_SIZE, createInitialZonesForPlayer } from "./state";
+import {
+  OPENING_HAND_SIZE,
+  PLAYER_ONE_STARTING_CREDITS,
+  PLAYER_TWO_STARTING_CREDITS,
+  STARTING_PRIMARY_RESOURCE,
+  createInitialGameState,
+  createInitialZonesForPlayer,
+} from "./state";
 
 function createSeededRandom(seed: number): () => number {
   let state = seed >>> 0;
@@ -28,5 +36,24 @@ describe("createInitialZonesForPlayer", () => {
 
     expect(shuffledOrderA).toEqual(shuffledOrderB);
     expect(shuffledOrderA).not.toEqual(getStarterDeckCardIds("alloy_clan"));
+  });
+});
+
+describe("createInitialGameState", () => {
+  it("uses the tuned asymmetric starting resources", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+
+    expect(state.players.player_1.resources).toEqual({
+      credits: PLAYER_ONE_STARTING_CREDITS,
+      alloy: STARTING_PRIMARY_RESOURCE,
+      flux: 0,
+      biomass: 0,
+    });
+    expect(state.players.player_2.resources).toEqual({
+      credits: PLAYER_TWO_STARTING_CREDITS,
+      alloy: 0,
+      flux: STARTING_PRIMARY_RESOURCE,
+      biomass: 0,
+    });
   });
 });

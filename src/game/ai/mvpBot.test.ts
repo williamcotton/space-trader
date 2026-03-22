@@ -432,6 +432,7 @@ describe("decideMvpBotCommand", () => {
     state.zones.player_1.discard = [];
     state.zones.player_1.exile = [];
     moveCardFromDeckToHand(state, "player_1", "alloy_guard_card");
+    state.players.player_1.resources.credits = 3;
 
     const scout = state.entities.unit_player_1_scout;
     const harvester = state.entities.unit_player_1_harvester;

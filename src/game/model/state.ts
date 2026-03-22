@@ -6,6 +6,9 @@ import type { ContinuousEffect } from "../systems/continuousEffects";
 export const OPENING_HAND_SIZE = 5;
 export const MAX_HAND_SIZE = 7;
 export const BASE_STARTING_HP = 20;
+export const PLAYER_ONE_STARTING_CREDITS = 2;
+export const PLAYER_TWO_STARTING_CREDITS = 5;
+export const STARTING_PRIMARY_RESOURCE = 2;
 
 export type HexCoord = {
   q: number;
@@ -152,12 +155,12 @@ function shuffleCards<T>(cards: T[], randomSource: () => number): T[] {
   return shuffled;
 }
 
-function createStartingResources(faction: Faction): ResourcePool {
+function createStartingResources(playerId: PlayerId, faction: Faction): ResourcePool {
   return {
-    credits: 4,
-    alloy: faction === "alloy_clan" ? 2 : 0,
-    flux: faction === "flux_collective" ? 2 : 0,
-    biomass: faction === "biomass_swarm" ? 2 : 0,
+    credits: playerId === PLAYER_ONE ? PLAYER_ONE_STARTING_CREDITS : PLAYER_TWO_STARTING_CREDITS,
+    alloy: faction === "alloy_clan" ? STARTING_PRIMARY_RESOURCE : 0,
+    flux: faction === "flux_collective" ? STARTING_PRIMARY_RESOURCE : 0,
+    biomass: faction === "biomass_swarm" ? STARTING_PRIMARY_RESOURCE : 0,
   };
 }
 
@@ -367,7 +370,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
         id: PLAYER_ONE,
         name: "Player 1",
         faction: "alloy_clan",
-        resources: createStartingResources("alloy_clan"),
+        resources: createStartingResources(PLAYER_ONE, "alloy_clan"),
         handSize: zones.player_1.hand.length,
         deckSize: zones.player_1.deck.length,
         baseEntityId: baseOneId,
@@ -376,7 +379,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
         id: PLAYER_TWO,
         name: "Player 2",
         faction: "flux_collective",
-        resources: createStartingResources("flux_collective"),
+        resources: createStartingResources(PLAYER_TWO, "flux_collective"),
         handSize: zones.player_2.hand.length,
         deckSize: zones.player_2.deck.length,
         baseEntityId: baseTwoId,
