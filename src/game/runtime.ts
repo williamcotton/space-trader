@@ -220,6 +220,74 @@ function migrateRuntimeState(state: GameState): void {
   }
 }
 
+function findEntityAtHex(state: GameState, coord: { q: number; r: number }): GameState["entities"][string] | undefined {
+  return Object.values(state.entities).find((entity) => areSameHex(entity.coord, coord));
+}
+
+function getSelectedActiveUnit(state: GameState) {
+  if (!state.selectedEntityId) {
+    return null;
+  }
+
+  const entity = state.entities[state.selectedEntityId];
+  if (!entity || entity.kind !== "unit" || entity.ownerId !== state.activePlayerId) {
+    return null;
+  }
+
+  return entity;
+}
+
+export function getBoardClickCommand(state: GameState, clickedHex: { q: number; r: number } | null): GameCommand | null {
+  if (!clickedHex) {
+    if (!state.selectedEntityId) {
+      return null;
+    }
+
+    return {
+      type: "CLEAR_SELECTION",
+      playerId: state.activePlayerId,
+      reason: "clicked_outside_map",
+    };
+  }
+
+  const clickedEntity = findEntityAtHex(state, clickedHex);
+  if (clickedEntity?.kind === "unit" && clickedEntity.ownerId === state.activePlayerId) {
+    if (state.selectedEntityId === clickedEntity.id) {
+      return {
+        type: "CLEAR_SELECTION",
+        playerId: state.activePlayerId,
+        reason: "clicked_selected_unit",
+      };
+    }
+
+    return {
+      type: "SELECT_ENTITY",
+      playerId: state.activePlayerId,
+      entityId: clickedEntity.id,
+    };
+  }
+
+  const selectedUnit = getSelectedActiveUnit(state);
+  if (selectedUnit && !clickedEntity && state.phase === "tactical") {
+    return {
+      type: "MOVE_UNIT",
+      playerId: state.activePlayerId,
+      entityId: selectedUnit.id,
+      to: clickedHex,
+    };
+  }
+
+  if (!state.selectedEntityId) {
+    return null;
+  }
+
+  return {
+    type: "CLEAR_SELECTION",
+    playerId: state.activePlayerId,
+    reason: "clicked_empty_or_enemy_tile",
+  };
+}
+
 class GameRuntime {
   private viewport: GameViewport = { ...INITIAL_VIEWPORT };
   private updateSystem: UpdateSystem = updateGame;
@@ -296,10 +364,6 @@ class GameRuntime {
     return next;
   }
 
-  private findEntityAtHex(coord: { q: number; r: number }): GameState["entities"][string] | undefined {
-    return Object.values(this.state.entities).find((entity) => areSameHex(entity.coord, coord));
-  }
-
   private findResourceNodeAtHex(coord: { q: number; r: number }): GameState["map"]["resourceNodes"][number] | undefined {
     return this.state.map.resourceNodes.find((node) => areSameHex(node.coord, coord));
   }
@@ -324,44 +388,11 @@ class GameRuntime {
   selectUnitFromScreenPoint(pixelX: number, pixelY: number): void {
     const hoveredHex = this.getHexAtScreenPoint(pixelX, pixelY);
     this.state.hoveredHex = hoveredHex;
-
-    if (!hoveredHex) {
-      if (this.state.selectedEntityId) {
-        void this.dispatch({
-          type: "CLEAR_SELECTION",
-          playerId: this.state.activePlayerId,
-          reason: "clicked_outside_map",
-        });
-      }
+    const command = getBoardClickCommand(this.state, hoveredHex);
+    if (!command) {
       return;
     }
-
-    const entity = this.findEntityAtHex(hoveredHex);
-    if (!entity || entity.kind !== "unit" || entity.ownerId !== this.state.activePlayerId) {
-      if (this.state.selectedEntityId) {
-        void this.dispatch({
-          type: "CLEAR_SELECTION",
-          playerId: this.state.activePlayerId,
-          reason: "clicked_empty_or_enemy_tile",
-        });
-      }
-      return;
-    }
-
-    if (this.state.selectedEntityId === entity.id) {
-      void this.dispatch({
-        type: "CLEAR_SELECTION",
-        playerId: this.state.activePlayerId,
-        reason: "clicked_selected_unit",
-      });
-      return;
-    }
-
-    void this.dispatch({
-      type: "SELECT_ENTITY",
-      playerId: this.state.activePlayerId,
-      entityId: entity.id,
-    });
+    void this.dispatch(command);
   }
 
   debugAdvancePhase(): void {
