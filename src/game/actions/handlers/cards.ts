@@ -1,7 +1,7 @@
 import type { GameCommand } from "../commands";
 import type { GameEvent } from "../events";
 import { getCardDefinition, type AutoTargetStrategy, type CardCost, type UnitCardDefinition } from "../../content/cards/catalog";
-import { getStackEffectDefinition, type CounterDestination } from "../../content/stackEffects";
+import { getStackEffectDefinition, type CounterDestination, type StackResolutionRules } from "../../content/stackEffects";
 import { createStackItemId, getOpponentPlayer, popTopStackItem, removeStackItemById } from "../../turn/stack";
 import type { PlayerId } from "../../model/ids";
 import { MAX_HAND_SIZE, syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../../model/state";
@@ -241,7 +241,213 @@ function moveStackSourceCardToZone(state: GameState, stackItem: GameState["stack
   syncPlayerZoneCounts(state);
 }
 
-function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["stack"][number]): CounterDestination {
+type StackItem = GameState["stack"][number];
+type EffectResolver = (state: GameState, item: StackItem, resolution: StackResolutionRules) => CounterDestination;
+
+function resolveNoopLog(state: GameState, item: StackItem): CounterDestination {
+  state.log.push({
+    turn: state.turn,
+    text: `Resolved stack item ${item.label}: no-op.`,
+  });
+  return "discard";
+}
+
+function resolveDeployUnit(state: GameState, item: StackItem): CounterDestination {
+  const sourceCardId = item.sourceCardId;
+  const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
+  if (!sourceCard || sourceCard.kind !== "unit") {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${item.label}: missing unit card definition.`,
+    });
+    return "discard";
+  }
+
+  const spawnCoord = getFirstOpenBaseAdjacentTile(state, item.controllerId);
+  if (!spawnCoord) {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${item.label}: no open base-adjacent tile; card discarded.`,
+    });
+    return "discard";
+  }
+
+  const unitEntityId =
+    item.pendingUnitEntityId && !state.entities[item.pendingUnitEntityId]
+      ? item.pendingUnitEntityId
+      : createSummonedUnitId(state, item.controllerId, sourceCard.id);
+  deployUnitToBattlefield(state, item.controllerId, sourceCard.id, sourceCard.name, unitEntityId, spawnCoord);
+  return "none";
+}
+
+function resolveDamageEnemyBase(state: GameState, item: StackItem, resolution: StackResolutionRules): CounterDestination {
+  if (resolution.type !== "damage_enemy_base") {
+    return "discard";
+  }
+  const enemyPlayerId = getOpponentPlayer(item.controllerId);
+  const targetBase = getPlayerBase(state, enemyPlayerId);
+  if (!targetBase) {
+    return "discard";
+  }
+
+  const damage = resolution.amount;
+  const beforeHp = targetBase.hp;
+  targetBase.hp = Math.max(0, targetBase.hp - damage);
+  state.log.push({
+    turn: state.turn,
+    text: `Resolved ${item.label}: dealt ${damage} to ${enemyPlayerId} base (${beforeHp} -> ${targetBase.hp}).`,
+  });
+  return "discard";
+}
+
+function resolveDamageEntity(state: GameState, item: StackItem, resolution: StackResolutionRules): CounterDestination {
+  if (resolution.type !== "damage_entity") {
+    return "discard";
+  }
+  const targetId = item.targetEntityId;
+  if (!targetId) {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${item.label}: no battlefield target configured.`,
+    });
+    return "discard";
+  }
+
+  const target = state.entities[targetId];
+  if (!target) {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${item.label}: target entity not found.`,
+    });
+    return "discard";
+  }
+
+  const damage = resolution.amount;
+  const beforeHp = target.hp;
+  target.hp = Math.max(0, target.hp - damage);
+  state.log.push({
+    turn: state.turn,
+    text: `Resolved ${item.label}: dealt ${damage} to ${targetId} (${beforeHp} -> ${target.hp}).`,
+  });
+
+  if (target.kind === "unit" && target.hp === 0) {
+    destroyUnit(state, target.id, `${target.id} was destroyed.`);
+  }
+
+  return "discard";
+}
+
+function resolveDestroyEntity(state: GameState, item: StackItem, resolution: StackResolutionRules): CounterDestination {
+  if (resolution.type !== "destroy_entity") {
+    return "discard";
+  }
+  const targetId = item.targetEntityId;
+  if (!targetId) {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${item.label}: no battlefield target configured.`,
+    });
+    return "discard";
+  }
+
+  const target = state.entities[targetId];
+  if (!target || target.kind !== "unit") {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${item.label}: target unit not found.`,
+    });
+    return "discard";
+  }
+
+  if (resolution.requireDamaged && target.hp >= target.maxHp) {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${item.label}: target ${targetId} was no longer damaged.`,
+    });
+    return "discard";
+  }
+
+  destroyUnit(state, target.id, `${item.label} destroyed ${target.id}.`);
+  return "discard";
+}
+
+function resolveModifyUnitUntilEndOfTurn(state: GameState, item: StackItem, resolution: StackResolutionRules): CounterDestination {
+  if (resolution.type !== "modify_unit_until_end_of_turn") {
+    return "discard";
+  }
+  const targetId = item.targetEntityId;
+  if (!targetId) {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${item.label}: no battlefield target configured.`,
+    });
+    return "discard";
+  }
+
+  const target = state.entities[targetId];
+  if (!target || target.kind !== "unit") {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${item.label}: target unit not found.`,
+    });
+    return "discard";
+  }
+
+  target.temporaryAttackBonus += resolution.attackBonus;
+  target.temporaryArmorBonus += resolution.armorBonus;
+  state.log.push({
+    turn: state.turn,
+    text: `Resolved ${item.label}: ${targetId} gains +${resolution.attackBonus} ATK and +${resolution.armorBonus} ARM until end of turn.`,
+  });
+  return "discard";
+}
+
+function resolveCounter(state: GameState, item: StackItem, resolution: StackResolutionRules): CounterDestination {
+  if (resolution.type !== "counter") {
+    return "discard";
+  }
+  const targetId = item.targetStackItemId;
+  if (!targetId) {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${item.label}: no stack target configured.`,
+    });
+    return "discard";
+  }
+
+  const countered = removeStackItemById(state.stack, targetId);
+  if (!countered) {
+    state.log.push({
+      turn: state.turn,
+      text: `Resolved ${item.label}: target stack item not found.`,
+    });
+    return "discard";
+  }
+
+  const destination =
+    resolution.destination === "none"
+      ? countered.defaultCounterDestination
+      : resolution.destination;
+
+  moveStackSourceCardToZone(state, countered, destination);
+  state.log.push({
+    turn: state.turn,
+    text: `Resolved ${item.label}: countered ${countered.label} -> ${destination}.`,
+  });
+  return "discard";
+}
+
+const EFFECT_RESOLVERS: Record<string, EffectResolver> = {
+  noop_log: resolveNoopLog,
+  deploy_unit: resolveDeployUnit,
+  damage_enemy_base: resolveDamageEnemyBase,
+  damage_entity: resolveDamageEntity,
+  destroy_entity: resolveDestroyEntity,
+  modify_unit_until_end_of_turn: resolveModifyUnitUntilEndOfTurn,
+  counter: resolveCounter,
+};
+
+function applyResolvedStackEffect(state: GameState, resolvedItem: StackItem): CounterDestination {
   const definition = getStackEffectDefinition(resolvedItem.effectId);
   if (!definition) {
     state.log.push({
@@ -251,180 +457,8 @@ function applyResolvedStackEffect(state: GameState, resolvedItem: GameState["sta
     return "discard";
   }
 
-  switch (definition.resolution.type) {
-    case "noop_log":
-      state.log.push({
-        turn: state.turn,
-        text: `Resolved stack item ${resolvedItem.label}: no-op.`,
-      });
-      return "discard";
-    case "deploy_unit": {
-      const sourceCardId = resolvedItem.sourceCardId;
-      const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
-      if (!sourceCard || sourceCard.kind !== "unit") {
-        state.log.push({
-          turn: state.turn,
-          text: `Resolved ${resolvedItem.label}: missing unit card definition.`,
-        });
-        return "discard";
-      }
-
-      const spawnCoord = getFirstOpenBaseAdjacentTile(state, resolvedItem.controllerId);
-      if (!spawnCoord) {
-        state.log.push({
-          turn: state.turn,
-          text: `Resolved ${resolvedItem.label}: no open base-adjacent tile; card discarded.`,
-        });
-        return "discard";
-      }
-
-      const unitEntityId =
-        resolvedItem.pendingUnitEntityId && !state.entities[resolvedItem.pendingUnitEntityId]
-          ? resolvedItem.pendingUnitEntityId
-          : createSummonedUnitId(state, resolvedItem.controllerId, sourceCard.id);
-      deployUnitToBattlefield(state, resolvedItem.controllerId, sourceCard.id, sourceCard.name, unitEntityId, spawnCoord);
-      return "none";
-    }
-    case "damage_enemy_base": {
-      const enemyPlayerId = getOpponentPlayer(resolvedItem.controllerId);
-      const targetBase = getPlayerBase(state, enemyPlayerId);
-      if (!targetBase) {
-        return "discard";
-      }
-
-      const damage = definition.resolution.amount;
-      const beforeHp = targetBase.hp;
-      targetBase.hp = Math.max(0, targetBase.hp - damage);
-      state.log.push({
-        turn: state.turn,
-        text: `Resolved ${resolvedItem.label}: dealt ${damage} to ${enemyPlayerId} base (${beforeHp} -> ${targetBase.hp}).`,
-      });
-      return "discard";
-    }
-    case "damage_entity": {
-      const targetId = resolvedItem.targetEntityId;
-      if (!targetId) {
-        state.log.push({
-          turn: state.turn,
-          text: `Resolved ${resolvedItem.label}: no battlefield target configured.`,
-        });
-        return "discard";
-      }
-
-      const target = state.entities[targetId];
-      if (!target) {
-        state.log.push({
-          turn: state.turn,
-          text: `Resolved ${resolvedItem.label}: target entity not found.`,
-        });
-        return "discard";
-      }
-
-      const damage = definition.resolution.amount;
-      const beforeHp = target.hp;
-      target.hp = Math.max(0, target.hp - damage);
-      state.log.push({
-        turn: state.turn,
-        text: `Resolved ${resolvedItem.label}: dealt ${damage} to ${targetId} (${beforeHp} -> ${target.hp}).`,
-      });
-
-      if (target.kind === "unit" && target.hp === 0) {
-        destroyUnit(state, target.id, `${target.id} was destroyed.`);
-      }
-
-      return "discard";
-    }
-    case "destroy_entity": {
-      const targetId = resolvedItem.targetEntityId;
-      if (!targetId) {
-        state.log.push({
-          turn: state.turn,
-          text: `Resolved ${resolvedItem.label}: no battlefield target configured.`,
-        });
-        return "discard";
-      }
-
-      const target = state.entities[targetId];
-      if (!target || target.kind !== "unit") {
-        state.log.push({
-          turn: state.turn,
-          text: `Resolved ${resolvedItem.label}: target unit not found.`,
-        });
-        return "discard";
-      }
-
-      if (definition.resolution.requireDamaged && target.hp >= target.maxHp) {
-        state.log.push({
-          turn: state.turn,
-          text: `Resolved ${resolvedItem.label}: target ${targetId} was no longer damaged.`,
-        });
-        return "discard";
-      }
-
-      destroyUnit(state, target.id, `${resolvedItem.label} destroyed ${target.id}.`);
-      return "discard";
-    }
-    case "modify_unit_until_end_of_turn": {
-      const targetId = resolvedItem.targetEntityId;
-      if (!targetId) {
-        state.log.push({
-          turn: state.turn,
-          text: `Resolved ${resolvedItem.label}: no battlefield target configured.`,
-        });
-        return "discard";
-      }
-
-      const target = state.entities[targetId];
-      if (!target || target.kind !== "unit") {
-        state.log.push({
-          turn: state.turn,
-          text: `Resolved ${resolvedItem.label}: target unit not found.`,
-        });
-        return "discard";
-      }
-
-      target.temporaryAttackBonus += definition.resolution.attackBonus;
-      target.temporaryArmorBonus += definition.resolution.armorBonus;
-      state.log.push({
-        turn: state.turn,
-        text: `Resolved ${resolvedItem.label}: ${targetId} gains +${definition.resolution.attackBonus} ATK and +${definition.resolution.armorBonus} ARM until end of turn.`,
-      });
-      return "discard";
-    }
-    case "counter": {
-      const targetId = resolvedItem.targetStackItemId;
-      if (!targetId) {
-        state.log.push({
-          turn: state.turn,
-          text: `Resolved ${resolvedItem.label}: no stack target configured.`,
-        });
-        return "discard";
-      }
-
-      const countered = removeStackItemById(state.stack, targetId);
-      if (!countered) {
-        state.log.push({
-          turn: state.turn,
-          text: `Resolved ${resolvedItem.label}: target stack item not found.`,
-        });
-        return "discard";
-      }
-
-      const destination =
-        definition.resolution.destination === "none"
-          ? countered.defaultCounterDestination
-          : definition.resolution.destination;
-
-      moveStackSourceCardToZone(state, countered, destination);
-      state.log.push({
-        turn: state.turn,
-        text: `Resolved ${resolvedItem.label}: countered ${countered.label} -> ${destination}.`,
-      });
-      return "discard";
-    }
-    default:
-      return "discard";
-  }
+  const resolver = EFFECT_RESOLVERS[definition.resolution.type];
+  return resolver ? resolver(state, resolvedItem, definition.resolution) : "discard";
 }
 
 export function handleRespondStack(

@@ -460,6 +460,97 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
   return best.score >= threshold ? best.command : null;
 }
 
+type DeployCandidate = {
+  cardInstanceId: string;
+  card: Extract<CardDefinition, { kind: "unit" }>;
+  totalCost: number;
+  isCoreCard: boolean;
+  isFactionCard: boolean;
+  isNeutralCard: boolean;
+};
+
+type DeployBoardContext = {
+  boardCounts: { combat: number; resource: number; utility: number };
+  enemyCombatCount: number;
+  hasMissingResourceForHand: boolean;
+  desiredResourceUnits: number;
+};
+
+function scoreEmergencyCombat(candidate: DeployCandidate): number {
+  const factionBonus = candidate.isFactionCard
+    ? AI_WEIGHTS.emergencyFactionBonus
+    : candidate.isNeutralCard
+      ? AI_WEIGHTS.emergencyNeutralBonus
+      : AI_WEIGHTS.emergencyOffFactionPenalty;
+  return (
+    factionBonus +
+    candidate.card.unit.attackDamage * AI_WEIGHTS.emergencyAttackMult +
+    candidate.card.unit.hp * AI_WEIGHTS.emergencyHpMult +
+    candidate.card.unit.armor * AI_WEIGHTS.emergencyArmorMult -
+    candidate.totalCost * AI_WEIGHTS.emergencyCostMult
+  );
+}
+
+function scoreCombatUnit(candidate: DeployCandidate, ctx: DeployBoardContext): number {
+  let score =
+    AI_WEIGHTS.combatBase +
+    candidate.card.unit.attackDamage * AI_WEIGHTS.combatAttackMult +
+    candidate.card.unit.hp * AI_WEIGHTS.combatHpMult +
+    candidate.card.unit.armor * AI_WEIGHTS.combatArmorMult +
+    candidate.card.unit.moveRange;
+  if (ctx.boardCounts.combat === 1) {
+    score += AI_WEIGHTS.combatSecondUnitBonus;
+  }
+  if (candidate.isFactionCard) {
+    score += AI_WEIGHTS.combatFactionBonus;
+  } else if (!candidate.isNeutralCard) {
+    score += AI_WEIGHTS.combatOffFactionPenalty;
+  }
+  return score;
+}
+
+function scoreResourceUnit(candidate: DeployCandidate, ctx: DeployBoardContext): number {
+  let score = ctx.boardCounts.resource === 0 ? AI_WEIGHTS.resourceFirstDeploy : AI_WEIGHTS.resourceAdditional;
+  if (ctx.hasMissingResourceForHand && ctx.boardCounts.resource < ctx.desiredResourceUnits) {
+    score += AI_WEIGHTS.resourceMissingBonus;
+  }
+  if (ctx.boardCounts.resource >= ctx.desiredResourceUnits) {
+    score += AI_WEIGHTS.resourceExcessBase - (ctx.boardCounts.resource - ctx.desiredResourceUnits) * AI_WEIGHTS.resourceExcessPerUnit;
+  }
+  if (ctx.enemyCombatCount > ctx.boardCounts.combat) {
+    score += AI_WEIGHTS.resourceOutnumberedPenalty;
+  }
+  if (!candidate.isNeutralCard && !candidate.isFactionCard) {
+    score += AI_WEIGHTS.resourceOffFactionPenalty;
+  }
+  return score;
+}
+
+function scoreUtilityUnit(_candidate: DeployCandidate, ctx: DeployBoardContext): number {
+  let score = ctx.boardCounts.utility === 0 ? AI_WEIGHTS.utilityFirstDeploy : AI_WEIGHTS.utilityAdditional;
+  if (ctx.enemyCombatCount > ctx.boardCounts.combat) {
+    score += AI_WEIGHTS.utilityOutnumberedPenalty;
+  }
+  return score;
+}
+
+function scoreDeployCandidate(candidate: DeployCandidate, ctx: DeployBoardContext): number {
+  let score: number;
+  switch (candidate.card.unit.role) {
+    case "combat":
+      score = scoreCombatUnit(candidate, ctx);
+      break;
+    case "resource":
+      score = scoreResourceUnit(candidate, ctx);
+      break;
+    default:
+      score = scoreUtilityUnit(candidate, ctx);
+      break;
+  }
+  score -= candidate.totalCost * AI_WEIGHTS.deployCostMult;
+  return score;
+}
+
 function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
   const deployOpen = getFirstOpenBaseAdjacentTile(state, botPlayerId);
   const hand = [...state.zones[botPlayerId].hand].sort((a, b) => a.instanceId.localeCompare(b.instanceId));
@@ -478,7 +569,7 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
   });
   const desiredResourceUnits = hasMissingResourceForHand ? 2 : 1;
 
-  const candidates = hand
+  const candidates: DeployCandidate[] = hand
     .map((cardInstance) => {
       const card = getCardDefinition(cardInstance.cardId);
       if (!card || card.kind !== "unit" || !canAffordCardCost(state, botPlayerId, card.cost) || !deployOpen) {
@@ -488,51 +579,27 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
       const totalCost = (card.cost.credits ?? 0) + (card.cost.alloy ?? 0) + (card.cost.flux ?? 0) + (card.cost.biomass ?? 0);
       const isFactionCard = card.faction === playerFaction;
       const isNeutralCard = card.faction === "neutral";
-      const isCoreCard = isFactionCard || isNeutralCard;
 
       return {
         cardInstanceId: cardInstance.instanceId,
         card,
         totalCost,
-        isCoreCard,
+        isCoreCard: isFactionCard || isNeutralCard,
         isFactionCard,
         isNeutralCard,
       };
     })
-    .filter(
-      (
-        entry
-      ): entry is {
-        cardInstanceId: string;
-        card: Extract<CardDefinition, { kind: "unit" }>;
-        totalCost: number;
-        isCoreCard: boolean;
-        isFactionCard: boolean;
-        isNeutralCard: boolean;
-      } => Boolean(entry)
-    );
+    .filter((entry): entry is DeployCandidate => Boolean(entry));
 
   const candidatePool = candidates.some((entry) => entry.isCoreCard)
     ? candidates.filter((entry) => entry.isCoreCard)
     : candidates;
 
+  const ctx: DeployBoardContext = { boardCounts, enemyCombatCount, hasMissingResourceForHand, desiredResourceUnits };
+
   const emergencyCombatCandidates = candidatePool
     .filter((entry) => entry.card.unit.role === "combat")
-    .sort((a, b) => {
-      const scoreA =
-        (a.isFactionCard ? AI_WEIGHTS.emergencyFactionBonus : a.isNeutralCard ? AI_WEIGHTS.emergencyNeutralBonus : AI_WEIGHTS.emergencyOffFactionPenalty) +
-        a.card.unit.attackDamage * AI_WEIGHTS.emergencyAttackMult +
-        a.card.unit.hp * AI_WEIGHTS.emergencyHpMult +
-        a.card.unit.armor * AI_WEIGHTS.emergencyArmorMult -
-        a.totalCost * AI_WEIGHTS.emergencyCostMult;
-      const scoreB =
-        (b.isFactionCard ? AI_WEIGHTS.emergencyFactionBonus : b.isNeutralCard ? AI_WEIGHTS.emergencyNeutralBonus : AI_WEIGHTS.emergencyOffFactionPenalty) +
-        b.card.unit.attackDamage * AI_WEIGHTS.emergencyAttackMult +
-        b.card.unit.hp * AI_WEIGHTS.emergencyHpMult +
-        b.card.unit.armor * AI_WEIGHTS.emergencyArmorMult -
-        b.totalCost * AI_WEIGHTS.emergencyCostMult;
-      return scoreB - scoreA || a.cardInstanceId.localeCompare(b.cardInstanceId);
-    });
+    .sort((a, b) => scoreEmergencyCombat(b) - scoreEmergencyCombat(a) || a.cardInstanceId.localeCompare(b.cardInstanceId));
 
   if ((boardCounts.combat === 0 || enemyCombatCount > boardCounts.combat) && emergencyCombatCandidates[0]) {
     return {
@@ -543,47 +610,10 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
   }
 
   const scored = candidatePool
-    .map((entry) => {
-      let score = 0;
-
-      if (entry.card.unit.role === "combat") {
-        score += AI_WEIGHTS.combatBase + entry.card.unit.attackDamage * AI_WEIGHTS.combatAttackMult + entry.card.unit.hp * AI_WEIGHTS.combatHpMult + entry.card.unit.armor * AI_WEIGHTS.combatArmorMult + entry.card.unit.moveRange;
-        if (boardCounts.combat === 1) {
-          score += AI_WEIGHTS.combatSecondUnitBonus;
-        }
-        if (entry.isFactionCard) {
-          score += AI_WEIGHTS.combatFactionBonus;
-        } else if (!entry.isNeutralCard) {
-          score += AI_WEIGHTS.combatOffFactionPenalty;
-        }
-      } else if (entry.card.unit.role === "resource") {
-        score += boardCounts.resource === 0 ? AI_WEIGHTS.resourceFirstDeploy : AI_WEIGHTS.resourceAdditional;
-        if (hasMissingResourceForHand && boardCounts.resource < desiredResourceUnits) {
-          score += AI_WEIGHTS.resourceMissingBonus;
-        }
-        if (boardCounts.resource >= desiredResourceUnits) {
-          score += AI_WEIGHTS.resourceExcessBase - (boardCounts.resource - desiredResourceUnits) * AI_WEIGHTS.resourceExcessPerUnit;
-        }
-        if (enemyCombatCount > boardCounts.combat) {
-          score += AI_WEIGHTS.resourceOutnumberedPenalty;
-        }
-        if (!entry.isNeutralCard && !entry.isFactionCard) {
-          score += AI_WEIGHTS.resourceOffFactionPenalty;
-        }
-      } else {
-        score += boardCounts.utility === 0 ? AI_WEIGHTS.utilityFirstDeploy : AI_WEIGHTS.utilityAdditional;
-        if (enemyCombatCount > boardCounts.combat) {
-          score += AI_WEIGHTS.utilityOutnumberedPenalty;
-        }
-      }
-
-      score -= entry.totalCost * AI_WEIGHTS.deployCostMult;
-
-      return {
-        cardInstanceId: entry.cardInstanceId,
-        score,
-      };
-    })
+    .map((entry) => ({
+      cardInstanceId: entry.cardInstanceId,
+      score: scoreDeployCandidate(entry, ctx),
+    }))
     .sort((a, b) => b.score - a.score || a.cardInstanceId.localeCompare(b.cardInstanceId));
 
   const best = scored[0];
