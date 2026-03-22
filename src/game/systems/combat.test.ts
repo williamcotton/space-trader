@@ -15,9 +15,9 @@ describe("resolveCombatAttack", () => {
       throw new Error("Expected initial units.");
     }
 
-    attacker.coord = { q: 4, r: 0 }; // distance 8 from player_1 base at (-4, 0) => supply penalty 1
+    attacker.coord = { q: 4, r: -2 }; // distance 8 from player_1 base at (-4, -2) => supply penalty 1
     attacker.attackDamage = 4;
-    target.coord = { q: 5, r: 0 };
+    target.coord = { q: 5, r: -2 };
     target.armor = 1;
     target.hp = 8;
 
@@ -43,9 +43,9 @@ describe("resolveCombatAttack", () => {
       throw new Error("Expected initial units.");
     }
 
-    attacker.coord = { q: 5, r: 0 }; // distance 9 => supply penalty 1
+    attacker.coord = { q: 5, r: -2 }; // distance 9 => supply penalty 1
     attacker.attackDamage = 1;
-    target.coord = { q: 4, r: 0 };
+    target.coord = { q: 4, r: -2 };
     target.armor = 4;
     target.hp = 2;
 
@@ -68,8 +68,8 @@ describe("resolveCombatAttack", () => {
       throw new Error("Expected unit attacker and base target.");
     }
 
-    attacker.coord = { q: 2, r: 0 };
-    target.coord = { q: 3, r: 0 };
+    attacker.coord = { q: -3, r: -2 };
+    target.coord = { q: -2, r: -2 };
 
     const result = resolveCombatAttack(state, attacker, target);
 

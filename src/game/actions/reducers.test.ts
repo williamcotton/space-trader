@@ -152,7 +152,7 @@ describe("dispatchCommand", () => {
       type: "MOVE_UNIT",
       playerId: "player_1",
       entityId: unitId,
-      to: { q: -4, r: 0 }, // friendly base tile (occupied and within movement range)
+      to: { q: -4, r: -2 }, // friendly base tile (occupied and within movement range)
     });
     expect(expectRejected(occupied)).toContain("occupied");
 
@@ -300,9 +300,9 @@ describe("dispatchCommand", () => {
     }
 
     attacker.attackDamage = 4;
-    attacker.coord = { q: 4, r: 0 }; // distance 8 from player_1 base => supply penalty 1
+    attacker.coord = { q: 4, r: -2 }; // distance 8 from player_1 base => supply penalty 1
     target.armor = 0;
-    target.coord = { q: 5, r: 0 };
+    target.coord = { q: 5, r: -2 };
     target.hp = 6;
 
     advanceToTactical(state);
@@ -344,7 +344,7 @@ describe("dispatchCommand", () => {
       throw new Error("Expected attacker, base, and blocker.");
     }
 
-    attacker.coord = { q: 3, r: 0 };
+    attacker.coord = { q: 3, r: 2 };
     blocker.coord = { q: 2, r: 0 };
     targetBase.hp = 1;
 
@@ -1261,7 +1261,7 @@ describe("dispatchCommand", () => {
     }
 
     harvester.carries = "alloy";
-    harvester.coord = { q: -3, r: 0 };
+    harvester.coord = { q: -3, r: -3 };
     const beforeAlloy = state.players.player_1.resources.alloy;
 
     const economyStep = dispatchCommand(state, {
@@ -1310,7 +1310,7 @@ describe("dispatchCommand", () => {
     }
 
     harvester.carries = "credits";
-    harvester.coord = { q: -3, r: 0 };
+    harvester.coord = { q: -3, r: -3 };
     const beforeCredits = state.players.player_1.resources.credits;
 
     const economyStep = dispatchCommand(state, {

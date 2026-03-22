@@ -302,7 +302,7 @@ describe("decideMvpBotCommand", () => {
       throw new Error("Expected resource-focused move command.");
     }
 
-    expect(command.to).toEqual({ q: 1, r: -3 });
+    expect(command.to).toEqual({ q: 0, r: -2 });
   });
 
   it("alloy bot prioritizes nearby ore over xenobog when alloy is the missing cost", () => {
@@ -342,7 +342,7 @@ describe("decideMvpBotCommand", () => {
       throw new Error("Expected alloy-focused move command.");
     }
 
-    expect(command.to).toEqual({ q: -3, r: 0 });
+    expect(command.to).toEqual({ q: -4, r: 0 });
   });
 
   it("alloy bot prioritizes credits before alloy when both are missing", () => {
@@ -368,7 +368,7 @@ describe("decideMvpBotCommand", () => {
       throw new Error("Expected player 1 harvester.");
     }
 
-    harvester.coord = { q: -2, r: 1 };
+    harvester.coord = { q: -2, r: 0 };
     harvester.movesRemaining = 2;
     harvester.hasSummoningSickness = false;
     state.selectedEntityId = harvester.id;
@@ -379,7 +379,7 @@ describe("decideMvpBotCommand", () => {
       throw new Error("Expected credits-focused move command.");
     }
 
-    expect(command.to).toEqual({ q: -2, r: 2 });
+    expect(command.to).toEqual({ q: -2, r: 1 });
   });
 
   it("alloy bot skips harvesting controlled biomass when core economy needs credits", () => {
@@ -418,7 +418,7 @@ describe("decideMvpBotCommand", () => {
       throw new Error("Expected bot to leave biomass node for credits.");
     }
 
-    expect(command.to).toEqual({ q: -2, r: 2 });
+    expect(command.to).toEqual({ q: -4, r: 1 });
   });
 
   it("holds a contested objective node instead of stepping off before end-phase capture", () => {
@@ -471,7 +471,7 @@ describe("decideMvpBotCommand", () => {
     scout.movesRemaining = 0;
     scout.attacksRemaining = 0;
     scout.hasSummoningSickness = true;
-    harvester.coord = { q: -3, r: 0 };
+    harvester.coord = { q: -3, r: -3 };
     harvester.movesRemaining = 1;
     harvester.hasSummoningSickness = false;
     harvester.carries = "alloy";
