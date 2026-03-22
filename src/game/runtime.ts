@@ -20,7 +20,7 @@ const INITIAL_VIEWPORT: GameViewport = {
   height: 768,
 };
 
-const CURRENT_STATE_VERSION = 14;
+const CURRENT_STATE_VERSION = 15;
 const BOT_ACTION_INTERVAL_SECONDS = 0.16;
 
 type BotDecisionSystem = typeof decideMvpBotCommand;
@@ -97,6 +97,14 @@ function migrateRuntimeState(state: GameState): void {
 
   if (typeof state.hoveredHex === "undefined") {
     state.hoveredHex = null;
+  }
+
+  if (!Array.isArray(state.tacticalHarvestEligibleUnitIds)) {
+    state.tacticalHarvestEligibleUnitIds = [];
+  }
+
+  if (!Array.isArray(state.tacticalHarvestedUnitIds)) {
+    state.tacticalHarvestedUnitIds = [];
   }
 
   for (const stackItem of state.stack) {
@@ -207,7 +215,7 @@ function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v14 (unit spells now use stack-based resolution).",
+      text: "State migrated to v15 (tactical auto-end now waits for a harvest before auto-skipping).",
     });
   }
 }

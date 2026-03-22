@@ -46,6 +46,8 @@ export function advancePhase(state: GameState): void {
   state.phase = getNextPhase(previousPhase);
   state.priorityPlayerId = state.activePlayerId;
   state.consecutivePriorityPasses = 0;
+  state.tacticalHarvestEligibleUnitIds = [];
+  state.tacticalHarvestedUnitIds = [];
 
   state.log.push({
     turn: state.turn,

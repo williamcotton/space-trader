@@ -96,6 +96,17 @@ function hasAnyTacticalAction(state: GameState, playerId: PlayerId): boolean {
   return false;
 }
 
+function hasPendingTrackedHarvest(state: GameState, playerId: PlayerId): boolean {
+  return state.tacticalHarvestEligibleUnitIds.some((entityId) => {
+    const entity = state.entities[entityId];
+    if (!entity || entity.kind !== "unit" || entity.ownerId !== playerId) {
+      return false;
+    }
+
+    return !state.tacticalHarvestedUnitIds.includes(entityId) && entity.carries === null;
+  });
+}
+
 export function getAutoFlowCommand(state: GameState): GameCommand | null {
   if (state.winner || !state.priorityPlayerId) {
     return null;
@@ -121,7 +132,7 @@ export function getAutoFlowCommand(state: GameState): GameCommand | null {
     };
   }
 
-  if (state.phase === "tactical" && !hasAnyTacticalAction(state, state.activePlayerId)) {
+  if (state.phase === "tactical" && !hasAnyTacticalAction(state, state.activePlayerId) && !hasPendingTrackedHarvest(state, state.activePlayerId)) {
     return {
       type: "END_PHASE",
       playerId: state.activePlayerId,

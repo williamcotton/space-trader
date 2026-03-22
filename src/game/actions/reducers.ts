@@ -9,7 +9,7 @@ import type { PlayerId } from "../model/ids";
 import { MAX_HAND_SIZE, syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../model/state";
 import { hexDistance, isWithinMapBounds } from "../model/hex";
 import { resolveCombatAttack } from "../systems/combat";
-import { getResourceNodeById, resolveEconomyDeposits } from "../systems/harvesting";
+import { getResourceNodeAtCoord, getResourceNodeById, resolveEconomyDeposits } from "../systems/harvesting";
 import { resolveEndPhaseNodeControl } from "../systems/nodeControl";
 import { resolveBaseHpVictory } from "../systems/victory";
 
@@ -42,6 +42,39 @@ function getPlayerBase(state: GameState, playerId: PlayerId) {
     return null;
   }
   return base;
+}
+
+function addUniqueTrackedUnit(target: string[], entityId: string): void {
+  if (!target.includes(entityId)) {
+    target.push(entityId);
+  }
+}
+
+function trackTacticalHarvestOpportunity(state: GameState, entityId: string): void {
+  if (state.phase !== "tactical") {
+    return;
+  }
+
+  const entity = state.entities[entityId];
+  if (!entity || entity.kind !== "unit" || entity.role !== "resource" || entity.carries !== null) {
+    return;
+  }
+
+  const node = getResourceNodeAtCoord(state, entity.coord);
+  if (!node || node.controlledBy !== entity.ownerId) {
+    return;
+  }
+
+  addUniqueTrackedUnit(state.tacticalHarvestEligibleUnitIds, entityId);
+}
+
+function seedTacticalHarvestOpportunities(state: GameState, playerId: PlayerId): void {
+  for (const entity of Object.values(state.entities)) {
+    if (entity.kind !== "unit" || entity.ownerId !== playerId) {
+      continue;
+    }
+    trackTacticalHarvestOpportunity(state, entity.id);
+  }
 }
 
 function applyCardCost(state: GameState, playerId: PlayerId, cost: CardCost): void {
@@ -499,6 +532,8 @@ function reduceEvent(state: GameState, event: GameEvent): void {
       advancePhase(state);
       if (state.phase === "start") {
         drawCardForPlayer(state, state.activePlayerId, "start_phase_draw");
+      } else if (state.phase === "tactical") {
+        seedTacticalHarvestOpportunities(state, state.activePlayerId);
       }
       return;
     }
@@ -613,6 +648,7 @@ function reduceEvent(state: GameState, event: GameEvent): void {
 
       entity.coord = { ...event.to };
       entity.movesRemaining = event.movesRemaining;
+      trackTacticalHarvestOpportunity(state, event.entityId);
       state.log.push({
         turn: state.turn,
         text: `${event.playerId} moved ${event.entityId} to (${event.to.q}, ${event.to.r}).`,
@@ -663,6 +699,8 @@ function reduceEvent(state: GameState, event: GameEvent): void {
       }
 
       entity.carries = event.resourceType;
+      addUniqueTrackedUnit(state.tacticalHarvestEligibleUnitIds, event.entityId);
+      addUniqueTrackedUnit(state.tacticalHarvestedUnitIds, event.entityId);
       state.log.push({
         turn: state.turn,
         text: `${event.playerId} harvested ${event.resourceType} at ${event.nodeId} with ${event.entityId}.`,
