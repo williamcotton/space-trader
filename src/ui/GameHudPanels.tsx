@@ -1,6 +1,7 @@
 import type { GamePhase } from "../game/model/enums";
-import { areSameHex, hexDistance, isWithinMapBounds } from "../game/model/hex";
+import { hexDistance, isWithinMapBounds } from "../game/model/hex";
 import type { EntityState, GameState, UnitEntity } from "../game/model/state";
+import { getEntityAtCoord, getSelectedUnit } from "../game/model/queries";
 import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleTheme } from "../game/presentation";
 import { getGameRuntime } from "../game/runtime";
 import { resolveCombatAttack } from "../game/systems/combat";
@@ -50,29 +51,6 @@ type TacticalHudSnapshot = {
   hoveredHex: GameState["hoveredHex"];
   hoverCombat: HoverCombatSnapshot | null;
 };
-
-function getSelectedUnit(state: GameState): UnitEntity | null {
-  if (!state.selectedEntityId) {
-    return null;
-  }
-
-  const selected = state.entities[state.selectedEntityId];
-  if (!selected || selected.kind !== "unit") {
-    return null;
-  }
-  return selected;
-}
-
-function getEntityAtCoord(state: GameState, coord: { q: number; r: number }, ignoreEntityId?: string): EntityState | null {
-  return (
-    Object.values(state.entities).find((entity) => {
-      if (ignoreEntityId && entity.id === ignoreEntityId) {
-        return false;
-      }
-      return areSameHex(entity.coord, coord);
-    }) ?? null
-  );
-}
 
 function readSnapshot(): TacticalHudSnapshot {
   const runtime = getGameRuntime();

@@ -1,20 +1,7 @@
 import { useState } from "react";
-import { getCardDefinition } from "../game/content/cards/catalog";
-import { getStackEffectDefinition } from "../game/content/stackEffects";
-import { getEntityDisplayName, getPlayerLabel } from "../game/presentation";
 import { getGameRuntime } from "../game/runtime";
+import { getStackItemPreview, type StackPreviewItem } from "../game/model/selectors";
 import { useGameSnapshot } from "./useGameSnapshot";
-
-type StackPreviewItem = {
-  id: string;
-  label: string;
-  controllerId: string;
-  effectId: string;
-  counterable: boolean;
-  kindLabel: string;
-  detail: string;
-  ownerLabel: string;
-};
 
 type HistoryEntry = {
   id: string;
@@ -29,65 +16,12 @@ type CommandStackSnapshot = {
 
 function readPanelSnapshot(): CommandStackSnapshot {
   const runtime = getGameRuntime();
-  const currentState = runtime.state;
-  const stackItems = runtime.state.stack.map((item) => ({
-    id: item.id,
-    label: item.label,
-    controllerId: item.controllerId,
-    effectId: item.effectId,
-    counterable: item.counterable,
-    kindLabel: (() => {
-      const sourceCard = item.sourceCardId ? getCardDefinition(item.sourceCardId) : undefined;
-      if (sourceCard?.kind === "unit" && item.effectId === "deploy_unit_card") {
-        return "Unit Spell";
-      }
-      if (sourceCard?.kind === "tactic") {
-        return "Tactic";
-      }
-      const effect = getStackEffectDefinition(item.effectId);
-      if (effect?.resolution.type === "counter") {
-        return "Counter";
-      }
-      if (effect?.resolution.type === "damage_enemy_base") {
-        return "Strike";
-      }
-      return item.objectKind === "ability" ? "Ability" : "Spell";
-    })(),
-    detail: (() => {
-      const sourceCard = item.sourceCardId ? getCardDefinition(item.sourceCardId) : undefined;
-      const targetEntity = item.targetEntityId ? currentState.entities[item.targetEntityId] : null;
-      const targetStackItem = item.targetStackItemId ? currentState.stack.find((stackItem) => stackItem.id === item.targetStackItemId) : null;
-      if (sourceCard?.kind === "unit" && item.effectId === "deploy_unit_card") {
-        return `${sourceCard.unit.role} · ${sourceCard.unit.hp} HP · deploy near base on resolve`;
-      }
-      if (sourceCard?.kind === "tactic") {
-        if (targetEntity) {
-          return `${sourceCard.text} Target: ${getEntityDisplayName(targetEntity, { players: currentState.players })}.`;
-        }
-        if (targetStackItem) {
-          return `${sourceCard.text} Target: ${targetStackItem.label}.`;
-        }
-        return sourceCard.text;
-      }
-      const effect = getStackEffectDefinition(item.effectId);
-      if (effect?.resolution.type === "counter") {
-        const baseText = effect.resolution.destination === "hand" ? "Counter target spell and return it to hand." : "Counter target spell.";
-        return targetStackItem ? `${baseText} Target: ${targetStackItem.label}.` : baseText;
-      }
-      if (effect?.resolution.type === "damage_enemy_base") {
-        return `Deal ${effect.resolution.amount} damage to the enemy base.`;
-      }
-      if (targetEntity) {
-        return `${effect?.label ?? item.effectId} targeting ${getEntityDisplayName(targetEntity, { players: currentState.players })}.`;
-      }
-      return effect?.label ?? item.effectId;
-    })(),
-    ownerLabel: getPlayerLabel(item.controllerId === "player_1" ? "player_1" : "player_2"),
-  }));
-  const historyWindow = runtime.state.log.slice(-18);
+  const state = runtime.state;
+  const stackItems = state.stack.map((item) => getStackItemPreview(item, state));
+  const historyWindow = state.log.slice(-18);
   const historyEntries = historyWindow
     .map((entry, index) => ({
-      id: `log_${runtime.state.log.length - historyWindow.length + index}_${entry.turn}`,
+      id: `log_${state.log.length - historyWindow.length + index}_${entry.turn}`,
       turn: entry.turn,
       text: entry.text,
     }))

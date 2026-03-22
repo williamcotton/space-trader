@@ -77,3 +77,19 @@ export function getEnemyEntities(state: GameState, playerId: PlayerId): EntitySt
     .filter((entity) => entity.ownerId !== playerId)
     .sort((a, b) => a.id.localeCompare(b.id));
 }
+
+export function getSelectedUnit(state: GameState): UnitEntity | null {
+  if (!state.selectedEntityId) return null;
+  const selected = state.entities[state.selectedEntityId];
+  if (!selected || selected.kind !== "unit") return null;
+  return selected;
+}
+
+export function getEntityAtCoord(state: GameState, coord: HexCoord, ignoreEntityId?: string): EntityState | null {
+  return (
+    Object.values(state.entities).find((entity) => {
+      if (ignoreEntityId && entity.id === ignoreEntityId) return false;
+      return areSameHex(entity.coord, coord);
+    }) ?? null
+  );
+}
