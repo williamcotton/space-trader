@@ -6,7 +6,7 @@ import { createStackItemId, getOpponentPlayer, popTopStackItem, removeStackItemB
 import type { PlayerId } from "../../model/ids";
 import { syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../../model/state";
 import { getPlayerBase, getFirstOpenBaseAdjacentTile } from "../../model/queries";
-import { evaluateTriggers, getStackEffectMagnitude } from "../../systems/triggers";
+import { getStackEffectMagnitude } from "../../systems/triggerEngine";
 import { createContinuousEffectId, LAYER, nextEffectTimestamp, removeEffectsForEntity } from "../../systems/continuousEffects";
 import type { InstructionContext } from "../instructions";
 import { executeInstructions } from "../instructionHandlers";
@@ -510,13 +510,6 @@ export function handlePlayCard(
       pendingUnitEntityId: card.kind === "unit" ? createSummonedUnitId(state, command.playerId, card.id) : null,
     },
   ];
-
-  if (card.kind === "tactic") {
-    events.push(...evaluateTriggers(state, command.playerId, "on_owner_tactic_played", {
-      preferredTargetId: command.targetEntityId ?? null,
-      idOffset: events.length,
-    }));
-  }
 
   return events;
 }

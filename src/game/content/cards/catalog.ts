@@ -1,7 +1,16 @@
 import type { Faction, ResourceType, UnitRole } from "../../model/enums";
 import type { PlayerId } from "../../model/ids";
+import type { EntityState } from "../../model/state";
+import type { GameState } from "../../model/state";
 import type { GameInstruction, InstructionContext } from "../../actions/instructions";
 import { LAYER } from "../../systems/continuousEffects";
+import type { CardTrigger } from "../../systems/triggerEngine";
+
+export type TargetPredicate = (
+  state: Readonly<GameState>,
+  target: EntityState,
+  sourcePlayerId: PlayerId
+) => boolean;
 
 export type CardSpeed = "instant" | "main";
 
@@ -39,6 +48,8 @@ export type TacticCardDefinition = CardBase & {
   kind: "tactic";
   stackEffectId: string;
   onResolve?: (context: InstructionContext) => GameInstruction[];
+  isValidTarget?: TargetPredicate;
+  targetHint?: "entity" | "stack_item" | "none";
 };
 
 export type AutoTargetStrategy = "weakest_enemy_unit";
@@ -53,8 +64,12 @@ export type UnitTrigger = {
 export type UnitCardDefinition = CardBase & {
   kind: "unit";
   unit: UnitTemplate;
+  /** @deprecated Use `triggers` array instead */
   trigger?: UnitTrigger;
+  triggers?: CardTrigger[];
   onResolve?: (context: InstructionContext) => GameInstruction[];
+  isValidTarget?: TargetPredicate;
+  targetHint?: "entity" | "stack_item" | "none";
 };
 
 export type CardDefinition = TacticCardDefinition | UnitCardDefinition;
@@ -179,6 +194,9 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     cost: { credits: 1, alloy: 1 },
     text: "Target allied unit gets +2 ARM until end of turn.",
     stackEffectId: "armor_ally_unit_2_eot",
+    isValidTarget: (_state, target, pid) =>
+      target.kind === "unit" && target.ownerId === pid,
+    targetHint: "entity",
     onResolve: (ctx) => {
       if (!ctx.targetEntityId) return [{ type: "LOG", text: "Brace Protocol: no target." }];
       return [{
@@ -204,6 +222,9 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     text: "Deal 2 damage to target enemy unit or base.",
     stackEffectId: "damage_enemy_entity_2",
     onResolve: damageTargetEntity(2, "Rivet Volley"),
+    isValidTarget: (_state, target, pid) =>
+      target.ownerId !== pid,
+    targetHint: "entity",
   },
   neural_echo: {
     id: "neural_echo",
@@ -281,6 +302,9 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     text: "Deal 2 damage to target enemy unit.",
     stackEffectId: "damage_enemy_unit_2",
     onResolve: damageTargetEntity(2, "Arc Snap"),
+    isValidTarget: (_state, target, pid) =>
+      target.kind === "unit" && target.ownerId !== pid,
+    targetHint: "entity",
   },
   overload_finish: {
     id: "overload_finish",
@@ -291,6 +315,9 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     cost: { credits: 2, flux: 1 },
     text: "Destroy target damaged enemy unit.",
     stackEffectId: "destroy_damaged_enemy_unit",
+    isValidTarget: (_state, target, pid) =>
+      target.kind === "unit" && target.ownerId !== pid && target.hp < target.maxHp,
+    targetHint: "entity",
     onResolve: (ctx) => {
       if (!ctx.targetEntityId) return [{ type: "LOG", text: "Overload Finish: no target." }];
       const target = ctx.state.entities[ctx.targetEntityId];
@@ -400,12 +427,12 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       attackRange: 1,
       attackActionsPerTurn: 1,
     },
-    trigger: {
-      event: "on_owner_tactic_played",
+    triggers: [{
+      condition: { type: "on_owner_tactic_played" },
       effectId: "damage_enemy_unit_1_uncounterable",
       labelSuffix: "Pulse",
       autoTarget: "weakest_enemy_unit",
-    },
+    }],
   },
   swarm_harvester_card: {
     id: "swarm_harvester_card",

@@ -1,5 +1,5 @@
 import type { GameCommand } from "../actions/commands";
-import { getCardDefinition, type CardDefinition } from "../content/cards/catalog";
+import { getCardDefinition, type CardDefinition, type TacticCardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import { MAX_HAND_SIZE, type EntityState, type GameState } from "../model/state";
@@ -49,8 +49,25 @@ function validateEntityTargetForEffect(
   state: GameState,
   playerId: PlayerId,
   targetEntityId: string | undefined,
-  effectId: string
+  effectId: string,
+  card?: TacticCardDefinition
 ): CommandValidationResult {
+  // New path: card-level predicate
+  if (card?.isValidTarget) {
+    if (!targetEntityId) {
+      return { ok: false, reason: "This card requires a battlefield target." };
+    }
+    const target = getEntity(state, targetEntityId);
+    if (!target) {
+      return { ok: false, reason: "Target entity does not exist." };
+    }
+    if (!card.isValidTarget(state, target, playerId)) {
+      return { ok: false, reason: "Target does not meet card requirements." };
+    }
+    return { ok: true };
+  }
+
+  // Legacy fallback: enum-based targeting from stack effect definition
   const effect = getStackEffectDefinition(effectId);
   if (!effect || effect.targeting.type !== "entity") {
     return { ok: true };
@@ -261,10 +278,14 @@ function validateTacticTargeting(
   command: Extract<GameCommand, { type: "PLAY_CARD" }>,
   card: Extract<CardDefinition, { kind: "tactic" }>
 ): CommandValidationResult {
+  // Determine targeting mode: card-level targetHint takes priority, then legacy effect definition
+  const targetHint = card.targetHint;
   const effect = getStackEffectDefinition(card.stackEffectId);
   if (!effect) return { ok: false, reason: `Unknown stack effect: ${card.stackEffectId}` };
 
-  if (effect.targeting.type === "stack_item") {
+  const targetingType = targetHint ?? effect.targeting.type;
+
+  if (targetingType === "stack_item") {
     if (!command.targetStackItemId) return { ok: false, reason: "Counter cards require a target stack item." };
     const topItem = state.stack[state.stack.length - 1];
     if (!topItem) return { ok: false, reason: "No stack item available to counter." };
@@ -274,9 +295,9 @@ function validateTacticTargeting(
     return { ok: true };
   }
 
-  if (effect.targeting.type === "entity") {
+  if (targetingType === "entity") {
     if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };
-    return validateEntityTargetForEffect(state, command.playerId, command.targetEntityId, card.stackEffectId);
+    return validateEntityTargetForEffect(state, command.playerId, command.targetEntityId, card.stackEffectId, card);
   }
 
   if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };

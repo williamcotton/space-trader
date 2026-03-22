@@ -124,6 +124,13 @@ export function isCardPlayable(state: GameState, playerId: PlayerId, definition:
     if (state.stack.length === 0) return false;
   }
 
+  if (definition.kind === "tactic" && definition.isValidTarget) {
+    const hasValidTarget = Object.values(state.entities).some(
+      (entity) => definition.isValidTarget!(state, entity, playerId)
+    );
+    if (!hasValidTarget) return false;
+  }
+
   return true;
 }
 

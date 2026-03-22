@@ -1,0 +1,211 @@
+import type { GameEvent, StackItemPushedEvent } from "../actions/events";
+import { getCardDefinition } from "../content/cards/catalog";
+import { getStackEffectDefinition } from "../content/stackEffects";
+import type { GamePhase } from "../model/enums";
+import type { PlayerId } from "../model/ids";
+import type { GameState, UnitEntity } from "../model/state";
+import { createStackItemId, getOpponentPlayer } from "../turn/stack";
+
+// --- Trigger Condition Types ---
+
+export type TriggerCondition =
+  | { type: "on_owner_tactic_played" }
+  | { type: "on_enter_battlefield" }
+  | { type: "on_death"; whose: "self" | "any_friendly" | "any_enemy" | "any" }
+  | { type: "on_damage_dealt"; whose: "self" | "any_friendly" }
+  | { type: "at_start_of_phase"; phase: GamePhase }
+  | { type: "at_end_of_turn" };
+
+export type AutoTargetStrategy = "weakest_enemy_unit";
+
+export type CardTrigger = {
+  condition: TriggerCondition;
+  effectId: string;
+  autoTarget?: AutoTargetStrategy;
+  labelSuffix: string;
+};
+
+// --- Auto-target resolution ---
+
+function resolveAutoTarget(
+  state: GameState,
+  controllerId: PlayerId,
+  strategy: AutoTargetStrategy,
+  preferredTargetId: string | null
+): string | null {
+  switch (strategy) {
+    case "weakest_enemy_unit": {
+      const preferredTarget = preferredTargetId ? state.entities[preferredTargetId] : null;
+      if (preferredTarget && preferredTarget.kind === "unit" && preferredTarget.ownerId !== controllerId) {
+        return preferredTarget.id;
+      }
+
+      const enemyUnits = Object.values(state.entities)
+        .filter((entity): entity is UnitEntity =>
+          entity.kind === "unit" && entity.ownerId !== controllerId
+        )
+        .sort((a, b) => {
+          const damagedDelta = Number(a.hp < a.maxHp) - Number(b.hp < b.maxHp);
+          if (damagedDelta !== 0) return damagedDelta > 0 ? -1 : 1;
+          if (a.hp !== b.hp) return a.hp - b.hp;
+          return a.id.localeCompare(b.id);
+        });
+
+      return enemyUnits[0]?.id ?? null;
+    }
+  }
+}
+
+// --- Stack effect magnitude helper (moved from triggers.ts) ---
+
+export function getStackEffectMagnitude(effectId: string): number {
+  const definition = getStackEffectDefinition(effectId);
+  if (!definition) return 0;
+  if (definition.resolution.type === "damage_enemy_base" || definition.resolution.type === "damage_entity") {
+    return definition.resolution.amount;
+  }
+  return 0;
+}
+
+// --- Event matching ---
+
+function getTriggersForUnit(unit: UnitEntity): CardTrigger[] {
+  if (!unit.sourceCardId) return [];
+  const card = getCardDefinition(unit.sourceCardId);
+  if (!card || card.kind !== "unit") return [];
+
+  // New triggers array takes priority
+  if (card.triggers && card.triggers.length > 0) {
+    return card.triggers;
+  }
+
+  // Legacy singular trigger fallback
+  if (card.trigger) {
+    return [{
+      condition: { type: card.trigger.event },
+      effectId: card.trigger.effectId,
+      autoTarget: card.trigger.autoTarget,
+      labelSuffix: card.trigger.labelSuffix,
+    }];
+  }
+
+  return [];
+}
+
+function doesEventMatchCondition(
+  event: GameEvent,
+  condition: TriggerCondition,
+  unitOwnerId: PlayerId
+): boolean {
+  switch (condition.type) {
+    case "on_owner_tactic_played":
+      return event.type === "CARD_PLAYED_TO_STACK" && event.playerId === unitOwnerId;
+
+    case "on_enter_battlefield":
+      return event.type === "CARD_PLAYED_TO_BATTLEFIELD";
+
+    case "on_death":
+      // Will be triggered by future ENTITY_DESTROYED events
+      return false;
+
+    case "on_damage_dealt":
+      return false;
+
+    case "at_start_of_phase":
+      return event.type === "PHASE_ADVANCED" && event.phase === condition.phase;
+
+    case "at_end_of_turn":
+      return false;
+
+    default:
+      return false;
+  }
+}
+
+function getPreferredTargetFromEvent(event: GameEvent): string | null {
+  if (event.type === "CARD_PLAYED_TO_STACK") {
+    return event.targetEntityId;
+  }
+  return null;
+}
+
+// --- Main trigger evaluation ---
+
+const MAX_TRIGGER_DEPTH = 10;
+let triggerDepth = 0;
+
+export function evaluateTriggersFromEvent(
+  state: GameState,
+  event: GameEvent
+): StackItemPushedEvent[] {
+  if (triggerDepth >= MAX_TRIGGER_DEPTH) {
+    state.log.push({
+      turn: state.turn,
+      text: "Trigger depth limit reached — suppressing further triggers.",
+    });
+    return [];
+  }
+
+  const triggeredEvents: StackItemPushedEvent[] = [];
+  const preferredTargetId = getPreferredTargetFromEvent(event);
+
+  const units = Object.values(state.entities)
+    .filter((entity): entity is UnitEntity => entity.kind === "unit")
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  for (const unit of units) {
+    const triggers = getTriggersForUnit(unit);
+
+    for (const trigger of triggers) {
+      if (!doesEventMatchCondition(event, trigger.condition, unit.ownerId)) {
+        continue;
+      }
+
+      const effectDefinition = getStackEffectDefinition(trigger.effectId);
+      if (!effectDefinition) continue;
+
+      const targetEntityId = trigger.autoTarget
+        ? resolveAutoTarget(state, unit.ownerId, trigger.autoTarget, preferredTargetId)
+        : null;
+
+      if (trigger.autoTarget && !targetEntityId) {
+        continue;
+      }
+
+      triggeredEvents.push({
+        type: "STACK_ITEM_PUSHED",
+        playerId: unit.ownerId,
+        itemId: createStackItemId(state.turn, state.log.length + triggeredEvents.length),
+        label: `${unit.name} ${trigger.labelSuffix}`,
+        controllerId: unit.ownerId,
+        ownerId: unit.ownerId,
+        effectId: trigger.effectId,
+        effectMagnitude: getStackEffectMagnitude(trigger.effectId),
+        targetStackItemId: null,
+        targetEntityId,
+        objectKind: effectDefinition.object.kind,
+        counterable: effectDefinition.object.counterable,
+        defaultCounterDestination: effectDefinition.object.defaultCounterDestination,
+        sourceCardInstanceId: null,
+        sourceCardId: null,
+        sourceCardOwnerId: null,
+        nextPriorityPlayerId: getOpponentPlayer(unit.ownerId),
+        pendingUnitEntityId: null,
+      });
+    }
+  }
+
+  return triggeredEvents;
+}
+
+export function resetTriggerDepth(): void {
+  triggerDepth = 0;
+}
+
+export function incrementTriggerDepth(): void {
+  triggerDepth++;
+}
+
+export function decrementTriggerDepth(): void {
+  triggerDepth = Math.max(0, triggerDepth - 1);
+}

@@ -2,6 +2,7 @@ import type { EntityId, PlayerId } from "../model/ids";
 import type { UnitRole } from "../model/enums";
 import type { GameState, UnitEntity } from "../model/state";
 import { hexDistance } from "../model/hex";
+import type { ReplacementEffectPayload } from "./replacementEngine";
 
 // --- Layer constants (MTG-inspired ordering) ---
 
@@ -22,7 +23,7 @@ export type StatModifier = {
   amount: number;
 };
 
-export type ContinuousEffectPayload = StatModifier;
+export type ContinuousEffectPayload = StatModifier | ReplacementEffectPayload;
 
 // --- Expiry conditions (all serializable) ---
 

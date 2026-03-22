@@ -410,7 +410,12 @@ class GameRuntime {
     const playerId = this.state.priorityPlayerId ?? this.state.activePlayerId;
     const handCard = this.state.zones[playerId].hand.find((card) => card.instanceId === cardInstanceId);
     const definition = handCard ? getCardDefinition(handCard.cardId) : undefined;
-    if (definition?.kind === "tactic" && requiresEntityTarget(definition.stackEffectId) && !targetEntityId) {
+    const needsEntityTarget = definition?.kind === "tactic" && (
+      definition.targetHint === "entity" ||
+      definition.isValidTarget ||
+      requiresEntityTarget(definition.stackEffectId)
+    );
+    if (needsEntityTarget && !targetEntityId) {
       this.pendingCardTargeting = {
         playerId,
         cardInstanceId,

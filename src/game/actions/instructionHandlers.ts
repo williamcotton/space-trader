@@ -13,6 +13,7 @@ import {
 import { removeStackItemById } from "../turn/stack";
 import type { GameInstruction } from "./instructions";
 import { drawCardForPlayer } from "./handlers/cards";
+import { applyReplacementEffects } from "../systems/replacementEngine";
 
 // --- Internal helpers (extracted from handlers/cards.ts) ---
 
@@ -226,35 +227,44 @@ function handleLog(state: GameState, instr: Extract<GameInstruction, { type: "LO
   state.log.push({ turn: state.turn, text: instr.text });
 }
 
-// --- Executor ---
+// --- Single instruction dispatcher ---
+
+function executeSingleInstruction(state: GameState, instr: GameInstruction): void {
+  switch (instr.type) {
+    case "DEAL_DAMAGE":
+      handleDealDamage(state, instr);
+      break;
+    case "DESTROY_ENTITY":
+      handleDestroyEntity(state, instr);
+      break;
+    case "DEPLOY_UNIT":
+      handleDeployUnit(state, instr);
+      break;
+    case "APPLY_CONTINUOUS_EFFECT":
+      handleApplyContinuousEffect(state, instr);
+      break;
+    case "DRAW_CARDS":
+      handleDrawCards(state, instr);
+      break;
+    case "GAIN_RESOURCES":
+      handleGainResources(state, instr);
+      break;
+    case "COUNTER_STACK_ITEM":
+      handleCounterStackItem(state, instr);
+      break;
+    case "LOG":
+      handleLog(state, instr);
+      break;
+  }
+}
+
+// --- Executor with replacement effect interception ---
 
 export function executeInstructions(state: GameState, instructions: GameInstruction[]): void {
   for (const instr of instructions) {
-    switch (instr.type) {
-      case "DEAL_DAMAGE":
-        handleDealDamage(state, instr);
-        break;
-      case "DESTROY_ENTITY":
-        handleDestroyEntity(state, instr);
-        break;
-      case "DEPLOY_UNIT":
-        handleDeployUnit(state, instr);
-        break;
-      case "APPLY_CONTINUOUS_EFFECT":
-        handleApplyContinuousEffect(state, instr);
-        break;
-      case "DRAW_CARDS":
-        handleDrawCards(state, instr);
-        break;
-      case "GAIN_RESOURCES":
-        handleGainResources(state, instr);
-        break;
-      case "COUNTER_STACK_ITEM":
-        handleCounterStackItem(state, instr);
-        break;
-      case "LOG":
-        handleLog(state, instr);
-        break;
+    const replaced = applyReplacementEffects(state, instr);
+    for (const r of replaced) {
+      executeSingleInstruction(state, r);
     }
   }
 }

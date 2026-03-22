@@ -929,7 +929,7 @@ describe("dispatchCommand", () => {
       cardInstanceId,
       targetEntityId: "base_player_1",
     });
-    expect(expectRejected(wrongKind)).toContain("must target a unit");
+    expect(expectRejected(wrongKind)).toContain("card requirements");
 
     const wrongOwner = dispatchCommand(state, {
       type: "PLAY_CARD",
@@ -937,7 +937,7 @@ describe("dispatchCommand", () => {
       cardInstanceId,
       targetEntityId: "unit_player_2_scout",
     });
-    expect(expectRejected(wrongOwner)).toContain("enemy entity");
+    expect(expectRejected(wrongOwner)).toContain("card requirements");
 
     const target = state.entities.unit_player_1_scout;
     expect(target?.kind).toBe("unit");
@@ -979,7 +979,7 @@ describe("dispatchCommand", () => {
       cardInstanceId,
       targetEntityId: "unit_player_1_scout",
     });
-    expect(expectRejected(invalidUndamaged)).toContain("damaged target");
+    expect(expectRejected(invalidUndamaged)).toContain("card requirements");
 
     const target = state.entities.unit_player_1_scout;
     expect(target?.kind).toBe("unit");

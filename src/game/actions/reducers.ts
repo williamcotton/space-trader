@@ -3,6 +3,7 @@ import type { GameEvent } from "./events";
 import { validateCommand } from "../rules/validators";
 import { syncPlayerZoneCounts, type GameState } from "../model/state";
 import { resolveBaseHpVictory } from "../systems/victory";
+import { evaluateTriggersFromEvent, resetTriggerDepth, incrementTriggerDepth, decrementTriggerDepth } from "../systems/triggerEngine";
 import { handleAdvancePhase, handlePassPriority, reducePhaseAdvanced, reducePriorityPassed } from "./handlers/phase";
 import { handleSelectEntity, handleClearSelection, reduceEntitySelected, reduceSelectionCleared } from "./handlers/selection";
 import { handleMoveUnit, handleAttackUnit, handleHarvestNode, reduceUnitMoved, reduceUnitAttackDeclared, reduceUnitHarvestedNode } from "./handlers/combat";
@@ -98,15 +99,29 @@ export function dispatchCommand(state: GameState, command: GameCommand): Dispatc
   }
 
   const events = createEventsFromCommand(state, command);
+  const allEvents: GameEvent[] = [];
+
+  resetTriggerDepth();
   for (const event of events) {
     reduceEvent(state, event);
+    allEvents.push(event);
+
+    // After each event, check for triggers
+    incrementTriggerDepth();
+    const triggeredEvents = evaluateTriggersFromEvent(state, event);
+    for (const triggered of triggeredEvents) {
+      reduceEvent(state, triggered);
+      allEvents.push(triggered);
+    }
+    decrementTriggerDepth();
   }
+
   resolveBaseHpVictory(state);
   syncPlayerZoneCounts(state);
   state.lastRejectedReason = null;
 
   return {
     ok: true,
-    events,
+    events: allEvents,
   };
 }
