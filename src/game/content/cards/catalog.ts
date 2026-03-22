@@ -47,14 +47,26 @@ type CardBase = {
   play: CardPlayProfile;
 };
 
-export type CardPlayProfile = {
+type CardPlayBase = {
   stackEffectId: string;
-  targetMode: CardTargetMode;
   sourceDestinationOnResolve: CardSourceDestination;
   requiresOpenBaseAdjacentTile?: boolean;
   reserveEntityId?: boolean;
-  isValidTarget?: TargetPredicate;
 };
+
+export type CardPlayProfile =
+  | (CardPlayBase & {
+      targetMode: "none";
+      isValidTarget?: undefined;
+    })
+  | (CardPlayBase & {
+      targetMode: "stack_item";
+      isValidTarget?: undefined;
+    })
+  | (CardPlayBase & {
+      targetMode: "entity";
+      isValidTarget: TargetPredicate;
+    });
 
 export type AutoTargetStrategy = "weakest_enemy_unit";
 
@@ -89,11 +101,24 @@ function tacticPlay(
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
+  const targetMode = options?.targetMode ?? "none";
+
+  if (targetMode === "entity") {
+    if (!options?.isValidTarget) {
+      throw new Error(`Entity-targeted card play ${stackEffectId} is missing isValidTarget.`);
+    }
+    return {
+      stackEffectId,
+      targetMode,
+      sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
+      isValidTarget: options.isValidTarget,
+    };
+  }
+
   return {
     stackEffectId,
-    targetMode: options?.targetMode ?? "none",
+    targetMode,
     sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
-    isValidTarget: options?.isValidTarget,
   };
 }
 

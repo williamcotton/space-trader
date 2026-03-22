@@ -446,18 +446,7 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
 
     if (card.play.targetMode === "entity") {
       for (const entity of Object.values(state.entities).sort((a, b) => a.id.localeCompare(b.id))) {
-        // New path: card-level predicate
-        if (card.play.isValidTarget) {
-          if (!card.play.isValidTarget(state, entity, botPlayerId)) continue;
-        } else {
-          // Legacy fallback: enum-based checks
-          if (effect.targeting.type === "entity") {
-            if (effect.targeting.relation === "ally" && entity.ownerId !== botPlayerId) continue;
-            if (effect.targeting.relation === "enemy" && entity.ownerId === botPlayerId) continue;
-            if (effect.targeting.entityKind === "unit" && entity.kind !== "unit") continue;
-            if (effect.targeting.requireDamaged && entity.hp >= entity.maxHp) continue;
-          }
-        }
+        if (!card.play.isValidTarget(state, entity, botPlayerId)) continue;
 
         let score = -Infinity;
         if (effect.behavior.type === "damage_entity") {

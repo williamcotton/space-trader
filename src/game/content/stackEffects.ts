@@ -407,11 +407,6 @@ export function isCounterResponse(effectId: string): boolean {
   return effect?.behavior.type === "counter";
 }
 
-export function requiresEntityTarget(effectId: string): boolean {
-  const effect = getStackEffectDefinition(effectId);
-  return effect?.targeting.type === "entity";
-}
-
 export function getStackEffectMagnitude(effectId: string): number {
   const effect = getStackEffectDefinition(effectId);
   if (!effect) return 0;

@@ -49,30 +49,8 @@ function validateEntityTargetForEffect(
   state: GameState,
   playerId: PlayerId,
   targetEntityId: string | undefined,
-  effectId: string,
-  card?: CardDefinition
+  card: CardDefinition
 ): CommandValidationResult {
-  // New path: card-level predicate
-  if (card?.play.isValidTarget) {
-    if (!targetEntityId) {
-      return { ok: false, reason: "This card requires a battlefield target." };
-    }
-    const target = getEntity(state, targetEntityId);
-    if (!target) {
-      return { ok: false, reason: "Target entity does not exist." };
-    }
-    if (!card.play.isValidTarget(state, target, playerId)) {
-      return { ok: false, reason: "Target does not meet card requirements." };
-    }
-    return { ok: true };
-  }
-
-  // Legacy fallback: enum-based targeting from stack effect definition
-  const effect = getStackEffectDefinition(effectId);
-  if (!effect || effect.targeting.type !== "entity") {
-    return { ok: true };
-  }
-
   if (!targetEntityId) {
     return { ok: false, reason: "This card requires a battlefield target." };
   }
@@ -82,20 +60,12 @@ function validateEntityTargetForEffect(
     return { ok: false, reason: "Target entity does not exist." };
   }
 
-  if (effect.targeting.entityKind === "unit" && target.kind !== "unit") {
-    return { ok: false, reason: "This card must target a unit." };
+  if (card.play.targetMode !== "entity") {
+    return { ok: true };
   }
 
-  if (effect.targeting.relation === "ally" && target.ownerId !== playerId) {
-    return { ok: false, reason: "This card must target an allied unit." };
-  }
-
-  if (effect.targeting.relation === "enemy" && target.ownerId === playerId) {
-    return { ok: false, reason: "This card must target an enemy entity." };
-  }
-
-  if (effect.targeting.requireDamaged && target.hp >= target.maxHp) {
-    return { ok: false, reason: "This card requires a damaged target." };
+  if (!card.play.isValidTarget(state, target, playerId)) {
+    return { ok: false, reason: "Target does not meet card requirements." };
   }
 
   return { ok: true };
@@ -295,7 +265,7 @@ function validateCardTargeting(
 
   if (targetingType === "entity") {
     if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };
-    return validateEntityTargetForEffect(state, command.playerId, command.targetEntityId, card.play.stackEffectId, card);
+    return validateEntityTargetForEffect(state, command.playerId, command.targetEntityId, card);
   }
 
   if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };
