@@ -4,7 +4,7 @@ import { getStackEffectDefinition, isCounterResponse } from "../content/stackEff
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import type { Faction, ResourceType } from "../model/enums";
 import type { PlayerId } from "../model/ids";
-import type { EntityState, GameState, HexCoord, UnitEntity } from "../model/state";
+import { MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord, type UnitEntity } from "../model/state";
 import { resolveCombatAttack } from "../systems/combat";
 import { canAffordCardCost, getEnemyEntities, getFirstOpenBaseAdjacentTile, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../model/queries";
 import { getOpponentPlayer } from "../turn/stack";
@@ -261,6 +261,65 @@ function chooseCounterCommand(state: GameState, botPlayerId: PlayerId): GameComm
   }
 
   return null;
+}
+
+function chooseDiscardCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
+  const hand = [...state.zones[botPlayerId].hand];
+  if (hand.length <= MAX_HAND_SIZE) {
+    return null;
+  }
+
+  const playerFaction = state.players[botPlayerId].faction;
+  const ranked = hand
+    .map((cardInstance) => {
+      const card = getCardDefinition(cardInstance.cardId);
+      if (!card) {
+        return {
+          cardInstanceId: cardInstance.instanceId,
+          cardId: cardInstance.cardId,
+          score: 1000,
+        };
+      }
+
+      const totalCost = RESOURCE_ORDER.reduce((sum, resource) => sum + (card.cost[resource] ?? 0), 0);
+      let score = totalCost * 10;
+
+      if (card.faction !== playerFaction && card.faction !== "neutral") {
+        score += 80;
+      } else if (card.faction === "neutral") {
+        score += 15;
+      }
+
+      if (!canAffordCardCost(state, botPlayerId, card.cost)) {
+        score += 20;
+      }
+
+      if (card.kind === "tactic") {
+        score += 10;
+      } else if (card.unit.role === "resource") {
+        score -= 30;
+      } else if (card.unit.role === "combat") {
+        score -= 10;
+      }
+
+      return {
+        cardInstanceId: cardInstance.instanceId,
+        cardId: card.id,
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score || a.cardId.localeCompare(b.cardId) || a.cardInstanceId.localeCompare(b.cardInstanceId));
+
+  const discard = ranked[0];
+  if (!discard) {
+    return null;
+  }
+
+  return {
+    type: "DISCARD_CARD",
+    playerId: botPlayerId,
+    cardInstanceId: discard.cardInstanceId,
+  };
 }
 
 function scoreEnemyEntityThreat(state: GameState, botPlayerId: PlayerId, target: EntityState): number {
@@ -912,6 +971,13 @@ export function decideMvpBotCommand(state: GameState, botPlayerId: PlayerId): Ga
     }
 
     return chooseTacticalCommand(state, botPlayerId);
+  }
+
+  if (state.phase === "discard") {
+    const discard = chooseDiscardCardCommand(state, botPlayerId);
+    if (discard) {
+      return discard;
+    }
   }
 
   return {

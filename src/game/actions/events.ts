@@ -82,6 +82,13 @@ export type CardPlayedToBattlefieldEvent = {
   unit: UnitTemplate;
 };
 
+export type CardDiscardedEvent = {
+  type: "CARD_DISCARDED";
+  playerId: PlayerId;
+  cardInstanceId: string;
+  cardId: string;
+};
+
 export type PriorityPassedEvent = {
   type: "PRIORITY_PASSED";
   playerId: PlayerId;
@@ -144,6 +151,7 @@ export type GameEvent =
   | UnitHarvestedNodeEvent
   | CardPlayedToStackEvent
   | CardPlayedToBattlefieldEvent
+  | CardDiscardedEvent
   | PriorityPassedEvent
   | StackItemPushedEvent
   | StackItemResolvedEvent;

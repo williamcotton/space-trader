@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { getResourceTheme } from "../game/presentation";
 import { getGameRuntime } from "../game/runtime";
 import type { PlayerId } from "../game/model/ids";
+import { MAX_HAND_SIZE } from "../game/model/state";
 import { getCardDisplayInfo, type CardTag, type CostEntry, type UnitStatEntry } from "../game/model/selectors";
 import { ResourceIcon } from "./ResourceIcon";
 import { useGameSnapshot } from "./useGameSnapshot";
@@ -23,6 +24,8 @@ type HandSnapshot = {
   visiblePlayerId: PlayerId;
   cards: HandCardSnapshot[];
   deckCount: number;
+  discardPhase: boolean;
+  requiredDiscards: number;
   pendingTargetingCardInstanceId: string | null;
   pendingTargetingPrompt: string | null;
 };
@@ -32,6 +35,7 @@ function readSnapshot(): HandSnapshot {
   const state = runtime.state;
   const pendingTargeting = runtime.getPendingCardTargeting();
   const visiblePlayerId = state.activePlayerId as PlayerId;
+  const discardPhase = state.phase === "discard";
 
   const cards = [...state.zones[visiblePlayerId].hand].reverse().map((card) =>
     getCardDisplayInfo(state, visiblePlayerId, card.cardId, card.instanceId)
@@ -41,14 +45,19 @@ function readSnapshot(): HandSnapshot {
     visiblePlayerId,
     cards,
     deckCount: state.zones[visiblePlayerId].deck.length,
-    pendingTargetingCardInstanceId: pendingTargeting?.cardInstanceId ?? null,
-    pendingTargetingPrompt: pendingTargeting?.prompt ?? null,
+    discardPhase,
+    requiredDiscards: Math.max(0, state.zones[visiblePlayerId].hand.length - MAX_HAND_SIZE),
+    pendingTargetingCardInstanceId: discardPhase ? null : pendingTargeting?.cardInstanceId ?? null,
+    pendingTargetingPrompt: discardPhase ? null : pendingTargeting?.prompt ?? null,
   };
 }
 
 export function HandTray() {
   const runtime = getGameRuntime();
   const snapshot = useGameSnapshot(readSnapshot);
+  const discardPrompt = snapshot.discardPhase
+    ? `Discard ${snapshot.requiredDiscards} card${snapshot.requiredDiscards === 1 ? "" : "s"} to reach ${MAX_HAND_SIZE}.`
+    : null;
 
   return (
     <section className="hand-tray" aria-label="Hand tray">
@@ -58,6 +67,7 @@ export function HandTray() {
           Hand {snapshot.cards.length} | Deck {snapshot.deckCount}
         </span>
       </header>
+      {discardPrompt ? <p className="hand-tray-targeting-hint">{discardPrompt}</p> : null}
       {snapshot.pendingTargetingPrompt ? <p className="hand-tray-targeting-hint">{snapshot.pendingTargetingPrompt}</p> : null}
       <div className="hand-tray-cards">
         {snapshot.cards.length === 0 ? (
@@ -69,7 +79,7 @@ export function HandTray() {
               type="button"
               className={[
                 "hand-card",
-                card.playable ? "playable" : "blocked",
+                snapshot.discardPhase || card.playable ? "playable" : "blocked",
                 snapshot.pendingTargetingCardInstanceId === card.instanceId ? "targeting" : "",
               ].join(" ")}
               onClick={() => runtime.playCardFromHand(card.instanceId, card.counterTarget)}

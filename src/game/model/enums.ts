@@ -1,4 +1,4 @@
-export const GAME_PHASES = ["start", "economy", "main", "tactical", "end"] as const;
+export const GAME_PHASES = ["start", "economy", "main", "tactical", "end", "discard"] as const;
 export type GamePhase = (typeof GAME_PHASES)[number];
 
 export const RESOURCE_TYPES = ["credits", "alloy", "flux", "biomass"] as const;

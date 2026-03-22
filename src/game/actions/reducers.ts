@@ -7,8 +7,8 @@ import { handleAdvancePhase, handlePassPriority, reducePhaseAdvanced, reducePrio
 import { handleSelectEntity, handleClearSelection, reduceEntitySelected, reduceSelectionCleared } from "./handlers/selection";
 import { handleMoveUnit, handleAttackUnit, handleHarvestNode, reduceUnitMoved, reduceUnitAttackDeclared, reduceUnitHarvestedNode } from "./handlers/combat";
 import {
-  handleRespondStack, handlePlayCard,
-  reduceCardPlayedToStack, reduceCardPlayedToBattlefield, reduceStackItemPushed, reduceStackItemResolved,
+  handleRespondStack, handlePlayCard, handleDiscardCard,
+  reduceCardPlayedToStack, reduceCardPlayedToBattlefield, reduceCardDiscarded, reduceStackItemPushed, reduceStackItemResolved,
 } from "./handlers/cards";
 
 export type DispatchResult =
@@ -43,6 +43,8 @@ function createEventsFromCommand(state: GameState, command: GameCommand): GameEv
       return handleHarvestNode(state, command);
     case "PLAY_CARD":
       return handlePlayCard(state, command);
+    case "DISCARD_CARD":
+      return handleDiscardCard(state, command);
     default:
       return [];
   }
@@ -66,6 +68,8 @@ function reduceEvent(state: GameState, event: GameEvent): void {
       return reduceCardPlayedToStack(state, event);
     case "CARD_PLAYED_TO_BATTLEFIELD":
       return reduceCardPlayedToBattlefield(state, event);
+    case "CARD_DISCARDED":
+      return reduceCardDiscarded(state, event);
     case "UNIT_MOVED":
       return reduceUnitMoved(state, event);
     case "UNIT_ATTACK_DECLARED":

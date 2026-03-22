@@ -87,6 +87,26 @@ describe("decideMvpBotCommand", () => {
     expect(playedCard).toBeDefined();
   });
 
+  it("discards a card during discard phase when above the soft cap", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "discard";
+
+    moveCardFromDeckToHand(state, "player_2", "expedition_harvester_card");
+    moveCardFromDeckToHand(state, "player_2", "null_intercept");
+    moveCardFromDeckToHand(state, "player_2", "relay_savant_card");
+
+    const command = decideMvpBotCommand(state, "player_2");
+    expect(command?.type).toBe("DISCARD_CARD");
+    expect(command?.playerId).toBe("player_2");
+    if (!command || command.type !== "DISCARD_CARD") {
+      throw new Error("Expected bot to discard during discard phase.");
+    }
+
+    expect(state.zones.player_2.hand.some((card) => card.instanceId === command.cardInstanceId)).toBe(true);
+  });
+
   it("rebuilds combat presence before playing more economy units when behind on board", () => {
     const state = setupState();
     state.activePlayerId = "player_2";

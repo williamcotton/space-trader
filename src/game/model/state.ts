@@ -4,7 +4,7 @@ import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/sta
 import type { ContinuousEffect } from "../systems/continuousEffects";
 
 export const OPENING_HAND_SIZE = 5;
-export const PASSIVE_DRAW_CAP = 7;
+export const MAX_HAND_SIZE = 7;
 export const BASE_STARTING_HP = 20;
 
 export type HexCoord = {

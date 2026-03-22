@@ -398,6 +398,15 @@ class GameRuntime {
   }
 
   playCardFromHand(cardInstanceId: string, targetStackItemId?: string, targetEntityId?: string): DispatchResult {
+    if (this.state.phase === "discard") {
+      this.pendingCardTargeting = null;
+      return this.dispatch({
+        type: "DISCARD_CARD",
+        playerId: this.state.activePlayerId,
+        cardInstanceId,
+      });
+    }
+
     const playerId = this.state.priorityPlayerId ?? this.state.activePlayerId;
     const handCard = this.state.zones[playerId].hand.find((card) => card.instanceId === cardInstanceId);
     const definition = handCard ? getCardDefinition(handCard.cardId) : undefined;

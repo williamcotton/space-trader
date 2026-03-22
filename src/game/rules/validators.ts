@@ -2,7 +2,7 @@ import type { GameCommand } from "../actions/commands";
 import { getCardDefinition, type CardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
-import type { EntityState, GameState } from "../model/state";
+import { MAX_HAND_SIZE, type EntityState, type GameState } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { canUnitHarvestNode, getResourceNodeById } from "../systems/harvesting";
 import { canAffordCardCost, getFirstOpenBaseAdjacentTile, hasEntityAtCoord } from "../model/queries";
@@ -33,6 +33,14 @@ function requirePriority(state: GameState, playerId: string, action: string): Co
 
 function requireTacticalPhase(state: GameState, action: string): CommandValidationResult | null {
   return state.phase !== "tactical" ? { ok: false, reason: `${action} can only occur during tactical phase.` } : null;
+}
+
+function requireNotDiscardPhase(state: GameState, action: string): CommandValidationResult | null {
+  return state.phase === "discard" ? { ok: false, reason: `Cannot ${action} during discard phase.` } : null;
+}
+
+function requireDiscardPhase(state: GameState): CommandValidationResult | null {
+  return state.phase !== "discard" ? { ok: false, reason: "Cards can only be discarded during discard phase." } : null;
 }
 
 // --- Entity Target Validation ---
@@ -81,21 +89,30 @@ function validateEntityTargetForEffect(
 function validateAdvancePhase(state: GameState, playerId: string): CommandValidationResult {
   return requireActivePlayer(state, playerId, "advance the phase")
     ?? requireEmptyStack(state, "advance phases")
+    ?? (state.phase === "discard" && state.zones[state.activePlayerId].hand.length > MAX_HAND_SIZE
+      ? { ok: false, reason: `Discard down to ${MAX_HAND_SIZE} cards before ending the turn.` }
+      : null)
     ?? { ok: true };
 }
 
 function validateEndPhase(state: GameState, playerId: string): CommandValidationResult {
   return requireActivePlayer(state, playerId, "end the phase")
     ?? requireEmptyStack(state, "end phases")
+    ?? (state.phase === "discard" && state.zones[state.activePlayerId].hand.length > MAX_HAND_SIZE
+      ? { ok: false, reason: `Discard down to ${MAX_HAND_SIZE} cards before ending the turn.` }
+      : null)
     ?? { ok: true };
 }
 
 function validatePassPriority(state: GameState, playerId: string): CommandValidationResult {
-  return requirePriority(state, playerId, "pass priority") ?? { ok: true };
+  return requireNotDiscardPhase(state, "pass priority")
+    ?? requirePriority(state, playerId, "pass priority")
+    ?? { ok: true };
 }
 
 function validateRespondStack(state: GameState, command: Extract<GameCommand, { type: "RESPOND_STACK" }>): CommandValidationResult {
-  const fail = requirePriority(state, command.playerId, "respond");
+  const fail = requireNotDiscardPhase(state, "respond")
+    ?? requirePriority(state, command.playerId, "respond");
   if (fail) return fail;
 
   if (!command.label.trim()) {
@@ -134,6 +151,7 @@ function validateRespondStack(state: GameState, command: Extract<GameCommand, { 
 
 function validateSelectEntity(state: GameState, command: Extract<GameCommand, { type: "SELECT_ENTITY" }>): CommandValidationResult {
   const fail = requireActivePlayer(state, command.playerId, "select entities")
+    ?? requireNotDiscardPhase(state, "select entities")
     ?? requireEmptyStack(state, "select units");
   if (fail) return fail;
 
@@ -147,6 +165,7 @@ function validateSelectEntity(state: GameState, command: Extract<GameCommand, { 
 
 function validateClearSelection(state: GameState, command: Extract<GameCommand, { type: "CLEAR_SELECTION" }>): CommandValidationResult {
   return requireActivePlayer(state, command.playerId, "clear selection")
+    ?? requireNotDiscardPhase(state, "clear selection")
     ?? requireEmptyStack(state, "clear selection")
     ?? (!state.selectedEntityId ? { ok: false, reason: "No selected entity to clear." } : null)
     ?? { ok: true };
@@ -276,7 +295,8 @@ function validateUnitTargeting(
 }
 
 function validatePlayCard(state: GameState, command: Extract<GameCommand, { type: "PLAY_CARD" }>): CommandValidationResult {
-  const fail = requirePriority(state, command.playerId, "play a card");
+  const fail = requireNotDiscardPhase(state, "play cards")
+    ?? requirePriority(state, command.playerId, "play a card");
   if (fail) return fail;
 
   const handCard = state.zones[command.playerId].hand.find((card) => card.instanceId === command.cardInstanceId);
@@ -291,6 +311,15 @@ function validatePlayCard(state: GameState, command: Extract<GameCommand, { type
 
   if (card.kind === "tactic") return validateTacticTargeting(state, command, card);
   return validateUnitTargeting(state, command);
+}
+
+function validateDiscardCard(state: GameState, command: Extract<GameCommand, { type: "DISCARD_CARD" }>): CommandValidationResult {
+  return requireActivePlayer(state, command.playerId, "discard cards")
+    ?? requireDiscardPhase(state)
+    ?? (!state.zones[command.playerId].hand.some((card) => card.instanceId === command.cardInstanceId)
+      ? { ok: false, reason: "Card is not in hand." }
+      : null)
+    ?? { ok: true };
 }
 
 // --- Command Dispatcher ---
@@ -321,6 +350,8 @@ export function validateCommand(state: GameState, command: GameCommand): Command
       return validateHarvestNode(state, command);
     case "PLAY_CARD":
       return validatePlayCard(state, command);
+    case "DISCARD_CARD":
+      return validateDiscardCard(state, command);
     default:
       return { ok: false, reason: "Unknown command type." };
   }

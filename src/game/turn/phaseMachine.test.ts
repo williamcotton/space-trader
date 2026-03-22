@@ -3,6 +3,21 @@ import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { createInitialGameState } from "../model/state";
 import { advancePhase } from "./phaseMachine";
 
+function moveCardFromDeckToHand(state: ReturnType<typeof createInitialGameState>, playerId: "player_1" | "player_2", cardId: string): void {
+  const deck = state.zones[playerId].deck;
+  const index = deck.findIndex((card) => card.cardId === cardId);
+  if (index < 0) {
+    throw new Error(`Expected ${cardId} in deck for ${playerId}.`);
+  }
+
+  const [card] = deck.splice(index, 1);
+  if (!card) {
+    throw new Error(`Failed to move ${cardId} from deck for ${playerId}.`);
+  }
+
+  state.zones[playerId].hand.push(card);
+}
+
 describe("phaseMachine", () => {
   it("advances through all phases in order", () => {
     const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
@@ -34,6 +49,24 @@ describe("phaseMachine", () => {
     expect(state.turn).toBe(2);
     expect(state.activePlayerId).toBe("player_2");
     expect(state.priorityPlayerId).toBe("player_2");
+  });
+
+  it("enters discard phase after end when the active player is above the soft cap", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+
+    moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
+    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+
+    advancePhase(state); // economy
+    advancePhase(state); // main
+    advancePhase(state); // tactical
+    advancePhase(state); // end
+    advancePhase(state); // discard
+
+    expect(state.phase).toBe("discard");
+    expect(state.turn).toBe(1);
+    expect(state.activePlayerId).toBe("player_1");
   });
 
   it("resets unit move/attack budgets for new active player on turn handoff", () => {

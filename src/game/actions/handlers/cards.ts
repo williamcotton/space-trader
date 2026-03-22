@@ -4,7 +4,7 @@ import { getCardDefinition, type CardCost } from "../../content/cards/catalog";
 import { getStackEffectDefinition, type CounterDestination, type StackResolutionRules } from "../../content/stackEffects";
 import { createStackItemId, getOpponentPlayer, popTopStackItem, removeStackItemById } from "../../turn/stack";
 import type { PlayerId } from "../../model/ids";
-import { PASSIVE_DRAW_CAP, syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../../model/state";
+import { syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../../model/state";
 import { getPlayerBase, getFirstOpenBaseAdjacentTile } from "../../model/queries";
 import { evaluateTriggers, getStackEffectMagnitude } from "../../systems/triggers";
 import { createContinuousEffectId, LAYER, nextEffectTimestamp, removeEffectsForEntity } from "../../systems/continuousEffects";
@@ -33,15 +33,6 @@ function addCardToZone(state: GameState, playerId: PlayerId, zone: "hand" | "dis
 }
 
 export function drawCardForPlayer(state: GameState, playerId: PlayerId, drawReason: "opening_hand" | "start_phase_draw"): void {
-  if (state.zones[playerId].hand.length > PASSIVE_DRAW_CAP) {
-    state.log.push({
-      turn: state.turn,
-      text: `${playerId} skipped satellite download (${drawReason}) above passive draw cap ${PASSIVE_DRAW_CAP}.`,
-    });
-    syncPlayerZoneCounts(state);
-    return;
-  }
-
   const deck = state.zones[playerId].deck;
   const next = deck.shift();
   if (!next) {
@@ -530,6 +521,25 @@ export function handlePlayCard(
   return events;
 }
 
+export function handleDiscardCard(
+  state: GameState,
+  command: Extract<GameCommand, { type: "DISCARD_CARD" }>
+): GameEvent[] {
+  const handCard = state.zones[command.playerId].hand.find((card) => card.instanceId === command.cardInstanceId);
+  if (!handCard) {
+    return [];
+  }
+
+  return [
+    {
+      type: "CARD_DISCARDED",
+      playerId: command.playerId,
+      cardInstanceId: handCard.instanceId,
+      cardId: handCard.cardId,
+    },
+  ];
+}
+
 export function reduceCardPlayedToStack(
   state: GameState,
   event: Extract<GameEvent, { type: "CARD_PLAYED_TO_STACK" }>
@@ -580,6 +590,23 @@ export function reduceCardPlayedToBattlefield(
   applyCardCost(state, event.playerId, event.cost);
   syncPlayerZoneCounts(state);
   deployUnitToBattlefield(state, event.playerId, event.cardId, event.cardName, event.unitEntityId, event.spawnCoord);
+}
+
+export function reduceCardDiscarded(
+  state: GameState,
+  event: Extract<GameEvent, { type: "CARD_DISCARDED" }>
+): void {
+  const card = removeCardFromHand(state, event.playerId, event.cardInstanceId);
+  if (!card) {
+    return;
+  }
+
+  addCardToZone(state, event.playerId, "discard", card);
+  syncPlayerZoneCounts(state);
+  state.log.push({
+    turn: state.turn,
+    text: `${event.playerId} discarded ${event.cardId}.`,
+  });
 }
 
 export function reduceStackItemPushed(

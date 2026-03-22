@@ -2,7 +2,7 @@ import type { GameCommand } from "../actions/commands";
 import { getCardDefinition } from "../content/cards/catalog";
 import { isCounterResponse } from "../content/stackEffects";
 import { getMapAxialBounds, hexDistance, isWithinMapBounds } from "../model/hex";
-import type { GameState, UnitEntity } from "../model/state";
+import { MAX_HAND_SIZE, type GameState, type UnitEntity } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { validateCommand } from "../rules/validators";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../systems/harvesting";
@@ -115,6 +115,15 @@ export function getAutoFlowCommand(state: GameState): GameCommand | null {
 
   if (state.priorityPlayerId !== state.activePlayerId) {
     return null;
+  }
+
+  if (state.phase === "discard") {
+    return state.zones[state.activePlayerId].hand.length <= MAX_HAND_SIZE
+      ? {
+          type: "END_PHASE",
+          playerId: state.activePlayerId,
+        }
+      : null;
   }
 
   if (state.phase === "main" && !hasAnyPlayableCard(state, state.activePlayerId)) {

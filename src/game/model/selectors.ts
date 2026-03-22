@@ -107,6 +107,7 @@ export function getCostEntries(cost: CardCost): CostEntry[] {
 
 export function isCardPlayable(state: GameState, playerId: PlayerId, definition: CardDefinition): boolean {
   if (state.winner) return false;
+  if (state.phase === "discard") return false;
   if (!canAffordCardCost(state, playerId, definition.cost)) return false;
 
   if (definition.speed === "main") {

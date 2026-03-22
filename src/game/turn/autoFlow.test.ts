@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
-import { createInitialGameState } from "../model/state";
+import { MAX_HAND_SIZE, createInitialGameState } from "../model/state";
 import { getAutoFlowCommand } from "./autoFlow";
 
 function setupState() {
@@ -137,6 +137,32 @@ describe("getAutoFlowCommand", () => {
     state.priorityPlayerId = "player_1";
 
     expect(getAutoFlowCommand(state)).toBeNull();
+  });
+
+  it("waits in discard phase while the active player is still above the soft cap", () => {
+    const state = setupState();
+    state.phase = "discard";
+    state.priorityPlayerId = "player_1";
+    moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
+    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    expect(state.zones.player_1.hand).toHaveLength(MAX_HAND_SIZE + 1);
+
+    expect(getAutoFlowCommand(state)).toBeNull();
+  });
+
+  it("auto-hands off once discard phase has reached the soft cap", () => {
+    const state = setupState();
+    state.phase = "discard";
+    state.priorityPlayerId = "player_1";
+    moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
+    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    expect(state.zones.player_1.hand).toHaveLength(MAX_HAND_SIZE);
+
+    expect(getAutoFlowCommand(state)).toEqual({
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
   });
 
   it("auto-passes priority on stack when no response card can be played", () => {

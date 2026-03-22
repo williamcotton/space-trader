@@ -65,6 +65,12 @@ export type PlayCardCommand = {
   targetEntityId?: EntityId;
 };
 
+export type DiscardCardCommand = {
+  type: "DISCARD_CARD";
+  playerId: PlayerId;
+  cardInstanceId: string;
+};
+
 export type GameCommand =
   | AdvancePhaseCommand
   | EndPhaseCommand
@@ -75,4 +81,5 @@ export type GameCommand =
   | MoveUnitCommand
   | AttackUnitCommand
   | HarvestNodeCommand
-  | PlayCardCommand;
+  | PlayCardCommand
+  | DiscardCardCommand;

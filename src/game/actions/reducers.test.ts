@@ -11,7 +11,7 @@ function setupState() {
 
 function advanceToPhase(state: ReturnType<typeof setupState>, phase: ReturnType<typeof setupState>["phase"]): void {
   let guard = 0;
-  while (state.phase !== phase && guard < 12) {
+  while (state.phase !== phase && guard < 16) {
     dispatchCommand(state, { type: "END_PHASE", playerId: state.activePlayerId });
     guard += 1;
   }
@@ -516,7 +516,7 @@ describe("dispatchCommand", () => {
     expect(state.zones.player_2.deck.length).toBe(beforeDeck - 1);
   });
 
-  it("skips start-phase draw only when the active player is already above the soft cap", () => {
+  it("still draws at start of turn even when already above the hand limit", () => {
     const state = setupState();
 
     moveCardFromDeckToHand(state, "player_2", "expedition_harvester_card");
@@ -535,8 +535,85 @@ describe("dispatchCommand", () => {
     expect(handoff.ok).toBe(true);
     expect(state.phase).toBe("start");
     expect(state.activePlayerId).toBe("player_2");
-    expect(state.zones.player_2.hand.length).toBe(beforeHand);
-    expect(state.zones.player_2.deck.length).toBe(beforeDeck);
+    expect(state.zones.player_2.hand.length).toBe(beforeHand + 1);
+    expect(state.zones.player_2.deck.length).toBe(beforeDeck - 1);
+  });
+
+  it("enters discard phase at end of turn when the active player is above the soft cap", () => {
+    const state = setupState();
+
+    moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
+    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    expect(state.zones.player_1.hand).toHaveLength(8);
+
+    advanceToPhase(state, "end");
+    const handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+
+    expect(handoff.ok).toBe(true);
+    expect(state.phase).toBe("discard");
+    expect(state.turn).toBe(1);
+    expect(state.activePlayerId).toBe("player_1");
+    expect(state.priorityPlayerId).toBe("player_1");
+  });
+
+  it("requires discarding down to seven before the turn can hand off", () => {
+    const state = setupState();
+
+    const discardedId = moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
+    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    expect(state.zones.player_1.hand).toHaveLength(8);
+
+    advanceToPhase(state, "end");
+    dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(state.phase).toBe("discard");
+
+    const blockedHandoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(expectRejected(blockedHandoff)).toContain("Discard down to 7");
+
+    const discard = dispatchCommand(state, {
+      type: "DISCARD_CARD",
+      playerId: "player_1",
+      cardInstanceId: discardedId,
+    });
+    expect(discard.ok).toBe(true);
+    expect(state.zones.player_1.hand).toHaveLength(7);
+    expect(state.zones.player_1.discard.some((card) => card.instanceId === discardedId)).toBe(true);
+
+    const handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(handoff.ok).toBe(true);
+    expect(state.phase).toBe("start");
+    expect(state.turn).toBe(2);
+    expect(state.activePlayerId).toBe("player_2");
+  });
+
+  it("rejects discard commands outside discard phase", () => {
+    const state = setupState();
+    const cardInstanceId = state.zones.player_1.hand[0]?.instanceId;
+    if (!cardInstanceId) {
+      throw new Error("Expected opening hand card.");
+    }
+
+    const result = dispatchCommand(state, {
+      type: "DISCARD_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+
+    expect(expectRejected(result)).toContain("discard phase");
   });
 
   it("plays a tactic card from hand to stack and moves it to discard on resolve", () => {

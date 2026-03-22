@@ -1,9 +1,9 @@
 import type { GamePhase } from "../model/enums";
-import type { GameState } from "../model/state";
+import { MAX_HAND_SIZE, type GameState } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { clearTemporaryUnitModifiers } from "../systems/unitStats";
 
-const PHASE_SEQUENCE: GamePhase[] = ["start", "economy", "main", "tactical", "end"];
+const PHASE_SEQUENCE: GamePhase[] = ["start", "economy", "main", "tactical", "end", "discard"];
 
 function getNextActivePlayer(playerId: PlayerId): PlayerId {
   return playerId === "player_1" ? "player_2" : "player_1";
@@ -35,8 +35,9 @@ export function getNextPhase(currentPhase: GamePhase): GamePhase {
 }
 
 export function advancePhase(state: GameState): void {
-  const movingToNewTurn = state.phase === "end";
   const previousPhase = state.phase;
+  const requiresDiscard = previousPhase === "end" && state.zones[state.activePlayerId].hand.length > MAX_HAND_SIZE;
+  const movingToNewTurn = previousPhase === "discard" || (previousPhase === "end" && !requiresDiscard);
 
   if (movingToNewTurn) {
     clearTemporaryUnitModifiers(state);
@@ -45,7 +46,13 @@ export function advancePhase(state: GameState): void {
     resetUnitActionBudgetsForPlayer(state, state.activePlayerId);
   }
 
-  state.phase = getNextPhase(previousPhase);
+  if (requiresDiscard) {
+    state.phase = "discard";
+  } else if (movingToNewTurn) {
+    state.phase = "start";
+  } else {
+    state.phase = getNextPhase(previousPhase);
+  }
   state.priorityPlayerId = state.activePlayerId;
   state.consecutivePriorityPasses = 0;
   state.tacticalHarvestEligibleUnitIds = [];

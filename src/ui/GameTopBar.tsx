@@ -6,13 +6,14 @@ import type { PlayerId } from "../game/model/ids";
 import { formatFactionName, getPlayerLabel, getResourceTheme } from "../game/presentation";
 import { ResourceIcon } from "./ResourceIcon";
 
-const PHASE_ORDER: GamePhase[] = ["start", "economy", "main", "tactical", "end"];
+const PHASE_ORDER: GamePhase[] = ["start", "economy", "main", "tactical", "end", "discard"];
 const PHASE_LABELS: Record<GamePhase, string> = {
   start: "Start",
   economy: "Eco",
   main: "Main",
   tactical: "Tac",
   end: "End",
+  discard: "Disc",
 };
 const RESOURCE_ORDER: ResourceType[] = ["credits", "alloy", "flux", "biomass"];
 
