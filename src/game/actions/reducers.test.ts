@@ -467,6 +467,24 @@ describe("dispatchCommand", () => {
     expect(state.zones.player_2.deck.length).toBe(beforeDeck - 1);
   });
 
+  it("does not give the opening player a draw on the first turn", () => {
+    const state = setupState();
+    const beforeHand = state.zones.player_1.hand.length;
+    const beforeDeck = state.zones.player_1.deck.length;
+
+    const toEconomy = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+
+    expect(toEconomy.ok).toBe(true);
+    expect(state.turn).toBe(1);
+    expect(state.phase).toBe("economy");
+    expect(state.activePlayerId).toBe("player_1");
+    expect(state.zones.player_1.hand.length).toBe(beforeHand);
+    expect(state.zones.player_1.deck.length).toBe(beforeDeck);
+  });
+
   it("draws for the active player each time their turn cycles back to start", () => {
     const state = setupState();
     const p1InitialHand = state.zones.player_1.hand.length;
