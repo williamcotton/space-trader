@@ -4,6 +4,7 @@ import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/st
 import type { GamePhase } from "../model/enums";
 import type { PlayerId } from "../model/ids";
 import type { GameState, UnitEntity } from "../model/state";
+import { canTargetEntityDirectly } from "./keywords";
 import { createStackItemId, getOpponentPlayer } from "../turn/stack";
 
 // --- Trigger Condition Types ---
@@ -36,13 +37,20 @@ function resolveAutoTarget(
   switch (strategy) {
     case "weakest_enemy_unit": {
       const preferredTarget = preferredTargetId ? state.entities[preferredTargetId] : null;
-      if (preferredTarget && preferredTarget.kind === "unit" && preferredTarget.ownerId !== controllerId) {
+      if (
+        preferredTarget &&
+        preferredTarget.kind === "unit" &&
+        preferredTarget.ownerId !== controllerId &&
+        canTargetEntityDirectly(state, controllerId, preferredTarget)
+      ) {
         return preferredTarget.id;
       }
 
       const enemyUnits = Object.values(state.entities)
         .filter((entity): entity is UnitEntity =>
-          entity.kind === "unit" && entity.ownerId !== controllerId
+          entity.kind === "unit" &&
+          entity.ownerId !== controllerId &&
+          canTargetEntityDirectly(state, controllerId, entity)
         )
         .sort((a, b) => {
           const damagedDelta = Number(a.hp < a.maxHp) - Number(b.hp < b.maxHp);

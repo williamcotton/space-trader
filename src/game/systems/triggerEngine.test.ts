@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { createInitialGameState } from "../model/state";
 import { evaluateTriggersFromEvent, resetTriggerDepth, incrementTriggerDepth } from "./triggerEngine";
@@ -228,6 +229,67 @@ describe("triggerEngine", () => {
       incrementTriggerDepth();
       const triggered = evaluateTriggersFromEvent(state, tacticEvent);
       expect(triggered).toHaveLength(0);
+    });
+
+    it("does not auto-target stealthed enemy units", () => {
+      const fluxRunnerCard = CARD_DEFINITIONS.flux_runner_card as UnitCardDefinition;
+      const original = fluxRunnerCard.unit.keywords;
+      fluxRunnerCard.unit.keywords = ["stealth"];
+
+      try {
+        const state = createState();
+        delete state.entities.unit_player_2_harvester;
+
+        state.entities["unit_player_1_relay"] = {
+          id: "unit_player_1_relay",
+          kind: "unit",
+          name: "Relay Savant",
+          ownerId: "player_1",
+          role: "utility",
+          hp: 4,
+          maxHp: 4,
+          attackDamage: 1,
+          siegeDamageBonus: 0,
+          armor: 0,
+          moveRange: 2,
+          attackRange: 1,
+          attackActionsPerTurn: 1,
+          coord: { q: 0, r: 0 },
+          carries: null,
+          sourceCardId: "relay_savant_card",
+          hasSummoningSickness: false,
+          movesRemaining: 2,
+          attacksRemaining: 1,
+          temporaryAttackBonus: 0,
+          temporaryArmorBonus: 0,
+        };
+
+        const tacticEvent: CardPlayedToStackEvent = {
+          type: "CARD_PLAYED_TO_STACK",
+          playerId: "player_1",
+          cardInstanceId: "test_card",
+          cardId: "orbital_ping",
+          cardName: "Orbital Ping",
+          cost: { credits: 1, flux: 1 },
+          stackItemId: "stack_1",
+          effectId: "damage_enemy_base_2",
+          effectMagnitude: 2,
+          targetStackItemId: null,
+          targetEntityId: null,
+          objectKind: "spell",
+          counterable: true,
+          defaultCounterDestination: "discard",
+          nextPriorityPlayerId: "player_2",
+          pendingUnitEntityId: null,
+        };
+
+        resetTriggerDepth();
+        incrementTriggerDepth();
+        const triggered = evaluateTriggersFromEvent(state, tacticEvent);
+        expect(triggered).toHaveLength(0);
+      } finally {
+        fluxRunnerCard.unit.keywords = original;
+      }
     });
   });
 

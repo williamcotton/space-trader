@@ -11,6 +11,7 @@ import { migrateRuntimeState } from "./model/migrations";
 import { captureAnimationSnapshot, buildAnimationsFromEvents, stepAnimations } from "./render/animations";
 import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
+import { canAttackEntityDirectly } from "./systems/keywords";
 import { getAutoFlowCommand } from "./turn/autoFlow";
 import type { GameState } from "./model/state";
 import type { CanvasAnimation, GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
@@ -356,7 +357,7 @@ class GameRuntime {
       if (entity.ownerId === activePlayerId) {
         return false;
       }
-      return hexDistance(attacker.coord, entity.coord) <= attacker.attackRange;
+      return canAttackEntityDirectly(this.state, activePlayerId, entity) && hexDistance(attacker.coord, entity.coord) <= attacker.attackRange;
     });
 
     if (!target) {

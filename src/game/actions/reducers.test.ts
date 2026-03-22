@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GameCommand } from "./commands";
 import { dispatchCommand } from "./reducers";
+import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
 import { getEffectiveUnitArmor } from "../systems/unitStats";
@@ -434,6 +435,43 @@ describe("dispatchCommand", () => {
       targetId,
     });
     expect(expectRejected(summoningSickness)).toContain("summoning sickness");
+  });
+
+  it("prevents attacks against stealthed enemy units", () => {
+    const fluxRunnerCard = CARD_DEFINITIONS.flux_runner_card as UnitCardDefinition;
+    const original = fluxRunnerCard.unit.keywords;
+    fluxRunnerCard.unit.keywords = ["stealth"];
+
+    try {
+      const state = setupState();
+      const attacker = state.entities.unit_player_1_scout;
+      const target = state.entities.unit_player_2_scout;
+      expect(attacker?.kind).toBe("unit");
+      expect(target?.kind).toBe("unit");
+      if (!attacker || attacker.kind !== "unit" || !target || target.kind !== "unit") {
+        throw new Error("Expected units for stealth attack test.");
+      }
+
+      attacker.coord = { q: -1, r: 0 };
+      target.coord = { q: 0, r: 0 };
+
+      advanceToTactical(state);
+      dispatchCommand(state, {
+        type: "SELECT_ENTITY",
+        playerId: "player_1",
+        entityId: attacker.id,
+      });
+
+      const result = dispatchCommand(state, {
+        type: "ATTACK_UNIT",
+        playerId: "player_1",
+        attackerId: attacker.id,
+        targetId: target.id,
+      });
+      expect(expectRejected(result)).toContain("Stealthed enemy units cannot be attacked directly");
+    } finally {
+      fluxRunnerCard.unit.keywords = original;
+    }
   });
 
   it("initializes with opening hands and validated starter decks", () => {
@@ -964,6 +1002,29 @@ describe("dispatchCommand", () => {
     }
     expect(updatedTarget.hp).toBe(beforeHp - 2);
     expect(state.zones.player_2.discard.some((card) => card.instanceId === cardInstanceId)).toBe(true);
+  });
+
+  it("prevents hostile targeted cards from choosing stealthed enemy units", () => {
+    const fluxRunnerCard = CARD_DEFINITIONS.flux_runner_card as UnitCardDefinition;
+    const original = fluxRunnerCard.unit.keywords;
+    fluxRunnerCard.unit.keywords = ["stealth"];
+
+    try {
+      const state = setupState();
+      const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "rivet_volley");
+      state.players.player_1.resources.credits = 4;
+      state.players.player_1.resources.alloy = 4;
+
+      const result = dispatchCommand(state, {
+        type: "PLAY_CARD",
+        playerId: "player_1",
+        cardInstanceId,
+        targetEntityId: "unit_player_2_scout",
+      });
+      expect(expectRejected(result)).toContain("Stealthed enemy units cannot be targeted directly");
+    } finally {
+      fluxRunnerCard.unit.keywords = original;
+    }
   });
 
   it("requires Overload Finish to target a damaged enemy unit and destroys it on resolve", () => {

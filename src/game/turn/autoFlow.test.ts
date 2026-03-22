@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { MAX_HAND_SIZE, createInitialGameState } from "../model/state";
 import { getAutoFlowCommand } from "./autoFlow";
@@ -137,6 +138,41 @@ describe("getAutoFlowCommand", () => {
     state.priorityPlayerId = "player_1";
 
     expect(getAutoFlowCommand(state)).toBeNull();
+  });
+
+  it("auto-advances out of tactical when the only enemy in range is stealthed", () => {
+    const fluxRunnerCard = CARD_DEFINITIONS.flux_runner_card as UnitCardDefinition;
+    const original = fluxRunnerCard.unit.keywords;
+    fluxRunnerCard.unit.keywords = ["stealth"];
+
+    try {
+      const state = setupState();
+      state.phase = "tactical";
+      state.priorityPlayerId = "player_1";
+
+      const scout = state.entities.unit_player_1_scout;
+      const target = state.entities.unit_player_2_scout;
+      const harvester = state.entities.unit_player_1_harvester;
+      if (!scout || scout.kind !== "unit" || !target || target.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+        throw new Error("Expected units for stealth auto-flow test.");
+      }
+
+      scout.coord = { q: -1, r: 0 };
+      scout.movesRemaining = 0;
+      scout.attacksRemaining = 1;
+      scout.hasSummoningSickness = false;
+      target.coord = { q: 0, r: 0 };
+      harvester.movesRemaining = 0;
+      harvester.attacksRemaining = 0;
+      harvester.carries = "alloy";
+
+      expect(getAutoFlowCommand(state)).toEqual({
+        type: "END_PHASE",
+        playerId: "player_1",
+      });
+    } finally {
+      fluxRunnerCard.unit.keywords = original;
+    }
   });
 
   it("waits in discard phase while the active player is still above the soft cap", () => {

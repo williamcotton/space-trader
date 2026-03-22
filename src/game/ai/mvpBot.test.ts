@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { createInitialGameState } from "../model/state";
 import { decideMvpBotCommand } from "./mvpBot";
@@ -155,6 +156,34 @@ describe("decideMvpBotCommand", () => {
       cardInstanceId,
       targetEntityId: target.id,
     });
+  });
+
+  it("does not spend a hostile targeted tactic on a stealthed enemy unit", () => {
+    const scoutCard = CARD_DEFINITIONS.frontline_scout_card as UnitCardDefinition;
+    const original = scoutCard.unit.keywords;
+    scoutCard.unit.keywords = ["stealth"];
+
+    try {
+      const state = setupState();
+      state.activePlayerId = "player_2";
+      state.priorityPlayerId = "player_2";
+      state.phase = "main";
+      state.stack = [];
+      state.zones.player_2.hand = [];
+      state.players.player_2.resources.credits = 4;
+      state.players.player_2.resources.flux = 4;
+
+      delete state.entities.unit_player_1_harvester;
+      moveCardFromDeckToHand(state, "player_2", "arc_snap");
+
+      const command = decideMvpBotCommand(state, "player_2");
+      expect(command).toEqual({
+        type: "END_PHASE",
+        playerId: "player_2",
+      });
+    } finally {
+      scoutCard.unit.keywords = original;
+    }
   });
 
   it("casts Overload Finish on a damaged enemy unit before deploying more units", () => {

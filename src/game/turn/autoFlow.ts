@@ -6,6 +6,7 @@ import { MAX_HAND_SIZE, type GameState, type UnitEntity } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { validateCommand } from "../rules/validators";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../systems/harvesting";
+import { canAttackEntityDirectly } from "../systems/keywords";
 import { hasEntityAtCoord } from "../model/queries";
 
 function hasAnyPlayableCard(state: GameState, playerId: PlayerId): boolean {
@@ -65,7 +66,11 @@ function hasAvailableAttack(state: GameState, unit: UnitEntity): boolean {
     return false;
   }
 
-  return Object.values(state.entities).some((entity) => entity.ownerId !== unit.ownerId && hexDistance(unit.coord, entity.coord) <= unit.attackRange);
+  return Object.values(state.entities).some((entity) =>
+    entity.ownerId !== unit.ownerId &&
+    canAttackEntityDirectly(state, unit.ownerId, entity) &&
+    hexDistance(unit.coord, entity.coord) <= unit.attackRange
+  );
 }
 
 function hasAvailableHarvest(state: GameState, unit: UnitEntity): boolean {

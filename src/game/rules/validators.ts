@@ -5,6 +5,7 @@ import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import { MAX_HAND_SIZE, type EntityState, type GameState } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { canUnitHarvestNode, getResourceNodeById } from "../systems/harvesting";
+import { getAttackKeywordBlockReason, getTargetingKeywordBlockReason } from "../systems/keywords";
 import { canAffordCardCost, getFirstOpenBaseAdjacentTile, hasEntityAtCoord } from "../model/queries";
 
 export type CommandValidationResult = {
@@ -66,6 +67,11 @@ function validateEntityTargetForEffect(
 
   if (!card.play.isValidTarget(state, target, playerId)) {
     return { ok: false, reason: "Target does not meet card requirements." };
+  }
+
+  const keywordBlockReason = getTargetingKeywordBlockReason(state, playerId, target);
+  if (keywordBlockReason) {
+    return { ok: false, reason: keywordBlockReason };
   }
 
   return { ok: true };
@@ -197,6 +203,9 @@ function validateAttackUnit(state: GameState, command: Extract<GameCommand, { ty
   const target = getEntity(state, command.targetId);
   if (!target) return { ok: false, reason: "Target does not exist." };
   if (target.ownerId === command.playerId) return { ok: false, reason: "Cannot attack friendly entity." };
+
+  const keywordBlockReason = getAttackKeywordBlockReason(state, command.playerId, target);
+  if (keywordBlockReason) return { ok: false, reason: keywordBlockReason };
 
   const distance = hexDistance(attacker.coord, target.coord);
   if (distance > attacker.attackRange) return { ok: false, reason: "Target is out of attack range." };

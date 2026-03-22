@@ -7,6 +7,7 @@ import type { PlayerId } from "../model/ids";
 import { MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord, type UnitEntity } from "../model/state";
 import { resolveCombatAttack } from "../systems/combat";
 import { canAffordCardCost, getEnemyEntities, getFirstOpenBaseAdjacentTile, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../model/queries";
+import { canAttackEntityDirectly, canTargetEntityDirectly } from "../systems/keywords";
 import { getOpponentPlayer } from "../turn/stack";
 
 const RESOURCE_ORDER: ResourceType[] = ["credits", "alloy", "flux", "biomass"];
@@ -447,6 +448,7 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
     if (card.play.targetMode === "entity") {
       for (const entity of Object.values(state.entities).sort((a, b) => a.id.localeCompare(b.id))) {
         if (!card.play.isValidTarget(state, entity, botPlayerId)) continue;
+        if (!canTargetEntityDirectly(state, botPlayerId, entity)) continue;
 
         let score = -Infinity;
         if (effect.behavior.type === "damage_entity") {
@@ -693,6 +695,7 @@ function chooseAttackCommand(state: GameState, botPlayerId: PlayerId, unit: Unit
   }
 
   const targets = getEnemyEntities(state, botPlayerId)
+    .filter((target) => canAttackEntityDirectly(state, botPlayerId, target))
     .filter((target) => hexDistance(unit.coord, target.coord) <= unit.attackRange)
     .map((target) => {
       const preview = resolveCombatAttack(state, unit, target);
