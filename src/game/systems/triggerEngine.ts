@@ -1,6 +1,6 @@
 import type { GameEvent, StackItemPushedEvent } from "../actions/events";
 import { getCardDefinition } from "../content/cards/catalog";
-import { getStackEffectDefinition } from "../content/stackEffects";
+import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/stackEffects";
 import type { GamePhase } from "../model/enums";
 import type { PlayerId } from "../model/ids";
 import type { GameState, UnitEntity } from "../model/state";
@@ -54,17 +54,6 @@ function resolveAutoTarget(
       return enemyUnits[0]?.id ?? null;
     }
   }
-}
-
-// --- Stack effect magnitude helper (moved from triggers.ts) ---
-
-export function getStackEffectMagnitude(effectId: string): number {
-  const definition = getStackEffectDefinition(effectId);
-  if (!definition) return 0;
-  if (definition.resolution.type === "damage_enemy_base" || definition.resolution.type === "damage_entity") {
-    return definition.resolution.amount;
-  }
-  return 0;
 }
 
 // --- Event matching ---

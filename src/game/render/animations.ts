@@ -61,7 +61,7 @@ function getStackAnimationVisual(effectId: string, sourceCardId: string | null):
   }
 
   const effect = getStackEffectDefinition(effectId);
-  if (effect?.resolution.type === "counter") {
+  if (effect?.behavior.type === "counter") {
     return "counter";
   }
 
@@ -80,7 +80,7 @@ function buildStackResolutionAnimation(
 ): CanvasAnimation | null {
   const definition = getStackEffectDefinition(event.effectId);
 
-  if (definition?.resolution.type === "counter") {
+  if (definition?.behavior.type === "counter") {
     const sourceBase = state.entities[state.players[event.controllerId].baseEntityId];
     const targetItem = event.targetStackItemId ? before.stackItems[event.targetStackItemId] : undefined;
     if (!sourceBase || sourceBase.kind !== "base" || !targetItem) {
@@ -97,11 +97,11 @@ function buildStackResolutionAnimation(
       label: event.label,
       targetLabel: targetItem.label,
       targetVisual: getStackAnimationVisual(targetItem.effectId, targetItem.sourceCardId),
-      returnToHand: definition.resolution.destination === "hand",
+      returnToHand: definition.behavior.destination === "hand",
     };
   }
 
-  if (definition?.resolution.type === "deploy_unit") {
+  if (definition?.behavior.type === "deploy_unit") {
     if (!event.pendingUnitEntityId) {
       return null;
     }
@@ -121,7 +121,7 @@ function buildStackResolutionAnimation(
     };
   }
 
-  if (definition?.resolution.type === "damage_entity") {
+  if (definition?.behavior.type === "damage_entity") {
     const targetId = event.targetEntityId;
     if (!targetId) {
       return null;
@@ -139,12 +139,12 @@ function buildStackResolutionAnimation(
       durationSeconds: 0.78,
       coord: target.coord,
       visual: target.kind === "base" ? "base_damage" : "damage",
-      amount: definition.resolution.amount,
+      amount: definition.behavior.amount,
       label: event.label,
     };
   }
 
-  if (definition?.resolution.type === "destroy_entity") {
+  if (definition?.behavior.type === "destroy_entity") {
     const targetId = event.targetEntityId;
     if (!targetId) {
       return null;
@@ -166,7 +166,7 @@ function buildStackResolutionAnimation(
     };
   }
 
-  if (definition?.resolution.type === "modify_unit_until_end_of_turn") {
+  if (definition?.behavior.type === "modify_unit_until_end_of_turn") {
     const targetId = event.targetEntityId;
     if (!targetId) {
       return null;
@@ -177,11 +177,11 @@ function buildStackResolutionAnimation(
     }
 
     const buffLabelParts: string[] = [];
-    if (definition.resolution.attackBonus !== 0) {
-      buffLabelParts.push(`${definition.resolution.attackBonus > 0 ? "+" : ""}${definition.resolution.attackBonus} ATK`);
+    if (definition.behavior.attackBonus !== 0) {
+      buffLabelParts.push(`${definition.behavior.attackBonus > 0 ? "+" : ""}${definition.behavior.attackBonus} ATK`);
     }
-    if (definition.resolution.armorBonus !== 0) {
-      buffLabelParts.push(`${definition.resolution.armorBonus > 0 ? "+" : ""}${definition.resolution.armorBonus} ARM`);
+    if (definition.behavior.armorBonus !== 0) {
+      buffLabelParts.push(`${definition.behavior.armorBonus > 0 ? "+" : ""}${definition.behavior.armorBonus} ARM`);
     }
 
     return {
@@ -196,7 +196,7 @@ function buildStackResolutionAnimation(
     };
   }
 
-  if (definition?.resolution.type === "damage_enemy_base") {
+  if (definition?.behavior.type === "damage_enemy_base") {
     const targetPlayerId = event.controllerId === "player_1" ? "player_2" : "player_1";
     const targetBase = state.entities[state.players[targetPlayerId].baseEntityId];
     if (!targetBase || targetBase.kind !== "base") {
@@ -210,7 +210,7 @@ function buildStackResolutionAnimation(
       ageSeconds: 0,
       durationSeconds: 0.7,
       coord: targetBase.coord,
-      damage: definition.resolution.amount,
+      damage: definition.behavior.amount,
     };
   }
 

@@ -141,7 +141,7 @@ function validateRespondStack(state: GameState, command: Extract<GameCommand, { 
     return { ok: false, reason: `Unknown stack effect: ${command.effectId}` };
   }
 
-  const isCounterEffect = effect.resolution.type === "counter";
+  const isCounterEffect = effect.behavior.type === "counter";
   if (isCounterEffect) {
     if (!command.targetStackItemId) {
       return { ok: false, reason: "Counter response requires a target stack item." };

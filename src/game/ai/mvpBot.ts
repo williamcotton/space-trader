@@ -460,11 +460,11 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
         }
 
         let score = -Infinity;
-        if (effect.resolution.type === "damage_entity") {
-          score = scoreDamageSpellTarget(state, botPlayerId, entity, effect.resolution.amount, state.phase);
-        } else if (effect.resolution.type === "destroy_entity" && entity.kind === "unit") {
+        if (effect.behavior.type === "damage_entity") {
+          score = scoreDamageSpellTarget(state, botPlayerId, entity, effect.behavior.amount, state.phase);
+        } else if (effect.behavior.type === "destroy_entity" && entity.kind === "unit") {
           score = scoreDestroySpellTarget(state, botPlayerId, entity);
-        } else if (effect.resolution.type === "modify_unit_until_end_of_turn" && entity.kind === "unit") {
+        } else if (effect.behavior.type === "modify_unit_until_end_of_turn" && entity.kind === "unit") {
           score = scoreBraceProtocolTarget(state, botPlayerId, entity);
         }
 
@@ -487,13 +487,13 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
       continue;
     }
 
-    if (effect.resolution.type === "damage_enemy_base") {
+    if (effect.behavior.type === "damage_enemy_base") {
       const enemyBase = state.entities[state.players[getOpponentPlayer(botPlayerId)].baseEntityId];
       if (!enemyBase || enemyBase.kind !== "base") {
         continue;
       }
 
-      const score = effect.resolution.amount >= enemyBase.hp ? AI_WEIGHTS.basePingLethalScore : state.phase === "tactical" ? AI_WEIGHTS.basePingTacticalScore : -Infinity;
+      const score = effect.behavior.amount >= enemyBase.hp ? AI_WEIGHTS.basePingLethalScore : state.phase === "tactical" ? AI_WEIGHTS.basePingTacticalScore : -Infinity;
       if (score === -Infinity) {
         continue;
       }

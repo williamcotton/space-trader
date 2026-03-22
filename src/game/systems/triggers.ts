@@ -1,18 +1,9 @@
 import type { GameEvent } from "../actions/events";
 import { getCardDefinition, type AutoTargetStrategy, type UnitCardDefinition, type UnitTrigger } from "../content/cards/catalog";
-import { getStackEffectDefinition } from "../content/stackEffects";
+import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/stackEffects";
 import type { PlayerId } from "../model/ids";
 import type { GameState } from "../model/state";
 import { createStackItemId, getOpponentPlayer } from "../turn/stack";
-
-export function getStackEffectMagnitude(effectId: string): number {
-  const definition = getStackEffectDefinition(effectId);
-  if (!definition) return 0;
-  if (definition.resolution.type === "damage_enemy_base" || definition.resolution.type === "damage_entity") {
-    return definition.resolution.amount;
-  }
-  return 0;
-}
 
 function resolveAutoTarget(
   state: GameState,

@@ -1,5 +1,5 @@
 import { getCardDefinition } from "../content/cards/catalog";
-import { getStackEffectDefinition } from "../content/stackEffects";
+import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/stackEffects";
 import { ensureEntityPresentation } from "../presentation";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
@@ -92,11 +92,7 @@ export function migrateRuntimeState(state: GameState): void {
     }
     const definition = getStackEffectDefinition(stackItem.effectId);
     if (typeof stackItem.effectMagnitude !== "number") {
-      if (definition?.resolution.type === "damage_enemy_base") {
-        stackItem.effectMagnitude = definition.resolution.amount;
-      } else {
-        stackItem.effectMagnitude = 0;
-      }
+      stackItem.effectMagnitude = getStackEffectMagnitude(stackItem.effectId);
     }
     if (typeof stackItem.targetStackItemId === "undefined") {
       stackItem.targetStackItemId = null;
