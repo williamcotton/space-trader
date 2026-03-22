@@ -304,7 +304,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     faction: "neutral",
     kind: "tactic",
     speed: "instant",
-    cost: { credits: 1 },
+    cost: { credits: 2 },
     text: "Deal 2 damage to enemy base.",
     play: tacticPlay("damage_enemy_base_2"),
     onResolve: damageEnemyBase(2, "Emergency Thrust"),
@@ -533,7 +533,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     onResolve: deployUnit("support_drone_card"),
     unit: {
       role: "combat",
-      hp: 5,
+      hp: 6,
       attackDamage: 2,
       siegeDamageBonus: 1,
       armor: 0,
