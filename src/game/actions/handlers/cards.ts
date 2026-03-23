@@ -8,6 +8,7 @@ import { syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord 
 import { createContinuousEffectId, LAYER, nextEffectTimestamp } from "../../systems/continuousEffects";
 import type { InstructionContext } from "../instructions";
 import { executeInstructions } from "../instructionHandlers";
+import { hasSproutKeyword } from "../../systems/keywords";
 
 function applyCardCost(state: GameState, playerId: PlayerId, cost: CardCost): void {
   const pool = state.players[playerId].resources;
@@ -67,6 +68,10 @@ function deployUnitToBattlefield(
   if (!cardDefinition || cardDefinition.kind !== "unit") {
     return;
   }
+  const keywords = getUnitCardKeywords(cardId);
+  const gainsImmediateActions = hasSproutKeyword(keywords);
+  const movesRemaining = gainsImmediateActions ? cardDefinition.unit.moveRange : 0;
+  const attacksRemaining = gainsImmediateActions ? cardDefinition.unit.attackActionsPerTurn : 0;
 
   state.entities[unitEntityId] = {
     id: unitEntityId,
@@ -83,12 +88,12 @@ function deployUnitToBattlefield(
     attackRange: cardDefinition.unit.attackRange,
     attackActionsPerTurn: cardDefinition.unit.attackActionsPerTurn,
     coord: { ...spawnCoord },
-    keywords: getUnitCardKeywords(cardId),
+    keywords,
     carries: null,
     sourceCardId: cardId,
     hasSummoningSickness: true,
-    movesRemaining: 0,
-    attacksRemaining: 0,
+    movesRemaining,
+    attacksRemaining,
     temporaryAttackBonus: 0,
     temporaryArmorBonus: 0,
   };

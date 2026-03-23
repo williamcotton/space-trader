@@ -5,6 +5,7 @@ import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/cata
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "../systems/unitStats";
+import { SPROUT_KEYWORD } from "../systems/keywords";
 
 function setupState() {
   return createInitialGameState({ map: FRONTIER_BELT_MAP });
@@ -871,6 +872,82 @@ describe("dispatchCommand", () => {
     expect(afterUnits.length).toBe(beforeUnitCount);
     expect(state.zones.player_1.discard.some((card) => card.instanceId === unitCardInstanceId)).toBe(true);
     expect(state.zones.player_2.discard.some((card) => card.instanceId === counterInstanceId)).toBe(true);
+  });
+
+  it("lets sprout units move and attack on the turn they enter", () => {
+    const state = setupState();
+    const supportDroneInstanceId = "player_1_support_drone_test";
+    state.zones.player_1.hand.push({
+      instanceId: supportDroneInstanceId,
+      cardId: "support_drone_card",
+      ownerId: "player_1",
+    });
+    state.players.player_1.handSize = state.zones.player_1.hand.length;
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.biomass = 4;
+    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // economy
+    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // main
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId: supportDroneInstanceId,
+    });
+    expect(play.ok).toBe(true);
+    resolveStackByPassing(state);
+
+    const deployed = Object.values(state.entities).find(
+      (entity) => entity.kind === "unit" && entity.sourceCardId === "support_drone_card"
+    );
+    expect(deployed?.kind).toBe("unit");
+    if (!deployed || deployed.kind !== "unit") {
+      throw new Error("Expected deployed support drone.");
+    }
+    expect(deployed.keywords).toContain(SPROUT_KEYWORD);
+    expect(deployed.hasSummoningSickness).toBe(true);
+    expect(deployed.movesRemaining).toBe(deployed.moveRange);
+    expect(deployed.attacksRemaining).toBe(1);
+
+    deployed.coord = { q: 0, r: 0 };
+    const enemyScout = state.entities.unit_player_2_scout;
+    expect(enemyScout?.kind).toBe("unit");
+    if (!enemyScout || enemyScout.kind !== "unit") {
+      throw new Error("Expected enemy scout.");
+    }
+    enemyScout.coord = { q: 2, r: 0 };
+    const enemyScoutHpBefore = enemyScout.hp;
+    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // tactical
+    expect(state.phase).toBe("tactical");
+
+    const select = dispatchCommand(state, {
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: deployed.id,
+    });
+    expect(select.ok).toBe(true);
+
+    const move = dispatchCommand(state, {
+      type: "MOVE_UNIT",
+      playerId: "player_1",
+      entityId: deployed.id,
+      to: { q: 1, r: 0 },
+    });
+    expect(move.ok).toBe(true);
+
+    const attack = dispatchCommand(state, {
+      type: "ATTACK_UNIT",
+      playerId: "player_1",
+      attackerId: deployed.id,
+      targetId: "unit_player_2_scout",
+    });
+    expect(attack.ok).toBe(true);
+
+    const updatedEnemyScout = state.entities.unit_player_2_scout;
+    expect(updatedEnemyScout?.kind).toBe("unit");
+    if (!updatedEnemyScout || updatedEnemyScout.kind !== "unit") {
+      throw new Error("Expected damaged enemy scout.");
+    }
+    expect(updatedEnemyScout.hp).toBeLessThan(enemyScoutHpBefore);
   });
 
   it("allows returning a unit spell to hand with a counter-to-hand effect", () => {

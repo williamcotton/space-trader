@@ -3,6 +3,7 @@ import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/cata
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { hexDistance } from "../model/hex";
 import { createInitialGameState } from "../model/state";
+import { SPROUT_KEYWORD } from "../systems/keywords";
 import { decideMvpBotCommand } from "./mvpBot";
 
 function setupState() {
@@ -370,6 +371,112 @@ describe("decideMvpBotCommand", () => {
     }
 
     expect(command.to).toEqual({ q: 0, r: -2 });
+  });
+
+  it("moves a sprout unit in tactical even while it still has summoning sickness", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+
+    const scout = state.entities.unit_player_1_scout;
+    const harvester = state.entities.unit_player_1_harvester;
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 units.");
+    }
+
+    scout.movesRemaining = 0;
+    scout.attacksRemaining = 0;
+    harvester.movesRemaining = 0;
+    harvester.attacksRemaining = 0;
+
+    state.entities.unit_player_1_support_drone = {
+      id: "unit_player_1_support_drone",
+      kind: "unit",
+      name: "Support Drone",
+      ownerId: "player_1",
+      role: "combat",
+      hp: 6,
+      maxHp: 6,
+      attackDamage: 2,
+      siegeDamageBonus: 1,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 0, r: 0 },
+      keywords: [SPROUT_KEYWORD],
+      carries: null,
+      sourceCardId: "support_drone_card",
+      hasSummoningSickness: true,
+      movesRemaining: 2,
+      attacksRemaining: 0,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+    state.selectedEntityId = "unit_player_1_support_drone";
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command?.type).toBe("MOVE_UNIT");
+    if (!command || command.type !== "MOVE_UNIT") {
+      throw new Error("Expected sprout movement command.");
+    }
+  });
+
+  it("attacks with a sprout unit in tactical even while it still has summoning sickness", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+
+    const scout = state.entities.unit_player_1_scout;
+    const harvester = state.entities.unit_player_1_harvester;
+    const enemyScout = state.entities.unit_player_2_scout;
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit" || !enemyScout || enemyScout.kind !== "unit") {
+      throw new Error("Expected units.");
+    }
+
+    scout.movesRemaining = 0;
+    scout.attacksRemaining = 0;
+    harvester.movesRemaining = 0;
+    harvester.attacksRemaining = 0;
+    enemyScout.coord = { q: 1, r: 0 };
+
+    state.entities.unit_player_1_support_drone = {
+      id: "unit_player_1_support_drone",
+      kind: "unit",
+      name: "Support Drone",
+      ownerId: "player_1",
+      role: "combat",
+      hp: 6,
+      maxHp: 6,
+      attackDamage: 2,
+      siegeDamageBonus: 1,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 0, r: 0 },
+      keywords: [SPROUT_KEYWORD],
+      carries: null,
+      sourceCardId: "support_drone_card",
+      hasSummoningSickness: true,
+      movesRemaining: 0,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+    state.selectedEntityId = "unit_player_1_support_drone";
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "ATTACK_UNIT",
+      playerId: "player_1",
+      attackerId: "unit_player_1_support_drone",
+      targetId: "unit_player_2_scout",
+    });
   });
 
   it("alloy bot prioritizes nearby ore over xenobog when alloy is the missing cost", () => {

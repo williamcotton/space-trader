@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { MAX_HAND_SIZE, createInitialGameState } from "../model/state";
+import { SPROUT_KEYWORD } from "../systems/keywords";
 import { getAutoFlowCommand } from "./autoFlow";
 
 function setupState() {
@@ -136,6 +137,56 @@ describe("getAutoFlowCommand", () => {
     const state = setupState();
     state.phase = "tactical";
     state.priorityPlayerId = "player_1";
+
+    expect(getAutoFlowCommand(state)).toBeNull();
+  });
+
+  it("does not auto-advance out of tactical when a sprout unit can still attack while summoning sick", () => {
+    const state = setupState();
+    state.phase = "tactical";
+    state.priorityPlayerId = "player_1";
+
+    const scout = state.entities.unit_player_1_scout;
+    const harvester = state.entities.unit_player_1_harvester;
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 units.");
+    }
+
+    scout.movesRemaining = 0;
+    scout.attacksRemaining = 0;
+    harvester.movesRemaining = 0;
+    harvester.attacksRemaining = 0;
+    const enemyScout = state.entities.unit_player_2_scout;
+    expect(enemyScout?.kind).toBe("unit");
+    if (!enemyScout || enemyScout.kind !== "unit") {
+      throw new Error("Expected enemy scout.");
+    }
+    enemyScout.coord = { q: 1, r: 0 };
+
+    state.entities.unit_player_1_support_drone = {
+      id: "unit_player_1_support_drone",
+      kind: "unit",
+      name: "Support Drone",
+      ownerId: "player_1",
+      role: "combat",
+      hp: 6,
+      maxHp: 6,
+      attackDamage: 2,
+      siegeDamageBonus: 1,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 0, r: 0 },
+      keywords: [SPROUT_KEYWORD],
+      carries: null,
+      sourceCardId: "support_drone_card",
+      hasSummoningSickness: true,
+      movesRemaining: 0,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
 
     expect(getAutoFlowCommand(state)).toBeNull();
   });

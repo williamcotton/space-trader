@@ -5,7 +5,11 @@ import { MAX_HAND_SIZE, type GameState, type UnitEntity } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { hasLegalPlayCardTargetOption } from "../rules/cardPlayOptions";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../systems/harvesting";
-import { canAttackEntityDirectly } from "../systems/keywords";
+import {
+  canAttackEntityDirectly,
+  isUnitBlockedFromAttackingBySummoningSickness,
+  isUnitBlockedFromMovingBySummoningSickness,
+} from "../systems/keywords";
 import { hasEntityAtCoord } from "../model/queries";
 
 function hasAnyPlayableCard(state: GameState, playerId: PlayerId): boolean {
@@ -24,7 +28,7 @@ function hasAnyPlayableCard(state: GameState, playerId: PlayerId): boolean {
 }
 
 function hasAvailableMove(state: GameState, unit: UnitEntity): boolean {
-  if (unit.hasSummoningSickness || unit.movesRemaining <= 0) {
+  if (isUnitBlockedFromMovingBySummoningSickness(unit) || unit.movesRemaining <= 0) {
     return false;
   }
 
@@ -48,7 +52,7 @@ function hasAvailableMove(state: GameState, unit: UnitEntity): boolean {
 }
 
 function hasAvailableAttack(state: GameState, unit: UnitEntity): boolean {
-  if (unit.role !== "combat" || unit.hasSummoningSickness || unit.attacksRemaining <= 0) {
+  if (unit.role !== "combat" || isUnitBlockedFromAttackingBySummoningSickness(unit) || unit.attacksRemaining <= 0) {
     return false;
   }
 

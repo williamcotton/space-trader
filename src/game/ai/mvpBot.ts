@@ -7,7 +7,11 @@ import type { PlayerId } from "../model/ids";
 import { MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord, type UnitEntity } from "../model/state";
 import { resolveCombatAttack } from "../systems/combat";
 import { canAffordCardCost, getEnemyEntities, getFirstOpenBaseAdjacentTile, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../model/queries";
-import { canAttackEntityDirectly } from "../systems/keywords";
+import {
+  canAttackEntityDirectly,
+  isUnitBlockedFromAttackingBySummoningSickness,
+  isUnitBlockedFromMovingBySummoningSickness,
+} from "../systems/keywords";
 import { getOpponentPlayer } from "../turn/stack";
 import { getCascadeAffectedHexes } from "../systems/cascade";
 import { getLegalPlayCardTargetOptions } from "../rules/cardPlayOptions";
@@ -387,7 +391,12 @@ function scoreDestroySpellTarget(state: GameState, botPlayerId: PlayerId, target
 
 function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId, target: UnitEntity): number {
   const threateningEnemies = getPlayerUnits(state, getOpponentPlayer(botPlayerId)).filter((enemy) => {
-    return enemy.role === "combat" && !enemy.hasSummoningSickness && enemy.attacksRemaining > 0 && hexDistance(enemy.coord, target.coord) <= enemy.attackRange;
+    return (
+      enemy.role === "combat" &&
+      !isUnitBlockedFromAttackingBySummoningSickness(enemy) &&
+      enemy.attacksRemaining > 0 &&
+      hexDistance(enemy.coord, target.coord) <= enemy.attackRange
+    );
   });
 
   if (threateningEnemies.length === 0) {
@@ -466,7 +475,7 @@ function scoreCascadeAttackBuffTarget(
       const threateningEnemies = getPlayerUnits(state, getOpponentPlayer(botPlayerId))
         .filter((enemy) =>
           enemy.role === "combat" &&
-          !enemy.hasSummoningSickness &&
+          !isUnitBlockedFromAttackingBySummoningSickness(enemy) &&
           enemy.attacksRemaining > 0 &&
           canAttackEntityDirectly(state, enemy.ownerId, unit) &&
           hexDistance(enemy.coord, unit.coord) <= enemy.attackRange
@@ -488,7 +497,7 @@ function scoreCascadeAttackBuffTarget(
       }
     }
 
-    if (options.attackBonus <= 0 || unit.role !== "combat" || unit.attacksRemaining <= 0 || unit.hasSummoningSickness) {
+    if (options.attackBonus <= 0 || unit.role !== "combat" || unit.attacksRemaining <= 0 || isUnitBlockedFromAttackingBySummoningSickness(unit)) {
       continue;
     }
 
@@ -800,7 +809,7 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
 }
 
 function chooseAttackCommand(state: GameState, botPlayerId: PlayerId, unit: UnitEntity): GameCommand | null {
-  if (unit.role !== "combat" || unit.attacksRemaining <= 0 || unit.hasSummoningSickness) {
+  if (unit.role !== "combat" || unit.attacksRemaining <= 0 || isUnitBlockedFromAttackingBySummoningSickness(unit)) {
     return null;
   }
 
@@ -923,7 +932,7 @@ function chooseObjectiveCoord(state: GameState, botPlayerId: PlayerId, unit: Uni
 }
 
 function chooseMoveCommand(state: GameState, botPlayerId: PlayerId, unit: UnitEntity): GameCommand | null {
-  if (unit.hasSummoningSickness || unit.movesRemaining <= 0) {
+  if (isUnitBlockedFromMovingBySummoningSickness(unit) || unit.movesRemaining <= 0) {
     return null;
   }
 

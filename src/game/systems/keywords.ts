@@ -3,6 +3,23 @@ import type { EntityState, GameState, UnitEntity } from "../model/state";
 import { unitHasKeyword } from "../model/state";
 
 export const STEALTH_KEYWORD = "stealth";
+export const SPROUT_KEYWORD = "sprout";
+
+export function hasSproutKeyword(keywords?: readonly string[]): boolean {
+  return Boolean(keywords?.includes(SPROUT_KEYWORD));
+}
+
+export function isUnitBlockedFromMovingBySummoningSickness(
+  unit: Readonly<Pick<UnitEntity, "hasSummoningSickness" | "keywords">>
+): boolean {
+  return unit.hasSummoningSickness && !hasSproutKeyword(unit.keywords);
+}
+
+export function isUnitBlockedFromAttackingBySummoningSickness(
+  unit: Readonly<Pick<UnitEntity, "hasSummoningSickness" | "keywords">>
+): boolean {
+  return unit.hasSummoningSickness && !hasSproutKeyword(unit.keywords);
+}
 
 function isEnemyStealthedUnit(
   _state: Readonly<GameState>,

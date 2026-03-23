@@ -5,7 +5,12 @@ import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import { MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { canUnitHarvestNode, getResourceNodeById } from "../systems/harvesting";
-import { getAttackKeywordBlockReason, getTargetingKeywordBlockReason } from "../systems/keywords";
+import {
+  getAttackKeywordBlockReason,
+  getTargetingKeywordBlockReason,
+  isUnitBlockedFromAttackingBySummoningSickness,
+  isUnitBlockedFromMovingBySummoningSickness,
+} from "../systems/keywords";
 import { canAffordCardCost, getFirstOpenBaseAdjacentTile, hasEntityAtCoord } from "../model/queries";
 
 export type CommandValidationResult = {
@@ -200,7 +205,7 @@ function validateMoveUnit(state: GameState, command: Extract<GameCommand, { type
   if (entity.kind !== "unit") return { ok: false, reason: "Only units can move." };
   if (entity.ownerId !== command.playerId) return { ok: false, reason: "Cannot move opponent unit." };
   if (state.selectedEntityId !== command.entityId) return { ok: false, reason: "Unit must be selected before moving." };
-  if (entity.hasSummoningSickness) return { ok: false, reason: "Unit has summoning sickness." };
+  if (isUnitBlockedFromMovingBySummoningSickness(entity)) return { ok: false, reason: "Unit has summoning sickness." };
 
   const distance = hexDistance(entity.coord, command.to);
   if (distance === 0) return { ok: false, reason: "Unit is already on target tile." };
@@ -222,7 +227,7 @@ function validateAttackUnit(state: GameState, command: Extract<GameCommand, { ty
   if (attacker.ownerId !== command.playerId) return { ok: false, reason: "Cannot attack with opponent unit." };
   if (attacker.role !== "combat") return { ok: false, reason: "Only combat units can attack." };
   if (state.selectedEntityId !== command.attackerId) return { ok: false, reason: "Attacker must be selected before attacking." };
-  if (attacker.hasSummoningSickness) return { ok: false, reason: "Unit has summoning sickness." };
+  if (isUnitBlockedFromAttackingBySummoningSickness(attacker)) return { ok: false, reason: "Unit has summoning sickness." };
   if (attacker.attacksRemaining <= 0) return { ok: false, reason: "Unit has no attacks remaining." };
 
   const target = getEntity(state, command.targetId);

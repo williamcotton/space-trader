@@ -14,6 +14,7 @@ import { removeStackItemById } from "../turn/stack";
 import type { GameInstruction } from "./instructions";
 import { drawCardForPlayer } from "./handlers/cards";
 import { applyReplacementEffects } from "../systems/replacementEngine";
+import { hasSproutKeyword } from "../systems/keywords";
 
 // --- Internal helpers (extracted from handlers/cards.ts) ---
 
@@ -56,6 +57,10 @@ function deployUnitInternal(
 
   const suffix = Object.keys(state.entities).length + state.log.length + state.turn;
   const unitEntityId = entityId ?? `unit_${controllerId}_${cardId}_${suffix}`;
+  const keywords = getUnitCardKeywords(cardId);
+  const gainsImmediateActions = hasSproutKeyword(keywords);
+  const movesRemaining = gainsImmediateActions ? cardDefinition.unit.moveRange : 0;
+  const attacksRemaining = gainsImmediateActions ? cardDefinition.unit.attackActionsPerTurn : 0;
 
   state.entities[unitEntityId] = {
     id: unitEntityId,
@@ -72,12 +77,12 @@ function deployUnitInternal(
     attackRange: cardDefinition.unit.attackRange,
     attackActionsPerTurn: cardDefinition.unit.attackActionsPerTurn,
     coord: { ...coord },
-    keywords: getUnitCardKeywords(cardId),
+    keywords,
     carries: null,
     sourceCardId: cardId,
     hasSummoningSickness: true,
-    movesRemaining: 0,
-    attacksRemaining: 0,
+    movesRemaining,
+    attacksRemaining,
     temporaryAttackBonus: 0,
     temporaryArmorBonus: 0,
   };

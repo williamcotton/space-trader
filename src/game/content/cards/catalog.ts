@@ -665,7 +665,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "unit",
     speed: "main",
     cost: { credits: 2, biomass: 1 },
-    text: "Deploy a resource unit near your base.",
+    text: "Sprout (can move and attack the turn it enters). Deploy a resource unit near your base.",
     play: unitPlay(),
     onResolve: deployUnit("swarm_harvester_card"),
     unit: {
@@ -677,6 +677,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       moveRange: 4,
       attackRange: 1,
       attackActionsPerTurn: 1,
+      keywords: ["sprout"],
     },
   },
   support_drone_card: {
@@ -686,7 +687,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "unit",
     speed: "main",
     cost: { credits: 2, biomass: 1 },
-    text: "Deploy a biomass skirmisher near your base.",
+    text: "Sprout (can move and attack the turn it enters). Deploy a biomass skirmisher near your base.",
     play: unitPlay(),
     onResolve: deployUnit("support_drone_card"),
     unit: {
@@ -698,6 +699,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       moveRange: 2,
       attackRange: 1,
       attackActionsPerTurn: 1,
+      keywords: ["sprout"],
     },
   },
   escort_drone_card: {
