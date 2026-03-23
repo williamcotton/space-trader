@@ -1,7 +1,7 @@
 import type { Faction, GamePhase, ResourceType, UnitRole } from "./enums";
 import { PLAYER_ONE, PLAYER_TWO, type EntityId, type NodeId, type PlayerId } from "./ids";
 import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
-import { getUnitCardKeywords } from "../content/cards/catalog";
+import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
 import type { ContinuousEffect } from "../systems/continuousEffects";
 
 export const OPENING_HAND_SIZE = 5;
@@ -46,6 +46,13 @@ export type MapState = {
   height: number;
   spawnPoints: Record<PlayerId, HexCoord>;
   resourceNodes: MapResourceNode[];
+};
+
+export type GameRules = {
+  creditDepositAmount: number;
+  primaryDepositAmount: number;
+  economyCreditsIncome: number;
+  economyPrimaryIncome: number;
 };
 
 export type PlayerState = {
@@ -129,6 +136,7 @@ export type GameState = {
   consecutivePriorityPasses: number;
   hoveredHex: HexCoord | null;
   selectedEntityId: EntityId | null;
+  rules: GameRules;
   map: MapState;
   players: Record<PlayerId, PlayerState>;
   zones: Record<PlayerId, PlayerZones>;
@@ -155,7 +163,33 @@ type CreateInitialGameStateOptions = {
   map: MapState;
   matchId?: string;
   randomSource?: () => number;
+  rules?: Partial<GameRules>;
 };
+
+export const DEFAULT_GAME_RULES: GameRules = {
+  creditDepositAmount: 2,
+  primaryDepositAmount: 2,
+  economyCreditsIncome: 1,
+  economyPrimaryIncome: 0,
+};
+
+export function createDefaultGameRules(): GameRules {
+  return { ...DEFAULT_GAME_RULES };
+}
+
+export function getConfiguredDepositAmount(rules: GameRules, resourceType: ResourceType): number {
+  return resourceType === "credits" ? rules.creditDepositAmount : rules.primaryDepositAmount;
+}
+
+export function getPrimaryResourceForFaction(faction: Faction): Exclude<ResourceType, "credits"> {
+  if (faction === "alloy_clan") {
+    return "alloy";
+  }
+  if (faction === "flux_collective") {
+    return "flux";
+  }
+  return "biomass";
+}
 
 function shuffleCards<T>(cards: T[], randomSource: () => number): T[] {
   const shuffled = [...cards];
@@ -167,11 +201,12 @@ function shuffleCards<T>(cards: T[], randomSource: () => number): T[] {
 }
 
 function createStartingResources(playerId: PlayerId, faction: Faction): ResourcePool {
+  const primary = getPrimaryResourceForFaction(faction);
   return {
     credits: playerId === PLAYER_ONE ? PLAYER_ONE_STARTING_CREDITS : PLAYER_TWO_STARTING_CREDITS,
-    alloy: faction === "alloy_clan" ? STARTING_PRIMARY_RESOURCE : 0,
-    flux: faction === "flux_collective" ? STARTING_PRIMARY_RESOURCE : 0,
-    biomass: faction === "biomass_swarm" ? STARTING_PRIMARY_RESOURCE : 0,
+    alloy: primary === "alloy" ? STARTING_PRIMARY_RESOURCE : 0,
+    flux: primary === "flux" ? STARTING_PRIMARY_RESOURCE : 0,
+    biomass: primary === "biomass" ? STARTING_PRIMARY_RESOURCE : 0,
   };
 }
 
@@ -228,12 +263,19 @@ export function syncPlayerZoneCounts(state: Pick<GameState, "players" | "zones">
 
 export function createInitialGameState(options: CreateInitialGameStateOptions): GameState {
   const map = cloneMap(options.map);
+  const rules = {
+    ...createDefaultGameRules(),
+    ...(options.rules ?? {}),
+  };
   const baseOneId: EntityId = "base_player_1";
   const baseTwoId: EntityId = "base_player_2";
   const unitOneId: EntityId = "unit_player_1_scout";
   const unitTwoId: EntityId = "unit_player_2_scout";
   const harvesterOneId: EntityId = "unit_player_1_harvester";
   const harvesterTwoId: EntityId = "unit_player_2_harvester";
+  const expeditionHarvesterCard = getCardDefinition("expedition_harvester_card");
+  const expeditionHarvesterMoveRange =
+    expeditionHarvesterCard && expeditionHarvesterCard.kind === "unit" ? expeditionHarvesterCard.unit.moveRange : 3;
 
   const entities: Record<EntityId, EntityState> = {
     [baseOneId]: {
@@ -319,7 +361,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       attackDamage: 1,
       siegeDamageBonus: 0,
       armor: 0,
-      moveRange: 2,
+      moveRange: expeditionHarvesterMoveRange,
       attackRange: 1,
       attackActionsPerTurn: 1,
       coord: {
@@ -330,7 +372,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       carries: null,
       sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,
-      movesRemaining: 2,
+      movesRemaining: expeditionHarvesterMoveRange,
       attacksRemaining: 1,
       temporaryAttackBonus: 0,
       temporaryArmorBonus: 0,
@@ -346,7 +388,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       attackDamage: 1,
       siegeDamageBonus: 0,
       armor: 0,
-      moveRange: 2,
+      moveRange: expeditionHarvesterMoveRange,
       attackRange: 1,
       attackActionsPerTurn: 1,
       coord: {
@@ -357,7 +399,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       carries: null,
       sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,
-      movesRemaining: 2,
+      movesRemaining: expeditionHarvesterMoveRange,
       attacksRemaining: 1,
       temporaryAttackBonus: 0,
       temporaryArmorBonus: 0,
@@ -379,6 +421,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     consecutivePriorityPasses: 0,
     hoveredHex: null,
     selectedEntityId: null,
+    rules,
     map,
     players: {
       player_1: {

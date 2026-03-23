@@ -3,6 +3,7 @@ import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/cata
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { getStarterDeckCardIds } from "../content/decks/starterDecks";
 import {
+  DEFAULT_GAME_RULES,
   OPENING_HAND_SIZE,
   PLAYER_ONE_STARTING_CREDITS,
   PLAYER_TWO_STARTING_CREDITS,
@@ -73,6 +74,38 @@ describe("createInitialGameState", () => {
       expect(scout.keywords).toEqual(["ambush"]);
     } finally {
       scoutCard.unit.keywords = original;
+    }
+  });
+
+  it("uses the live economy defaults for deposits and resource harvester movement", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+
+    expect(state.rules).toEqual(DEFAULT_GAME_RULES);
+    const harvester = state.entities.unit_player_1_harvester;
+    expect(harvester?.kind).toBe("unit");
+    if (!harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 harvester.");
+    }
+    expect(harvester.moveRange).toBe(4);
+    expect(harvester.movesRemaining).toBe(4);
+  });
+
+  it("hydrates starting harvester movement from the expedition harvester card definition", () => {
+    const harvesterCard = CARD_DEFINITIONS.expedition_harvester_card as UnitCardDefinition;
+    const originalMoveRange = harvesterCard.unit.moveRange;
+    harvesterCard.unit.moveRange = 4;
+
+    try {
+      const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+      const harvester = state.entities.unit_player_1_harvester;
+      expect(harvester?.kind).toBe("unit");
+      if (!harvester || harvester.kind !== "unit") {
+        throw new Error("Expected player 1 harvester.");
+      }
+      expect(harvester.moveRange).toBe(4);
+      expect(harvester.movesRemaining).toBe(4);
+    } finally {
+      harvesterCard.unit.moveRange = originalMoveRange;
     }
   });
 });

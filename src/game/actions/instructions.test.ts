@@ -156,6 +156,33 @@ describe("executeInstructions", () => {
         scoutCard.unit.keywords = original;
       }
     });
+
+    it("uses the resource unit card move range when deploying a resource unit", () => {
+      const harvesterCard = CARD_DEFINITIONS.expedition_harvester_card as UnitCardDefinition;
+      const originalMoveRange = harvesterCard.unit.moveRange;
+      harvesterCard.unit.moveRange = 4;
+
+      try {
+        const state = createInitialGameState({
+          map: FRONTIER_BELT_MAP,
+        });
+
+        executeInstructions(state, [
+          { type: "DEPLOY_UNIT", cardId: "expedition_harvester_card", controllerId: "player_1" },
+        ]);
+
+        const newUnit = Object.values(state.entities).find(
+          (entity) => entity.kind === "unit" && entity.sourceCardId === "expedition_harvester_card" && entity.id !== "unit_player_1_harvester"
+        );
+        expect(newUnit?.kind).toBe("unit");
+        if (!newUnit || newUnit.kind !== "unit") {
+          throw new Error("Expected deployed harvester.");
+        }
+        expect(newUnit.moveRange).toBe(4);
+      } finally {
+        harvesterCard.unit.moveRange = originalMoveRange;
+      }
+    });
   });
 
   describe("APPLY_CONTINUOUS_EFFECT", () => {

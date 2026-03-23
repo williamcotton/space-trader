@@ -4,7 +4,7 @@ import type { GameState } from "../../model/state";
 import type { PlayerId } from "../../model/ids";
 import { getOpponentPlayer, peekTopStackItem } from "../../turn/stack";
 import { advancePhase } from "../../turn/phaseMachine";
-import { resolveEconomyDeposits } from "../../systems/harvesting";
+import { resolveEconomyDeposits, resolveEconomyIncome } from "../../systems/harvesting";
 import { resolveEndPhaseNodeControl } from "../../systems/nodeControl";
 import { trackTacticalHarvestOpportunity } from "./combat";
 import { drawCardForPlayer } from "./cards";
@@ -90,6 +90,7 @@ export function reducePhaseAdvanced(
   const previousPhase = state.phase;
   const previousActivePlayer = state.activePlayerId;
   if (previousPhase === "start") {
+    resolveEconomyIncome(state, previousActivePlayer);
     resolveEconomyDeposits(state, previousActivePlayer);
   }
   if (previousPhase === "end") {

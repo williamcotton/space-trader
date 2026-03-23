@@ -1,7 +1,7 @@
 import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
 import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/stackEffects";
 import { ensureEntityPresentation } from "../presentation";
-import { BASE_STARTING_HP, OPENING_HAND_SIZE, createInitialZonesForPlayer } from "./state";
+import { BASE_STARTING_HP, OPENING_HAND_SIZE, createDefaultGameRules, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
 
 export const CURRENT_STATE_VERSION = 19;
@@ -9,6 +9,9 @@ export const CURRENT_STATE_VERSION = 19;
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
   const playerTwoHarvesterId = "unit_player_2_harvester";
+  const expeditionHarvesterCard = getCardDefinition("expedition_harvester_card");
+  const expeditionHarvesterMoveRange =
+    expeditionHarvesterCard && expeditionHarvesterCard.kind === "unit" ? expeditionHarvesterCard.unit.moveRange : 3;
 
   if (!state.entities[playerOneHarvesterId]) {
     const spawn = state.map.spawnPoints.player_1;
@@ -23,7 +26,7 @@ function migratePhaseFourHarvesters(state: GameState): void {
       attackDamage: 1,
       siegeDamageBonus: 0,
       armor: 0,
-      moveRange: 2,
+      moveRange: expeditionHarvesterMoveRange,
       attackRange: 1,
       attackActionsPerTurn: 1,
       coord: { q: spawn.q, r: spawn.r + 1 },
@@ -31,7 +34,7 @@ function migratePhaseFourHarvesters(state: GameState): void {
       carries: null,
       sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,
-      movesRemaining: 2,
+      movesRemaining: expeditionHarvesterMoveRange,
       attacksRemaining: 1,
       temporaryAttackBonus: 0,
       temporaryArmorBonus: 0,
@@ -51,7 +54,7 @@ function migratePhaseFourHarvesters(state: GameState): void {
       attackDamage: 1,
       siegeDamageBonus: 0,
       armor: 0,
-      moveRange: 2,
+      moveRange: expeditionHarvesterMoveRange,
       attackRange: 1,
       attackActionsPerTurn: 1,
       coord: { q: spawn.q, r: spawn.r - 1 },
@@ -59,7 +62,7 @@ function migratePhaseFourHarvesters(state: GameState): void {
       carries: null,
       sourceCardId: "expedition_harvester_card",
       hasSummoningSickness: false,
-      movesRemaining: 2,
+      movesRemaining: expeditionHarvesterMoveRange,
       attacksRemaining: 1,
       temporaryAttackBonus: 0,
       temporaryArmorBonus: 0,
@@ -78,6 +81,24 @@ export function migrateRuntimeState(state: GameState): void {
 
   if (typeof state.hoveredHex === "undefined") {
     state.hoveredHex = null;
+  }
+
+  if (!state.rules) {
+    state.rules = createDefaultGameRules();
+  } else {
+    const defaultRules = createDefaultGameRules();
+    if (typeof state.rules.creditDepositAmount !== "number") {
+      state.rules.creditDepositAmount = defaultRules.creditDepositAmount;
+    }
+    if (typeof state.rules.primaryDepositAmount !== "number") {
+      state.rules.primaryDepositAmount = defaultRules.primaryDepositAmount;
+    }
+    if (typeof state.rules.economyCreditsIncome !== "number") {
+      state.rules.economyCreditsIncome = defaultRules.economyCreditsIncome;
+    }
+    if (typeof state.rules.economyPrimaryIncome !== "number") {
+      state.rules.economyPrimaryIncome = defaultRules.economyPrimaryIncome;
+    }
   }
 
   if (!Array.isArray(state.tacticalHarvestEligibleUnitIds)) {

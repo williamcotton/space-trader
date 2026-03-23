@@ -802,7 +802,7 @@ describe("dispatchCommand", () => {
     expect(state.stack).toHaveLength(1);
     expect(state.stack[0]?.sourceCardId).toBe("frontline_scout_card");
     expect(state.stack[0]?.pendingUnitEntityId).toContain("frontline_scout_card");
-    expect(state.players.player_1.resources.credits).toBe(2);
+    expect(state.players.player_1.resources.credits).toBe(3);
     expect(state.players.player_1.resources.alloy).toBe(2);
     expect(state.zones.player_1.hand.some((card) => card.instanceId === cardInHand.instanceId)).toBe(false);
 
@@ -1420,7 +1420,7 @@ describe("dispatchCommand", () => {
     expect(node.controlledBy).toBe("player_1");
   });
 
-  it("does not grant passive income from node ownership", () => {
+  it("grants passive economy income, but not extra income from node ownership alone", () => {
     const state = setupState();
     const node = state.map.resourceNodes.find((entry) => entry.id === "frontier_credits_center");
     expect(node).toBeDefined();
@@ -1436,7 +1436,33 @@ describe("dispatchCommand", () => {
     });
     expect(toEconomy.ok).toBe(true);
     expect(state.phase).toBe("economy");
-    expect(state.players.player_1.resources).toEqual(before);
+    expect(state.players.player_1.resources).toEqual({
+      credits: before.credits + 1,
+      alloy: before.alloy,
+      flux: before.flux,
+      biomass: before.biomass,
+    });
+  });
+
+  it("grants passive economy income based on the active player's faction", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    const before = { ...state.players.player_2.resources };
+
+    const toEconomy = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_2",
+    });
+
+    expect(toEconomy.ok).toBe(true);
+    expect(state.phase).toBe("economy");
+    expect(state.players.player_2.resources).toEqual({
+      credits: before.credits + 1,
+      alloy: before.alloy,
+      flux: before.flux,
+      biomass: before.biomass,
+    });
   });
 
   it("harvests from a controlled node into harvester cargo and rejects invalid repeats", () => {
@@ -1559,7 +1585,7 @@ describe("dispatchCommand", () => {
     });
     expect(economyStep.ok).toBe(true);
     expect(state.phase).toBe("economy");
-    expect(state.players.player_1.resources.alloy).toBe(beforeAlloy + 1);
+    expect(state.players.player_1.resources.alloy).toBe(beforeAlloy + 2);
     const afterDeposit = state.entities[harvesterId];
     expect(afterDeposit?.kind).toBe("unit");
     if (!afterDeposit || afterDeposit.kind !== "unit") {
@@ -1609,7 +1635,29 @@ describe("dispatchCommand", () => {
 
     expect(economyStep.ok).toBe(true);
     expect(state.phase).toBe("economy");
-    expect(state.players.player_1.resources.credits).toBe(beforeCredits + 2);
+    expect(state.players.player_1.resources.credits).toBe(beforeCredits + 3);
+  });
+
+  it("uses configured primary deposit amounts when entering economy", () => {
+    const state = setupState();
+    state.rules.primaryDepositAmount = 4;
+    const harvester = state.entities.unit_player_1_harvester;
+    expect(harvester?.kind).toBe("unit");
+    if (!harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 harvester.");
+    }
+
+    harvester.carries = "alloy";
+    harvester.coord = { q: -3, r: -3 };
+    const beforeAlloy = state.players.player_1.resources.alloy;
+
+    const economyStep = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+
+    expect(economyStep.ok).toBe(true);
+    expect(state.players.player_1.resources.alloy).toBe(beforeAlloy + 4);
   });
 
   it("loses cargo when a loaded harvester is destroyed", () => {

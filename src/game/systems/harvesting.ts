@@ -1,6 +1,6 @@
 import { areSameHex, hexDistance } from "../model/hex";
 import type { ResourceType } from "../model/enums";
-import type { HexCoord, GameState, UnitEntity } from "../model/state";
+import { getConfiguredDepositAmount, getPrimaryResourceForFaction, type HexCoord, type GameState, type UnitEntity } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { getPlayerBase } from "../model/queries";
 
@@ -13,10 +13,6 @@ function createEmptyResourceTally(): ResourceTally {
     flux: 0,
     biomass: 0,
   };
-}
-
-function getDepositAmount(resourceType: ResourceType): number {
-  return resourceType === "credits" ? 2 : 1;
 }
 
 export function isBaseAdjacentDropoffTile(state: GameState, playerId: PlayerId, coord: HexCoord): boolean {
@@ -50,7 +46,7 @@ export function resolveEconomyDeposits(state: GameState, playerId: PlayerId): { 
     }
 
     const carried = entity.carries;
-    const amount = getDepositAmount(carried);
+    const amount = getConfiguredDepositAmount(state.rules, carried);
     entity.carries = null;
     state.players[playerId].resources[carried] += amount;
     byResource[carried] += amount;
@@ -62,6 +58,36 @@ export function resolveEconomyDeposits(state: GameState, playerId: PlayerId): { 
   }
 
   return { deposited, byResource };
+}
+
+export function resolveEconomyIncome(state: GameState, playerId: PlayerId): { granted: number; byResource: ResourceTally } {
+  const byResource = createEmptyResourceTally();
+  const player = state.players[playerId];
+  const primary = getPrimaryResourceForFaction(player.faction);
+  let granted = 0;
+
+  const creditAmount = state.rules.economyCreditsIncome;
+  if (creditAmount > 0) {
+    state.players[playerId].resources.credits += creditAmount;
+    byResource.credits += creditAmount;
+    granted += creditAmount;
+  }
+
+  const primaryAmount = state.rules.economyPrimaryIncome;
+  if (primaryAmount > 0) {
+    state.players[playerId].resources[primary] += primaryAmount;
+    byResource[primary] += primaryAmount;
+    granted += primaryAmount;
+  }
+
+  if (granted > 0) {
+    state.log.push({
+      turn: state.turn,
+      text: `${playerId} gained passive economy: ${creditAmount} credits and ${primaryAmount} ${primary}.`,
+    });
+  }
+
+  return { granted, byResource };
 }
 
 export function canUnitHarvestNode(unit: UnitEntity, playerId: PlayerId): boolean {

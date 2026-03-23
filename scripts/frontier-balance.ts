@@ -3,6 +3,7 @@ import { decideMvpBotCommand } from "../src/game/ai/mvpBot";
 import { FRONTIER_BELT_MAP } from "../src/game/content/maps/frontierBelt";
 import { FACTIONS, type Faction, type ResourceType } from "../src/game/model/enums";
 import {
+  DEFAULT_GAME_RULES,
   PLAYER_ONE_STARTING_CREDITS,
   PLAYER_TWO_STARTING_CREDITS,
   STARTING_PRIMARY_RESOURCE,
@@ -21,6 +22,7 @@ type SimulationConfig = {
   playerOnePrimary: number;
   playerTwoCredits: number;
   playerTwoPrimary: number;
+  primaryDepositAmount: number;
   sweepPlayerOneResources: boolean;
   sweepResourceGrid: boolean;
   playerOneCreditCandidates: number[];
@@ -66,6 +68,7 @@ const DEFAULT_CONFIG: SimulationConfig = {
   playerOnePrimary: STARTING_PRIMARY_RESOURCE,
   playerTwoCredits: PLAYER_TWO_STARTING_CREDITS,
   playerTwoPrimary: STARTING_PRIMARY_RESOURCE,
+  primaryDepositAmount: DEFAULT_GAME_RULES.primaryDepositAmount,
   sweepPlayerOneResources: false,
   sweepResourceGrid: false,
   playerOneCreditCandidates: [4, 3, 2, 1, 0],
@@ -89,6 +92,7 @@ function printUsage(): void {
   console.log(`  --p1-primary <n>             Override player 1 starting faction resource`);
   console.log(`  --p2-credits <n>             Override player 2 starting credits`);
   console.log(`  --p2-primary <n>             Override player 2 starting faction resource`);
+  console.log(`  --primary-deposit <n>        Override non-credit deposit amount`);
   console.log(`  --pairings <a:b,c:d>         Restrict runs to explicit ordered faction pairings`);
   console.log("");
   console.log(`Sweep options`);
@@ -193,6 +197,11 @@ function parseConfig(argv: string[]): SimulationConfig {
       index += 1;
       continue;
     }
+    if (arg === "--primary-deposit") {
+      config.primaryDepositAmount = Number(value);
+      index += 1;
+      continue;
+    }
     if (arg === "--sweep-p1-resources") {
       config.sweepPlayerOneResources = value === "true";
       index += 1;
@@ -249,6 +258,9 @@ function parseConfig(argv: string[]): SimulationConfig {
   }
   if (!Number.isInteger(config.playerTwoPrimary) || config.playerTwoPrimary < 0) {
     throw new Error(`Invalid --p2-primary value: ${config.playerTwoPrimary}`);
+  }
+  if (!Number.isInteger(config.primaryDepositAmount) || config.primaryDepositAmount < 0) {
+    throw new Error(`Invalid --primary-deposit value: ${config.primaryDepositAmount}`);
   }
   for (const [flag, values] of [
     ["--p1-credit-candidates", config.playerOneCreditCandidates],
@@ -310,6 +322,9 @@ function createFactionMatch(playerOneFaction: Faction, playerTwoFaction: Faction
     map: FRONTIER_BELT_MAP,
     matchId: `sim_${seed}`,
     randomSource,
+    rules: {
+      primaryDepositAmount: config.primaryDepositAmount,
+    },
   });
 
   assignFaction(state, "player_1", playerOneFaction, randomSource, {
@@ -324,7 +339,11 @@ function createFactionMatch(playerOneFaction: Faction, playerTwoFaction: Faction
   state.log = [
     {
       turn: 1,
-      text: `Simulation initialized: ${playerOneFaction} vs ${playerTwoFaction}. P1 ${config.playerOneCredits}/${config.playerOnePrimary} P2 ${config.playerTwoCredits}/${config.playerTwoPrimary}.`,
+      text:
+        `Simulation initialized: ${playerOneFaction} vs ${playerTwoFaction}. ` +
+        `P1 ${config.playerOneCredits}/${config.playerOnePrimary} ` +
+        `P2 ${config.playerTwoCredits}/${config.playerTwoPrimary} ` +
+        `primaryDeposit ${config.primaryDepositAmount}.`,
     },
   ];
   state.lastRejectedReason = null;
@@ -493,7 +512,10 @@ function printSimulationSummary(summary: SimulationSummary): void {
   const mirrorPlayerTwoRate = mirrorDecisiveGames === 0 ? 0.5 : mirrorSeatStats.playerTwoWins / mirrorDecisiveGames;
   console.log(`Frontier Belt bot simulation`);
   console.log(
-    `games=${config.games} maxTurns=${config.maxTurns} seed=${config.seed} p1Credits=${config.playerOneCredits} p1Primary=${config.playerOnePrimary} p2Credits=${config.playerTwoCredits} p2Primary=${config.playerTwoPrimary}`
+    `games=${config.games} maxTurns=${config.maxTurns} seed=${config.seed} ` +
+      `p1Credits=${config.playerOneCredits} p1Primary=${config.playerOnePrimary} ` +
+      `p2Credits=${config.playerTwoCredits} p2Primary=${config.playerTwoPrimary} ` +
+      `primaryDeposit=${config.primaryDepositAmount}`
   );
   console.log("");
   console.log(`Seat results`);
