@@ -1155,6 +1155,124 @@ describe("dispatchCommand", () => {
     expect(state.zones.player_2.discard.some((card) => card.instanceId === cardInstanceId)).toBe(true);
   });
 
+  it("Shrapnel Relay buffs only friendly combat units on affected hexes", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.alloy = 4;
+
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "shrapnel_relay");
+    const scout = state.entities.unit_player_1_scout;
+    const harvester = state.entities.unit_player_1_harvester;
+    expect(scout?.kind).toBe("unit");
+    expect(harvester?.kind).toBe("unit");
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 units for Shrapnel Relay.");
+    }
+
+    scout.coord = { q: 0, r: 0 };
+    harvester.coord = { q: 1, r: 0 };
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetHex: { q: 0, r: 0 },
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    const buffedScout = state.entities[scout.id];
+    const sameHarvester = state.entities[harvester.id];
+    expect(buffedScout?.kind).toBe("unit");
+    expect(sameHarvester?.kind).toBe("unit");
+    if (!buffedScout || buffedScout.kind !== "unit" || !sameHarvester || sameHarvester.kind !== "unit") {
+      throw new Error("Expected units after Shrapnel Relay.");
+    }
+
+    expect(getEffectiveUnitAttackDamage(state, buffedScout)).toBe(buffedScout.attackDamage + 1);
+    expect(getEffectiveUnitArmor(state, buffedScout)).toBe(buffedScout.armor + 1);
+    expect(getEffectiveUnitAttackDamage(state, sameHarvester)).toBe(sameHarvester.attackDamage);
+    expect(getEffectiveUnitArmor(state, sameHarvester)).toBe(sameHarvester.armor);
+  });
+
+  it("Spore Bloom rewards clustered friendly boards with bonus biomass", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.biomass = 4;
+
+    const extraUnitId = "unit_player_1_spore_bloom_test";
+    state.entities[extraUnitId] = {
+      id: extraUnitId,
+      kind: "unit",
+      name: "Spore Bloom Test Body",
+      ownerId: "player_1",
+      role: "utility",
+      hp: 4,
+      maxHp: 4,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 0, r: 1 },
+      keywords: [],
+      carries: null,
+      sourceCardId: "escort_drone_card",
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const scout = state.entities.unit_player_1_scout;
+    const harvester = state.entities.unit_player_1_harvester;
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 units for Spore Bloom.");
+    }
+    scout.coord = { q: 0, r: 0 };
+    harvester.coord = { q: 1, r: 0 };
+
+    const cardInstanceId = "player_1_spore_bloom_test";
+    state.zones.player_1.hand.push({
+      instanceId: cardInstanceId,
+      cardId: "spore_bloom",
+      ownerId: "player_1",
+    });
+    state.players.player_1.handSize = state.zones.player_1.hand.length;
+    const beforeBiomass = state.players.player_1.resources.biomass;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetHex: { q: 0, r: 0 },
+    });
+    expect(play.ok).toBe(true);
+    const afterCastBiomass = state.players.player_1.resources.biomass;
+
+    resolveStackByPassing(state);
+
+    expect(afterCastBiomass).toBe(beforeBiomass - 1);
+    expect(state.players.player_1.resources.biomass).toBe(beforeBiomass);
+    const buffedScout = state.entities[scout.id];
+    expect(buffedScout?.kind).toBe("unit");
+    if (!buffedScout || buffedScout.kind !== "unit") {
+      throw new Error("Expected scout after Spore Bloom.");
+    }
+    expect(getEffectiveUnitArmor(state, buffedScout)).toBe(buffedScout.armor + 1);
+  });
+
   it("applies Brace Protocol until end of turn and then clears the armor bonus", () => {
     const state = setupState();
     const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "brace_protocol");

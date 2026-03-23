@@ -34,6 +34,20 @@ describe("starter decks", () => {
     }
   });
 
+  it("includes the new cascade cards in the intended starters", () => {
+    const alloyCards = getStarterDeckCardIds("alloy_clan");
+    const fluxCards = getStarterDeckCardIds("flux_collective");
+    const biomassCards = getStarterDeckCardIds("biomass_swarm");
+
+    expect(alloyCards.filter((cardId) => cardId === "shrapnel_relay")).toHaveLength(4);
+    expect(fluxCards.filter((cardId) => cardId === "ion_shower")).toHaveLength(4);
+    expect(biomassCards.filter((cardId) => cardId === "spore_bloom")).toHaveLength(4);
+
+    for (const cards of [alloyCards, fluxCards, biomassCards]) {
+      expect(cards.filter((cardId) => cardId === "chain_beacon")).toHaveLength(4);
+    }
+  });
+
   it("does not include off-faction splash cards in starter decks", () => {
     for (const faction of ["alloy_clan", "flux_collective", "biomass_swarm"] as const) {
       const cards = getStarterDeckCardIds(faction);

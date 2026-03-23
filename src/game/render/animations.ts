@@ -238,7 +238,7 @@ function buildStackResolutionAnimation(
     };
   }
 
-  if (definition?.behavior.type === "cascade_attack_buff") {
+  if (definition?.behavior.type === "cascade_unit_buff") {
     return buildHexShowerAnimation(event, state, baseId, event.label, definition.behavior.waves, "neutral");
   }
 

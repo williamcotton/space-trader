@@ -1,7 +1,8 @@
 import type { GameInstruction, InstructionContext } from "../actions/instructions";
 import { getCardDefinition } from "./cards/catalog";
-import { createCascadeAttackBuffInstructions } from "./cards/instructionFactories";
+import { createCascadeUnitBuffInstructions } from "./cards/instructionFactories";
 import { LAYER } from "../systems/continuousEffects";
+import type { ResourceType, UnitRole } from "../model/enums";
 
 export type CounterDestination = "discard" | "hand" | "exile" | "none";
 export type StackObjectKind = "spell" | "ability";
@@ -56,9 +57,16 @@ export type StackEffectBehavior =
       armorBonus: number;
     }
   | {
-      type: "cascade_attack_buff";
-      amount: number;
+      type: "cascade_unit_buff";
+      attackBonus: number;
+      armorBonus: number;
       waves: number;
+      roleFilter?: UnitRole;
+      reward?: {
+        resource: ResourceType;
+        amount: number;
+        minUnits: number;
+      };
     }
   | {
       type: "counter";
@@ -205,10 +213,24 @@ function createModifyUnitUntilEndOfTurnInstructions(attackBonus: number, armorBo
   };
 }
 
-function createCascadeAttackBuffEffect(id: string, amount: number, waves: number): StackEffectDefinition {
+function createCascadeUnitBuffEffect(
+  id: string,
+  options: {
+    label: string;
+    attackBonus?: number;
+    armorBonus?: number;
+    waves: number;
+    roleFilter?: UnitRole;
+    reward?: {
+      resource: ResourceType;
+      amount: number;
+      minUnits: number;
+    };
+  }
+): StackEffectDefinition {
   return {
     id,
-    label: "Cascade Attack Buff",
+    label: options.label,
     object: {
       kind: "spell",
       counterable: true,
@@ -218,11 +240,20 @@ function createCascadeAttackBuffEffect(id: string, amount: number, waves: number
       type: "hex",
     },
     behavior: {
-      type: "cascade_attack_buff",
-      amount,
-      waves,
+      type: "cascade_unit_buff",
+      attackBonus: options.attackBonus ?? 0,
+      armorBonus: options.armorBonus ?? 0,
+      waves: options.waves,
+      roleFilter: options.roleFilter,
+      reward: options.reward,
     },
-    createInstructions: createCascadeAttackBuffInstructions(amount, waves),
+    createInstructions: createCascadeUnitBuffInstructions({
+      attackBonus: options.attackBonus,
+      armorBonus: options.armorBonus,
+      waves: options.waves,
+      roleFilter: options.roleFilter,
+      reward: options.reward,
+    }),
   };
 }
 
@@ -403,7 +434,38 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
     },
     createInstructions: createModifyUnitUntilEndOfTurnInstructions(0, 2),
   },
-  cascade_attack_buff_1_waves_2: createCascadeAttackBuffEffect("cascade_attack_buff_1_waves_2", 1, 2),
+  cascade_attack_buff_1_waves_2: createCascadeUnitBuffEffect("cascade_attack_buff_1_waves_2", {
+    label: "Cascade Attack Buff",
+    attackBonus: 1,
+    waves: 2,
+  }),
+  cascade_combat_buff_atk_1_arm_1_waves_2: createCascadeUnitBuffEffect("cascade_combat_buff_atk_1_arm_1_waves_2", {
+    label: "Cascade Combat Formation",
+    attackBonus: 1,
+    armorBonus: 1,
+    roleFilter: "combat",
+    waves: 2,
+  }),
+  cascade_buff_arm_1_waves_2_gain_biomass_1_on_3: createCascadeUnitBuffEffect("cascade_buff_arm_1_waves_2_gain_biomass_1_on_3", {
+    label: "Cascade Spore Growth",
+    armorBonus: 1,
+    waves: 2,
+    reward: {
+      resource: "biomass",
+      amount: 1,
+      minUnits: 3,
+    },
+  }),
+  cascade_buff_atk_1_waves_2_gain_credits_1_on_3: createCascadeUnitBuffEffect("cascade_buff_atk_1_waves_2_gain_credits_1_on_3", {
+    label: "Cascade Beacon Pulse",
+    attackBonus: 1,
+    waves: 2,
+    reward: {
+      resource: "credits",
+      amount: 1,
+      minUnits: 3,
+    },
+  }),
   damage_enemy_unit_1_uncounterable: {
     id: "damage_enemy_unit_1_uncounterable",
     label: "Deal 1 Unit Damage",
@@ -445,8 +507,9 @@ export function getStackEffectMagnitude(effectId: string): number {
   switch (effect.behavior.type) {
     case "damage_enemy_base":
     case "damage_entity":
-    case "cascade_attack_buff":
       return effect.behavior.amount;
+    case "cascade_unit_buff":
+      return Math.max(Math.abs(effect.behavior.attackBonus), Math.abs(effect.behavior.armorBonus));
     default:
       return 0;
   }

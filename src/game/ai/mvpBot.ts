@@ -434,12 +434,22 @@ function scoreCascadeAttackBuffTarget(
   state: GameState,
   botPlayerId: PlayerId,
   targetHex: HexCoord,
-  amount: number,
-  waves: number
+  options: {
+    attackBonus: number;
+    armorBonus: number;
+    waves: number;
+    roleFilter?: "combat" | "resource" | "utility";
+    reward?: {
+      resource: ResourceType;
+      amount: number;
+      minUnits: number;
+    };
+  }
 ): number {
-  const affectedHexes = getCascadeAffectedHexes(state, botPlayerId, targetHex, waves);
+  const affectedHexes = getCascadeAffectedHexes(state, botPlayerId, targetHex, options.waves);
   const affectedUnits = getPlayerUnits(state, botPlayerId)
     .filter((unit) => affectedHexes.some((coord) => areSameHex(coord, unit.coord)))
+    .filter((unit) => !options.roleFilter || unit.role === options.roleFilter)
     .sort((a, b) => a.id.localeCompare(b.id));
 
   if (affectedUnits.length === 0) {
@@ -447,12 +457,38 @@ function scoreCascadeAttackBuffTarget(
   }
 
   let score = affectedHexes.length;
-  let hasAttackOpportunity = false;
+  let hasMeaningfulOpportunity = false;
 
   for (const unit of affectedUnits) {
     score += unit.role === "combat" ? 14 : unit.role === "utility" ? 8 : 5;
 
-    if (unit.role !== "combat" || unit.attacksRemaining <= 0 || unit.hasSummoningSickness) {
+    if (options.armorBonus > 0) {
+      const threateningEnemies = getPlayerUnits(state, getOpponentPlayer(botPlayerId))
+        .filter((enemy) =>
+          enemy.role === "combat" &&
+          !enemy.hasSummoningSickness &&
+          enemy.attacksRemaining > 0 &&
+          canAttackEntityDirectly(state, enemy.ownerId, unit) &&
+          hexDistance(enemy.coord, unit.coord) <= enemy.attackRange
+        );
+
+      for (const enemy of threateningEnemies) {
+        const before = resolveCombatAttack(state, enemy, unit);
+        const reducedDamage = Math.max(1, before.rawAttack - (before.defense + options.armorBonus) - before.supplyPenalty);
+        const preventedDamage = before.finalDamage - reducedDamage;
+        if (preventedDamage <= 0) {
+          continue;
+        }
+
+        hasMeaningfulOpportunity = true;
+        score += preventedDamage * 14;
+        if (before.targetDestroyed && unit.hp > reducedDamage) {
+          score += 66;
+        }
+      }
+    }
+
+    if (options.attackBonus <= 0 || unit.role !== "combat" || unit.attacksRemaining <= 0 || unit.hasSummoningSickness) {
       continue;
     }
 
@@ -466,11 +502,11 @@ function scoreCascadeAttackBuffTarget(
       continue;
     }
 
-    hasAttackOpportunity = true;
+    hasMeaningfulOpportunity = true;
     score += 28;
 
     const currentAttack = getEffectiveUnitAttackDamage(state, unit);
-    const buffedAttack = currentAttack + amount;
+    const buffedAttack = currentAttack + options.attackBonus;
     const currentDamage = Math.min(currentAttack, bestTarget.hp);
     const buffedDamage = Math.min(buffedAttack, bestTarget.hp);
     score += (buffedDamage - currentDamage) * 20;
@@ -482,7 +518,13 @@ function scoreCascadeAttackBuffTarget(
     }
   }
 
-  return hasAttackOpportunity ? score : -Infinity;
+  if (options.reward && affectedUnits.length >= options.reward.minUnits) {
+    hasMeaningfulOpportunity = true;
+    const rewardBase = options.reward.resource === "credits" ? 18 : 14;
+    score += rewardBase * options.reward.amount;
+  }
+
+  return hasMeaningfulOpportunity ? score : -Infinity;
 }
 
 function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
@@ -532,8 +574,14 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
           continue;
         }
         score = effect.behavior.amount >= enemyBase.hp ? AI_WEIGHTS.basePingLethalScore : state.phase === "tactical" ? AI_WEIGHTS.basePingTacticalScore : -Infinity;
-      } else if (effect.behavior.type === "cascade_attack_buff" && targeting.targetHex) {
-        score = scoreCascadeAttackBuffTarget(state, botPlayerId, targeting.targetHex, effect.behavior.amount, effect.behavior.waves);
+      } else if (effect.behavior.type === "cascade_unit_buff" && targeting.targetHex) {
+        score = scoreCascadeAttackBuffTarget(state, botPlayerId, targeting.targetHex, {
+          attackBonus: effect.behavior.attackBonus,
+          armorBonus: effect.behavior.armorBonus,
+          waves: effect.behavior.waves,
+          roleFilter: effect.behavior.roleFilter,
+          reward: effect.behavior.reward,
+        });
       }
 
       if (score === -Infinity) {

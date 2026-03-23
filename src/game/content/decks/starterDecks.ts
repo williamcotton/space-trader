@@ -14,15 +14,15 @@ const ALLOY_STARTER_UNIQUE: string[] = [
   "alloy_guard_card",
   "forge_captain_card",
   "brace_protocol",
+  "shrapnel_relay",
   "rivet_volley",
-  "patchwork_barrier",
   "expedition_harvester_card",
   "escort_drone_card",
   "salvage_hauler_card",
   "bulwark_drone_card",
   "pathfinder_buggy_card",
   "null_intercept",
-  "jammer_cloud",
+  "chain_beacon",
   "failsafe_redirect",
   "slag_barrage",
 ];
@@ -41,7 +41,7 @@ const FLUX_STARTER_UNIQUE: string[] = [
   "bulwark_drone_card",
   "pathfinder_buggy_card",
   "null_intercept",
-  "jammer_cloud",
+  "chain_beacon",
   "failsafe_redirect",
 ];
 
@@ -49,6 +49,7 @@ const BIOMASS_STARTER_UNIQUE: string[] = [
   "swarm_harvester_card",
   "spore_burst",
   "neural_echo",
+  "spore_bloom",
   "expedition_harvester_card",
   "support_drone_card",
   "escort_drone_card",
@@ -56,10 +57,9 @@ const BIOMASS_STARTER_UNIQUE: string[] = [
   "bulwark_drone_card",
   "pathfinder_buggy_card",
   "null_intercept",
-  "jammer_cloud",
+  "chain_beacon",
   "failsafe_redirect",
   "emergency_thrust",
-  "scrap_burst",
   "holdfast_protocol",
 ];
 

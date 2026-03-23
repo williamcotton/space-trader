@@ -6,7 +6,7 @@ import type { GameInstruction, InstructionContext } from "../../actions/instruct
 import { hexDistance, isWithinMapBounds } from "../../model/hex";
 import { LAYER } from "../../systems/continuousEffects";
 import type { CardTrigger } from "../../systems/triggerEngine";
-import { createCascadeAttackBuffInstructions } from "./instructionFactories";
+import { createCascadeAttackBuffInstructions, createCascadeUnitBuffInstructions } from "./instructionFactories";
 
 export type TargetPredicate = (
   state: Readonly<GameState>,
@@ -322,6 +322,33 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       }];
     },
   },
+  shrapnel_relay: {
+    id: "shrapnel_relay",
+    name: "Shrapnel Relay",
+    faction: "alloy_clan",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 2, alloy: 1 },
+    text: "Choose a hex near one of your units. Cascade 2. Friendly combat units on affected hexes get +1 ATK and +1 ARM until end of turn.",
+    play: tacticPlay("cascade_combat_buff_atk_1_arm_1_waves_2", {
+      targetMode: "hex",
+      isValidHexTarget: (state, target, pid) => isWithinMapBounds(target, state.map) && hasFriendlyUnitNearHex(state, pid, target),
+    }),
+    animation: {
+      resolve: {
+        kind: "hex_shower",
+        label: "Shrapnel Relay",
+        waves: 2,
+        accent: "alloy",
+      },
+    },
+    onResolve: createCascadeUnitBuffInstructions({
+      attackBonus: 1,
+      armorBonus: 1,
+      roleFilter: "combat",
+      waves: 2,
+    }),
+  },
   rivet_volley: {
     id: "rivet_volley",
     name: "Rivet Volley",
@@ -346,6 +373,36 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     text: "Counter target top stack item and return it to hand.",
     play: tacticPlay("counter_to_hand", { targetMode: "stack_item" }),
     onResolve: counterStackItem("hand", "Neural Echo"),
+  },
+  spore_bloom: {
+    id: "spore_bloom",
+    name: "Spore Bloom",
+    faction: "biomass_swarm",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 2, biomass: 1 },
+    text: "Choose a hex near one of your units. Cascade 2. Friendly units on affected hexes get +1 ARM until end of turn. If 3 or more friendly units are affected, gain 1 biomass.",
+    play: tacticPlay("cascade_buff_arm_1_waves_2_gain_biomass_1_on_3", {
+      targetMode: "hex",
+      isValidHexTarget: (state, target, pid) => isWithinMapBounds(target, state.map) && hasFriendlyUnitNearHex(state, pid, target),
+    }),
+    animation: {
+      resolve: {
+        kind: "hex_shower",
+        label: "Spore Bloom",
+        waves: 2,
+        accent: "biomass",
+      },
+    },
+    onResolve: createCascadeUnitBuffInstructions({
+      armorBonus: 1,
+      waves: 2,
+      reward: {
+        resource: "biomass",
+        amount: 1,
+        minUnits: 3,
+      },
+    }),
   },
   emergency_thrust: {
     id: "emergency_thrust",
@@ -401,6 +458,36 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     text: "Counter target top stack item.",
     play: tacticPlay("counter_top_item", { targetMode: "stack_item" }),
     onResolve: counterStackItem("discard", "Holdfast Protocol"),
+  },
+  chain_beacon: {
+    id: "chain_beacon",
+    name: "Chain Beacon",
+    faction: "neutral",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 3 },
+    text: "Choose a hex near one of your units. Cascade 2. Friendly units on affected hexes get +1 ATK until end of turn. If 3 or more friendly units are affected, gain 1 credit.",
+    play: tacticPlay("cascade_buff_atk_1_waves_2_gain_credits_1_on_3", {
+      targetMode: "hex",
+      isValidHexTarget: (state, target, pid) => isWithinMapBounds(target, state.map) && hasFriendlyUnitNearHex(state, pid, target),
+    }),
+    animation: {
+      resolve: {
+        kind: "hex_shower",
+        label: "Chain Beacon",
+        waves: 2,
+        accent: "neutral",
+      },
+    },
+    onResolve: createCascadeUnitBuffInstructions({
+      attackBonus: 1,
+      waves: 2,
+      reward: {
+        resource: "credits",
+        amount: 1,
+        minUnits: 3,
+      },
+    }),
   },
   arc_snap: {
     id: "arc_snap",
