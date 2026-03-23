@@ -132,6 +132,21 @@ describe("executeInstructions", () => {
       )).toBe(true);
     });
 
+    it("registers armor aura effects when deploying Bulwark Drone", () => {
+      const state = createState();
+
+      executeInstructions(state, [
+        { type: "DEPLOY_UNIT", cardId: "bulwark_drone_card", controllerId: "player_1" },
+      ]);
+
+      expect(state.continuousEffects.some((e) =>
+        e.sourceCardId === "bulwark_drone_card" &&
+        e.payload.type === "stat_modifier" &&
+        e.payload.stat === "armor" &&
+        e.payload.amount === 1
+      )).toBe(true);
+    });
+
     it("copies unit keywords from the source card definition", () => {
       const scoutCard = CARD_DEFINITIONS.frontline_scout_card as UnitCardDefinition;
       const original = scoutCard.unit.keywords;

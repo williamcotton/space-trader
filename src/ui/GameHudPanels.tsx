@@ -3,6 +3,7 @@ import { hexDistance, isWithinMapBounds } from "../game/model/hex";
 import type { EntityState, GameState, UnitEntity } from "../game/model/state";
 import { getEntityAtCoord, getSelectedUnit } from "../game/model/queries";
 import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleTheme } from "../game/presentation";
+import { getCardDefinition } from "../game/content/cards/catalog";
 import { getGameRuntime } from "../game/runtime";
 import { resolveCombatAttack } from "../game/systems/combat";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "../game/systems/unitStats";
@@ -25,6 +26,7 @@ type SelectedUnitSnapshot = {
   attackActionsPerTurn: number;
   hasSummoningSickness: boolean;
   carries: UnitEntity["carries"];
+  rulesText: string | null;
 };
 
 type HoverCombatSnapshot = {
@@ -104,6 +106,7 @@ function readSnapshot(): TacticalHudSnapshot {
           attackActionsPerTurn: selected.attackActionsPerTurn,
           hasSummoningSickness: selected.hasSummoningSickness,
           carries: selected.carries,
+          rulesText: selected.sourceCardId ? getCardDefinition(selected.sourceCardId)?.text ?? null : null,
         }
       : null,
     hoveredHex: state.hoveredHex,
@@ -183,6 +186,9 @@ export function GameHudPanels() {
               </span>
               <span className="game-hud-pill">{cargoLabel}</span>
             </div>
+            {snapshot.selectedUnit.rulesText ? (
+              <p className="game-hud-detail-line">{snapshot.selectedUnit.rulesText}</p>
+            ) : null}
             <p className="game-hud-meta-line">Entity {snapshot.selectedUnit.id}</p>
           </>
         ) : (

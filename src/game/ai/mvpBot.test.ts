@@ -275,6 +275,63 @@ describe("decideMvpBotCommand", () => {
     });
   });
 
+  it("casts Slag Barrage at a damaged enemy base during tactical even when it is not lethal", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+    state.zones.player_1.hand = [];
+    state.players.player_1.resources.credits = 6;
+    state.players.player_1.resources.alloy = 6;
+
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    const enemyBase = state.entities.base_player_2;
+    if (!enemyBase || enemyBase.kind !== "base") {
+      throw new Error("Expected player 2 base for Slag Barrage bot test.");
+    }
+    enemyBase.hp = 4;
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+  });
+
+  it("spends base-damage tactics when hand is capped and resources are flooded", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+    state.zones.player_1.hand = [];
+    state.players.player_1.resources.credits = 12;
+    state.players.player_1.resources.alloy = 12;
+
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    moveCardFromDeckToHand(state, "player_1", "brace_protocol");
+    moveCardFromDeckToHand(state, "player_1", "brace_protocol");
+    moveCardFromDeckToHand(state, "player_1", "brace_protocol");
+    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    state.zones.player_1.deck = [];
+
+    const enemyBase = state.entities.base_player_2;
+    if (!enemyBase || enemyBase.kind !== "base") {
+      throw new Error("Expected player 2 base for overflow burn test.");
+    }
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+  });
+
   it("casts Brace Protocol on an allied unit when it prevents a lethal counterattack", () => {
     const state = setupState();
     state.activePlayerId = "player_1";

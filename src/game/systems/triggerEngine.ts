@@ -96,7 +96,10 @@ function doesEventMatchCondition(
 ): boolean {
   switch (condition.type) {
     case "on_owner_tactic_played":
-      return event.type === "CARD_PLAYED_TO_STACK" && event.playerId === unitOwnerId;
+      if (event.type !== "CARD_PLAYED_TO_STACK" || event.playerId !== unitOwnerId) {
+        return false;
+      }
+      return getCardDefinition(event.cardId)?.kind === "tactic";
 
     case "on_enter_battlefield":
       return event.type === "CARD_PLAYED_TO_BATTLEFIELD";

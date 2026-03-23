@@ -173,6 +173,57 @@ describe("triggerEngine", () => {
       expect(triggered).toHaveLength(0);
     });
 
+    it("does not fire when the owner plays a unit spell", () => {
+      const state = createState();
+      state.entities["unit_player_1_relay"] = {
+        id: "unit_player_1_relay",
+        kind: "unit",
+        name: "Relay Savant",
+        ownerId: "player_1",
+        role: "utility",
+        hp: 4,
+        maxHp: 4,
+        attackDamage: 1,
+        siegeDamageBonus: 0,
+        armor: 0,
+        moveRange: 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 0, r: 0 },
+        carries: null,
+        sourceCardId: "relay_savant_card",
+        hasSummoningSickness: false,
+        movesRemaining: 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+
+      const unitEvent: CardPlayedToStackEvent = {
+        type: "CARD_PLAYED_TO_STACK",
+        playerId: "player_1",
+        cardInstanceId: "test_card",
+        cardId: "frontline_scout_card",
+        cardName: "Frontline Scout",
+        cost: { credits: 2, alloy: 1 },
+        stackItemId: "stack_1",
+        effectId: "deploy_unit_card",
+        effectMagnitude: 0,
+        targetStackItemId: null,
+        targetEntityId: null,
+        objectKind: "spell",
+        counterable: true,
+        defaultCounterDestination: "discard",
+        nextPriorityPlayerId: "player_2",
+        pendingUnitEntityId: "pending_scout",
+      };
+
+      resetTriggerDepth();
+      incrementTriggerDepth();
+      const triggered = evaluateTriggersFromEvent(state, unitEvent);
+      expect(triggered).toHaveLength(0);
+    });
+
     it("does not fire if no enemy units exist (no valid target)", () => {
       const state = createState();
       // Remove all player_2 units

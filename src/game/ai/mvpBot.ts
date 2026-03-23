@@ -61,7 +61,12 @@ const AI_WEIGHTS = {
   tacticMainThreshold: 90,
   tacticTacticalThreshold: 55,
   basePingLethalScore: 300,
-  basePingTacticalScore: 18,
+  basePingNearCapBonus: 18,
+  basePingFullHandBonus: 34,
+  basePingDeckEmptyBonus: 20,
+  basePingFloodThreshold: 10,
+  basePingFloodBonusPerResource: 2,
+  basePingFloodBonusCap: 28,
 
   // emergency combat scoring
   emergencyFactionBonus: 12,
@@ -389,6 +394,43 @@ function scoreDestroySpellTarget(state: GameState, botPlayerId: PlayerId, target
   return AI_WEIGHTS.destroyBase + scoreEnemyEntityThreat(state, botPlayerId, target) + (target.maxHp - target.hp) * AI_WEIGHTS.destroyHpDeltaMult;
 }
 
+function scoreBaseDamageSpell(
+  state: GameState,
+  botPlayerId: PlayerId,
+  amount: number,
+  phase: GameState["phase"]
+): number {
+  const enemyBase = state.entities[state.players[getOpponentPlayer(botPlayerId)].baseEntityId];
+  if (!enemyBase || enemyBase.kind !== "base") {
+    return -Infinity;
+  }
+
+  let score = scoreDamageSpellTarget(state, botPlayerId, enemyBase, amount, phase);
+  if (score === -Infinity) {
+    return score;
+  }
+
+  const handSize = state.zones[botPlayerId].hand.length;
+  if (handSize >= MAX_HAND_SIZE) {
+    score += AI_WEIGHTS.basePingFullHandBonus;
+  } else if (handSize === MAX_HAND_SIZE - 1) {
+    score += AI_WEIGHTS.basePingNearCapBonus;
+  }
+
+  if (state.zones[botPlayerId].deck.length === 0) {
+    score += AI_WEIGHTS.basePingDeckEmptyBonus;
+  }
+
+  const totalResources = RESOURCE_ORDER.reduce(
+    (sum, resource) => sum + state.players[botPlayerId].resources[resource],
+    0
+  );
+  const floodBonus = Math.max(0, totalResources - AI_WEIGHTS.basePingFloodThreshold) * AI_WEIGHTS.basePingFloodBonusPerResource;
+  score += Math.min(AI_WEIGHTS.basePingFloodBonusCap, floodBonus);
+
+  return score;
+}
+
 function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId, target: UnitEntity): number {
   const threateningEnemies = getPlayerUnits(state, getOpponentPlayer(botPlayerId)).filter((enemy) => {
     return (
@@ -578,11 +620,7 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
         }
         score = scoreBraceProtocolTarget(state, botPlayerId, entity);
       } else if (effect.behavior.type === "damage_enemy_base" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
-        const enemyBase = state.entities[state.players[getOpponentPlayer(botPlayerId)].baseEntityId];
-        if (!enemyBase || enemyBase.kind !== "base") {
-          continue;
-        }
-        score = effect.behavior.amount >= enemyBase.hp ? AI_WEIGHTS.basePingLethalScore : state.phase === "tactical" ? AI_WEIGHTS.basePingTacticalScore : -Infinity;
+        score = scoreBaseDamageSpell(state, botPlayerId, effect.behavior.amount, state.phase);
       } else if (effect.behavior.type === "cascade_unit_buff" && targeting.targetHex) {
         score = scoreCascadeAttackBuffTarget(state, botPlayerId, targeting.targetHex, {
           attackBonus: effect.behavior.attackBonus,

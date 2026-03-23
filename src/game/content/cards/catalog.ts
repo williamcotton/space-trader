@@ -772,7 +772,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "unit",
     speed: "main",
     cost: { credits: 3 },
-    text: "Deploy a durable utility drone near your base.",
+    text: "Adjacent allied units get +1 ARM.",
     play: unitPlay(),
     onResolve: deployUnit("bulwark_drone_card"),
     unit: {
@@ -784,6 +784,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       moveRange: 1,
       attackRange: 1,
       attackActionsPerTurn: 1,
+      auras: [{ type: "adjacent_ally_buff", armorBonus: 1 }],
     },
   },
   pathfinder_buggy_card: {
