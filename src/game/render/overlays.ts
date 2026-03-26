@@ -1,6 +1,7 @@
 import { hexDistance, isWithinMapBounds } from "../model/hex";
 import type { GameState } from "../model/state";
-import { getEntityAtCoord, getSelectedUnit } from "../model/queries";
+import { getSelectedUnit } from "../model/queries";
+import { spatialGetEntity } from "../derived";
 import type { GameFrame } from "../types";
 import { toPixel, clamp, drawDiamond, drawRegularPolygon, drawRoundedRect, drawHexOutline } from "./primitives";
 
@@ -62,7 +63,7 @@ export function drawStackAnchor(context: CanvasRenderingContext2D, frame: GameFr
   context.restore();
 }
 
-export function drawHoverHexAndTargetPreview(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
+export function drawHoverHexAndTargetPreview(state: GameState, frame: GameFrame, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
   if (!state.hoveredHex || !isWithinMapBounds(state.hoveredHex, state.map)) {
     return;
   }
@@ -74,7 +75,7 @@ export function drawHoverHexAndTargetPreview(state: GameState, context: CanvasRe
   context.stroke();
 
   const selected = getSelectedUnit(state);
-  const hoveredEntity = getEntityAtCoord(state, state.hoveredHex, selected?.id);
+  const hoveredEntity = spatialGetEntity(frame.derived.spatialIndex, state.entities, state.hoveredHex, selected?.id);
   if (!selected || !hoveredEntity || hoveredEntity.ownerId === selected.ownerId) {
     return;
   }

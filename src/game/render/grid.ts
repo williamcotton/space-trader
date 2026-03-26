@@ -1,6 +1,5 @@
-import { getMapAxialBounds, hexDistance, isWithinMapBounds } from "../model/hex";
+import { getMapAxialBounds } from "../model/hex";
 import type { GameState } from "../model/state";
-import { hasEntityAtCoord, getSelectedUnit } from "../model/queries";
 import { getPlayerTheme, getResourceTheme } from "../presentation";
 import type { GameFrame } from "../types";
 import { toPixel, clamp, drawHexOutline, drawResourceGlyph } from "./primitives";
@@ -76,34 +75,17 @@ export function drawPlayerTerritory(state: GameState, context: CanvasRenderingCo
   }
 }
 
-export function drawMoveRangeOverlay(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
-  const selected = getSelectedUnit(state);
-  if (!selected || selected.ownerId !== state.activePlayerId) {
-    return;
-  }
-
-  const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
-  for (let r = rMin; r <= rMax; r += 1) {
-    for (let q = qMin; q <= qMax; q += 1) {
-      const coord = { q, r };
-      if (!isWithinMapBounds(coord, state.map)) {
-        continue;
-      }
-
-      const distance = hexDistance(selected.coord, coord);
-      if (distance === 0 || distance > selected.movesRemaining) {
-        continue;
-      }
-
-      const occupied = hasEntityAtCoord(state, coord, selected.id);
-      const { x, y } = toPixel(coord, originX, originY, hexSize);
-      drawHexOutline(context, x, y, hexSize - 3.2);
-      context.fillStyle = occupied ? "rgba(255, 110, 110, 0.11)" : "rgba(107, 245, 188, 0.1)";
-      context.fill();
-      context.strokeStyle = occupied ? "rgba(255, 145, 145, 0.34)" : "rgba(107, 245, 188, 0.35)";
-      context.lineWidth = 1.4;
-      context.stroke();
-    }
+export function drawMoveRangeOverlay(frame: GameFrame, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
+  const cells = frame.derived.moveRangeOverlay;
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    const { x, y } = toPixel(cell.coord, originX, originY, hexSize);
+    drawHexOutline(context, x, y, hexSize - 3.2);
+    context.fillStyle = cell.occupied ? "rgba(255, 110, 110, 0.11)" : "rgba(107, 245, 188, 0.1)";
+    context.fill();
+    context.strokeStyle = cell.occupied ? "rgba(255, 145, 145, 0.34)" : "rgba(107, 245, 188, 0.35)";
+    context.lineWidth = 1.4;
+    context.stroke();
   }
 }
 

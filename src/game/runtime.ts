@@ -13,6 +13,7 @@ import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
 import { canAttackEntityDirectly } from "./systems/keywords";
 import { getAutoFlowCommand } from "./turn/autoFlow";
+import { createEmptyDerivedState, rebuildDerivedState, type DerivedState } from "./derived";
 import type { GameState } from "./model/state";
 import type { CanvasAnimation, GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
 
@@ -119,6 +120,7 @@ class GameRuntime {
   private pendingCardTargeting: PendingCardTargeting | null = null;
   private listeners: Set<() => void> = new Set();
   private stateVersion = 0;
+  private derivedState: DerivedState = createEmptyDerivedState();
   readonly state: GameState;
 
   constructor(
@@ -161,6 +163,9 @@ class GameRuntime {
     }
     if (typeof this.stateVersion !== "number") {
       this.stateVersion = 0;
+    }
+    if (!this.derivedState || typeof this.derivedState.sourceVersion !== "number") {
+      this.derivedState = createEmptyDerivedState();
     }
   }
 
@@ -579,6 +584,10 @@ class GameRuntime {
     this.stepBotAutoplay(deltaSeconds);
     this.animations = stepAnimations(this.animations, deltaSeconds);
 
+    if (this.stateVersion > this.derivedState.sourceVersion) {
+      this.derivedState = rebuildDerivedState(this.state, this.stateVersion);
+    }
+
     const frame: GameFrame = {
       context,
       viewport: this.viewport,
@@ -587,6 +596,7 @@ class GameRuntime {
         animations: this.animations,
         timeSeconds: this.elapsedSeconds,
       },
+      derived: this.derivedState,
     };
 
     this.updateSystem(this.state, frame);

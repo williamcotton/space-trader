@@ -21,9 +21,9 @@ export function renderGame(state: GameState, frame: GameFrame): void {
   drawBackdrop(context, frame);
   drawPlayerTerritory(state, context, originX, originY, hexSize);
   drawHexGrid(state, context, originX, originY, hexSize);
-  drawMoveRangeOverlay(state, context, originX, originY, hexSize);
+  drawMoveRangeOverlay(frame, context, originX, originY, hexSize);
   drawResourceNodes(state, context, originX, originY, hexSize);
-  drawHoverHexAndTargetPreview(state, context, originX, originY, hexSize);
+  drawHoverHexAndTargetPreview(state, frame, context, originX, originY, hexSize);
   const stackActivityLevel = frame.transients.animations.some((animation) => {
     return animation.kind === "stack_cast" || animation.kind === "stack_counter" || animation.kind === "spell_resolve" || animation.kind === "hex_shower";
   })

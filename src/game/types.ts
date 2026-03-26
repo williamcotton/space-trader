@@ -1,6 +1,7 @@
 import type { ResourceType } from "./model/enums";
 import type { PlayerId } from "./model/ids";
 import type { GameState, HexCoord } from "./model/state";
+import type { DerivedState } from "./derived";
 
 export type CanvasAnimation =
   | {
@@ -109,6 +110,7 @@ export type GameFrame = {
   viewport: GameViewport;
   deltaSeconds: number;
   transients: FrameTransients;
+  derived: DerivedState;
 };
 
 export type UpdateSystem = (state: GameState, frame: GameFrame) => void;

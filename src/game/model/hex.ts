@@ -80,6 +80,10 @@ export function isWithinMapBounds(coord: HexCoord, map: MapState): boolean {
   return coord.q >= bounds.qMin && coord.q <= bounds.qMax && coord.r >= bounds.rMin && coord.r <= bounds.rMax;
 }
 
+export function hexKey(coord: HexCoord): string {
+  return `${coord.q},${coord.r}`;
+}
+
 export function areSameHex(a: HexCoord, b: HexCoord): boolean {
   return a.q === b.q && a.r === b.r;
 }
