@@ -5,6 +5,7 @@ import type { PlayerId } from "../game/model/ids";
 import { MAX_HAND_SIZE } from "../game/model/state";
 import { getCardDisplayInfo, type CardTag, type CostEntry, type UnitStatEntry } from "../game/model/selectors";
 import { ResourceIcon } from "./ResourceIcon";
+import { getVisibleHandState } from "./handTrayModel";
 import { useGameSnapshot } from "./useGameSnapshot";
 
 type HandCardSnapshot = {
@@ -22,6 +23,7 @@ type HandCardSnapshot = {
 
 type HandSnapshot = {
   visiblePlayerId: PlayerId;
+  showingPriorityHand: boolean;
   cards: HandCardSnapshot[];
   deckCount: number;
   discardPhase: boolean;
@@ -34,8 +36,12 @@ function readSnapshot(): HandSnapshot {
   const runtime = getGameRuntime();
   const state = runtime.state;
   const pendingTargeting = runtime.getPendingCardTargeting();
-  const visiblePlayerId = state.activePlayerId as PlayerId;
   const discardPhase = state.phase === "discard";
+  const { visiblePlayerId, showingPriorityHand } = getVisibleHandState({
+    phase: state.phase,
+    activePlayerId: state.activePlayerId,
+    priorityPlayerId: state.priorityPlayerId,
+  });
 
   const cards = [...state.zones[visiblePlayerId].hand].reverse().map((card) =>
     getCardDisplayInfo(state, visiblePlayerId, card.cardId, card.instanceId)
@@ -43,6 +49,7 @@ function readSnapshot(): HandSnapshot {
 
   return {
     visiblePlayerId,
+    showingPriorityHand,
     cards,
     deckCount: state.zones[visiblePlayerId].deck.length,
     discardPhase,
@@ -55,6 +62,9 @@ function readSnapshot(): HandSnapshot {
 export function HandTray() {
   const runtime = getGameRuntime();
   const snapshot = useGameSnapshot(readSnapshot);
+  const priorityPrompt = snapshot.showingPriorityHand
+    ? `Response window: showing ${snapshot.visiblePlayerId} because they currently hold priority.`
+    : null;
   const discardPrompt = snapshot.discardPhase
     ? `Discard ${snapshot.requiredDiscards} card${snapshot.requiredDiscards === 1 ? "" : "s"} to reach ${MAX_HAND_SIZE}.`
     : null;
@@ -62,11 +72,15 @@ export function HandTray() {
   return (
     <section className="hand-tray" aria-label="Hand tray">
       <header className="hand-tray-header">
-        <span>Hand - {snapshot.visiblePlayerId}</span>
+        <span>
+          Hand - {snapshot.visiblePlayerId}
+          {snapshot.showingPriorityHand ? " · Priority" : ""}
+        </span>
         <span>
           Hand {snapshot.cards.length} | Deck {snapshot.deckCount}
         </span>
       </header>
+      {priorityPrompt ? <p className="hand-tray-targeting-hint">{priorityPrompt}</p> : null}
       {discardPrompt ? <p className="hand-tray-targeting-hint">{discardPrompt}</p> : null}
       {snapshot.pendingTargetingPrompt ? <p className="hand-tray-targeting-hint">{snapshot.pendingTargetingPrompt}</p> : null}
       <div className="hand-tray-cards">
