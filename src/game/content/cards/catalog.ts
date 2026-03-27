@@ -20,6 +20,10 @@ export type HexTargetPredicate = (
   sourcePlayerId: PlayerId
 ) => boolean;
 
+function getStartOfControllersNextTurn(state: Readonly<GameState>, controllerId: PlayerId): number {
+  return state.activePlayerId === controllerId ? state.turn + 2 : state.turn + 1;
+}
+
 export type CardKeyword = string;
 export type CardSpeed = "instant" | "main";
 export type CardTargetMode = "none" | "entity" | "stack_item" | "hex";
@@ -302,7 +306,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "tactic",
     speed: "instant",
     cost: { credits: 1, alloy: 1 },
-    text: "Target allied unit gets +2 ARM until end of turn.",
+    text: "Target allied unit gets +2 ARM until your next turn.",
     play: tacticPlay("armor_ally_unit_2_eot", {
       targetMode: "entity",
       isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId === pid,
@@ -317,7 +321,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
         controllerId: ctx.controllerId,
         payload: { type: "stat_modifier", stat: "armor", amount: 2 },
         target: { type: "specific_entity", entityId: ctx.targetEntityId },
-        expiry: { type: "end_of_turn", turn: ctx.state.turn },
+        expiry: { type: "start_of_turn", turn: getStartOfControllersNextTurn(ctx.state, ctx.controllerId) },
         layer: LAYER.TEMPORARY,
       }];
     },

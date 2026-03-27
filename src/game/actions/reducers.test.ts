@@ -1350,7 +1350,7 @@ describe("dispatchCommand", () => {
     expect(getEffectiveUnitArmor(state, buffedScout)).toBe(buffedScout.armor + 1);
   });
 
-  it("applies Brace Protocol until end of turn and then clears the armor bonus", () => {
+  it("applies Brace Protocol until the start of its controller's next turn", () => {
     const state = setupState();
     const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "brace_protocol");
     state.players.player_1.resources.credits = 4;
@@ -1383,9 +1383,24 @@ describe("dispatchCommand", () => {
     advanceToPhase(state, "end");
     expect(getEffectiveUnitArmor(state, state.entities[target.id] as typeof buffed)).toBe((state.entities[target.id] as typeof buffed).armor + 2);
 
-    const handoff = dispatchCommand(state, {
+    let handoff = dispatchCommand(state, {
       type: "END_PHASE",
       playerId: "player_1",
+    });
+    expect(handoff.ok).toBe(true);
+
+    const duringOpponentTurn = state.entities[target.id];
+    expect(duringOpponentTurn?.kind).toBe("unit");
+    if (!duringOpponentTurn || duringOpponentTurn.kind !== "unit") {
+      throw new Error("Expected unit to stay buffed through the opponent turn.");
+    }
+    expect(state.activePlayerId).toBe("player_2");
+    expect(getEffectiveUnitArmor(state, duringOpponentTurn)).toBe(duringOpponentTurn.armor + 2);
+
+    advanceToPhase(state, "end");
+    handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_2",
     });
     expect(handoff.ok).toBe(true);
 
@@ -1394,6 +1409,7 @@ describe("dispatchCommand", () => {
     if (!afterHandoff || afterHandoff.kind !== "unit") {
       throw new Error("Expected unit after Brace Protocol turn rollover.");
     }
+    expect(state.activePlayerId).toBe("player_1");
     expect(getEffectiveUnitArmor(state, afterHandoff)).toBe(afterHandoff.armor);
   });
 

@@ -241,6 +241,42 @@ describe("continuousEffects", () => {
       expect(state.continuousEffects).toHaveLength(1);
     });
 
+    it("removes start_of_turn effects when the turn starts", () => {
+      const state = createState();
+      state.continuousEffects.push({
+        id: "sot",
+        sourceEntityId: null,
+        sourceCardId: null,
+        controllerId: "player_1",
+        payload: { type: "stat_modifier", stat: "armor", amount: 2 },
+        target: { type: "specific_entity", entityId: "unit_player_1_scout" },
+        expiry: { type: "start_of_turn", turn: 1 },
+        layer: LAYER.TEMPORARY,
+        timestamp: 1,
+      });
+
+      purgeExpiredEffects(state);
+      expect(state.continuousEffects).toHaveLength(0);
+    });
+
+    it("keeps start_of_turn effects until the matching turn begins", () => {
+      const state = createState();
+      state.continuousEffects.push({
+        id: "future_start",
+        sourceEntityId: null,
+        sourceCardId: null,
+        controllerId: "player_1",
+        payload: { type: "stat_modifier", stat: "armor", amount: 2 },
+        target: { type: "specific_entity", entityId: "unit_player_1_scout" },
+        expiry: { type: "start_of_turn", turn: 3 },
+        layer: LAYER.TEMPORARY,
+        timestamp: 1,
+      });
+
+      purgeExpiredEffects(state);
+      expect(state.continuousEffects).toHaveLength(1);
+    });
+
     it("removes while_source_alive effects when source is dead", () => {
       const state = createState();
       state.continuousEffects.push({

@@ -29,6 +29,7 @@ export type ContinuousEffectPayload = StatModifier | ReplacementEffectPayload;
 
 export type EffectExpiry =
   | { type: "end_of_turn"; turn: number }
+  | { type: "start_of_turn"; turn: number }
   | { type: "while_source_alive"; sourceEntityId: EntityId }
   | { type: "permanent" }
   | { type: "until_used"; usesRemaining: number };
@@ -140,6 +141,9 @@ export function getEffectiveStatValue(
 function isEffectExpired(state: GameState, effect: ContinuousEffect): boolean {
   switch (effect.expiry.type) {
     case "end_of_turn":
+      return state.turn >= effect.expiry.turn;
+
+    case "start_of_turn":
       return state.turn >= effect.expiry.turn;
 
     case "while_source_alive":
