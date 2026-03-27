@@ -267,7 +267,7 @@ body {
 
 .game-top-bar-line {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 6px;
   align-items: center;
 }
@@ -628,7 +628,7 @@ body {
   border-radius: 10px;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 10px;
 }
 
@@ -802,6 +802,83 @@ body {
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.command-stack-controls {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(63, 91, 161, 0.32);
+}
+
+.command-stack-controls-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.command-stack-controls-status,
+.command-stack-controls-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.command-stack-badge.priority {
+  border-color: rgba(87, 120, 193, 0.4);
+  background: rgba(17, 28, 63, 0.82);
+  color: #d9e6ff;
+}
+
+.command-stack-badge.priority.response-window {
+  border-color: rgba(124, 232, 202, 0.56);
+  background: linear-gradient(180deg, rgba(22, 58, 70, 0.92), rgba(15, 29, 63, 0.82));
+  color: #d4fff1;
+}
+
+.command-stack-badge.status {
+  border-color: rgba(255, 178, 159, 0.34);
+  background: rgba(82, 36, 48, 0.32);
+  color: #ffd6cc;
+}
+
+.command-stack-badge.metric {
+  background: rgba(36, 55, 100, 0.34);
+  color: #cfe0ff;
+}
+
+.command-stack-phase-track {
+  gap: 4px;
+}
+
+.command-stack-controls-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.command-stack-controls-actions button {
+  border: 1px solid #3f62b2;
+  background: linear-gradient(180deg, #1a2b66 0%, #15214a 100%);
+  color: #e7eeff;
+  min-height: 30px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+
+.command-stack-controls-actions button:hover:enabled {
+  background: linear-gradient(180deg, #243a85 0%, #1b2b61 100%);
+}
+
+.command-stack-controls-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .command-stack-header {
@@ -1083,13 +1160,19 @@ body {
     flex-wrap: wrap;
   }
 
-  .game-top-bar-phase-cluster {
-    width: 100%;
+  .command-stack-controls-head,
+  .command-stack-header {
+    flex-direction: column;
   }
 
-  .game-top-bar-actions {
-    grid-auto-flow: row;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .command-stack-header-actions {
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .command-stack-controls-actions,
+  .command-stack-view-toggle {
+    width: 100%;
   }
 
   .game-workspace {

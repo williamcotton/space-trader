@@ -1,21 +1,11 @@
-import { useMemo } from "react";
 import { getGameRuntime } from "../game/runtime";
 import { useGameSnapshot } from "./useGameSnapshot";
-import type { Faction, GamePhase, ResourceType } from "../game/model/enums";
+import type { Faction, ResourceType } from "../game/model/enums";
 import type { PlayerId } from "../game/model/ids";
 import { formatFactionName, getPlayerLabel, getResourceTheme } from "../game/presentation";
 import { PRIORITY_STOP_LABELS, type PriorityStopKey, type PriorityStopSettings } from "../game/turn/priorityStops";
 import { ResourceIcon } from "./ResourceIcon";
 
-const PHASE_ORDER: GamePhase[] = ["start", "economy", "main", "tactical", "end", "discard"];
-const PHASE_LABELS: Record<GamePhase, string> = {
-  start: "Start",
-  economy: "Eco",
-  main: "Main",
-  tactical: "Tac",
-  end: "End",
-  discard: "Disc",
-};
 const RESOURCE_ORDER: ResourceType[] = ["credits", "alloy", "flux", "biomass"];
 const PRIORITY_STOP_ORDER: PriorityStopKey[] = ["opponentMain", "opponentTactical", "opponentStack"];
 
@@ -32,43 +22,20 @@ type PlayerTopBarSnapshot = {
 type TopBarSnapshot = {
   mapName: string;
   turn: number;
-  phase: GamePhase;
   activePlayerId: PlayerId;
   priorityPlayerId: PlayerId | null;
-  stackSize: number;
-  consecutivePasses: number;
-  winner: PlayerId | null;
-  lastRejectedReason: string | null;
-  priorityLabel: string;
-  priorityDetail: string;
-  responseWindowOpen: boolean;
   players: PlayerTopBarSnapshot[];
 };
 
 function readSnapshot(): TopBarSnapshot {
   const runtime = getGameRuntime();
   const state = runtime.state;
-  const responseWindowOpen = Boolean(state.priorityPlayerId && state.priorityPlayerId !== state.activePlayerId);
-  const priorityLabel = state.priorityPlayerId ? `Priority ${getPlayerLabel(state.priorityPlayerId)}` : "Priority None";
-  const priorityDetail = !state.priorityPlayerId
-    ? "No player can act right now."
-    : responseWindowOpen
-      ? `${getPlayerLabel(state.priorityPlayerId)} can act during ${getPlayerLabel(state.activePlayerId)}'s turn.`
-      : `${getPlayerLabel(state.activePlayerId)} is holding priority.`;
 
   return {
     mapName: state.map.name,
     turn: state.turn,
-    phase: state.phase,
     activePlayerId: state.activePlayerId,
     priorityPlayerId: state.priorityPlayerId,
-    stackSize: state.stack.length,
-    consecutivePasses: state.consecutivePriorityPasses,
-    winner: state.winner,
-    lastRejectedReason: state.lastRejectedReason,
-    priorityLabel,
-    priorityDetail,
-    responseWindowOpen,
     players: (["player_1", "player_2"] as const).map((playerId) => ({
       id: playerId,
       faction: state.players[playerId].faction,
@@ -84,22 +51,6 @@ function readSnapshot(): TopBarSnapshot {
 export function GameTopBar() {
   const runtime = getGameRuntime();
   const snapshot = useGameSnapshot(readSnapshot);
-  const activePlayerControlsLocked =
-    Boolean(snapshot.winner) ||
-    snapshot.stackSize > 0 ||
-    !snapshot.priorityPlayerId ||
-    snapshot.priorityPlayerId !== snapshot.activePlayerId;
-
-  const phaseIndex = PHASE_ORDER.indexOf(snapshot.phase);
-  const statusMessage = useMemo(() => {
-    if (snapshot.winner) {
-      return `${getPlayerLabel(snapshot.winner)} wins`;
-    }
-    if (snapshot.lastRejectedReason) {
-      return `Reject: ${snapshot.lastRejectedReason}`;
-    }
-    return null;
-  }, [snapshot.lastRejectedReason, snapshot.winner]);
 
   return (
     <header className="game-top-bar" aria-label="Match controls and status">
@@ -107,13 +58,6 @@ export function GameTopBar() {
         <div className="game-top-bar-match">
           <span className="eyebrow">{snapshot.mapName}</span>
           <strong>Turn {snapshot.turn}</strong>
-          <span
-            className={["game-top-bar-priority-chip", snapshot.responseWindowOpen ? "response-window" : ""].join(" ")}
-            title={snapshot.priorityDetail}
-          >
-            {snapshot.priorityLabel}
-          </span>
-          {statusMessage ? <span className="game-top-bar-inline-status">{statusMessage}</span> : null}
         </div>
 
         <div className="game-top-bar-players-inline">
@@ -168,41 +112,6 @@ export function GameTopBar() {
               </div>
             </article>
           ))}
-        </div>
-
-        <div className="game-top-bar-phase-cluster">
-          <div className="game-top-bar-mini-metrics">
-            <span className="game-top-bar-chip">Stack {snapshot.stackSize}</span>
-            <span className="game-top-bar-chip">Pass {snapshot.consecutivePasses}</span>
-          </div>
-          <ol className="game-phase-track compact">
-            {PHASE_ORDER.map((phase, index) => (
-              <li
-                key={phase}
-                className={[
-                  index < phaseIndex ? "done" : "",
-                  index === phaseIndex ? "active" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                {PHASE_LABELS[phase]}
-              </li>
-            ))}
-          </ol>
-        </div>
-
-        <div className="game-top-bar-actions">
-          <button type="button" disabled={activePlayerControlsLocked} onClick={() => runtime.debugAdvancePhase()}>
-            End Phase
-          </button>
-          <button
-            type="button"
-            disabled={Boolean(snapshot.winner) || !snapshot.priorityPlayerId}
-            onClick={() => runtime.debugPassPriority()}
-          >
-            Pass Priority
-          </button>
         </div>
       </div>
     </header>

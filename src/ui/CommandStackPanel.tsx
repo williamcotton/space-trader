@@ -1,7 +1,20 @@
 import { useState } from "react";
 import { getGameRuntime } from "../game/runtime";
+import type { GamePhase } from "../game/model/enums";
+import type { PlayerId } from "../game/model/ids";
 import { getStackItemPreview, type StackPreviewItem } from "../game/model/selectors";
+import { getPlayerLabel } from "../game/presentation";
 import { useGameSnapshot } from "./useGameSnapshot";
+
+const PHASE_ORDER: GamePhase[] = ["start", "economy", "main", "tactical", "end", "discard"];
+const PHASE_LABELS: Record<GamePhase, string> = {
+  start: "Start",
+  economy: "Eco",
+  main: "Main",
+  tactical: "Tac",
+  end: "End",
+  discard: "Disc",
+};
 
 type HistoryEntry = {
   id: string;
@@ -10,6 +23,12 @@ type HistoryEntry = {
 };
 
 type CommandStackSnapshot = {
+  phase: GamePhase;
+  activePlayerId: PlayerId;
+  priorityPlayerId: PlayerId | null;
+  consecutivePasses: number;
+  winner: PlayerId | null;
+  lastRejectedReason: string | null;
   stackItems: StackPreviewItem[];
   historyEntries: HistoryEntry[];
 };
@@ -28,14 +47,39 @@ function readPanelSnapshot(): CommandStackSnapshot {
     .reverse();
 
   return {
+    phase: state.phase,
+    activePlayerId: state.activePlayerId,
+    priorityPlayerId: state.priorityPlayerId,
+    consecutivePasses: state.consecutivePriorityPasses,
+    winner: state.winner,
+    lastRejectedReason: state.lastRejectedReason,
     stackItems,
     historyEntries,
   };
 }
 
 export function CommandStackPanel() {
+  const runtime = getGameRuntime();
   const snapshot = useGameSnapshot(readPanelSnapshot);
   const [viewMode, setViewMode] = useState<"stack" | "history">("stack");
+  const phaseIndex = PHASE_ORDER.indexOf(snapshot.phase);
+  const responseWindowOpen = Boolean(snapshot.priorityPlayerId && snapshot.priorityPlayerId !== snapshot.activePlayerId);
+  const priorityLabel = snapshot.priorityPlayerId ? `Priority ${getPlayerLabel(snapshot.priorityPlayerId)}` : "Priority None";
+  const priorityDetail = !snapshot.priorityPlayerId
+    ? "No player can act right now."
+    : responseWindowOpen
+      ? `${getPlayerLabel(snapshot.priorityPlayerId)} can act during ${getPlayerLabel(snapshot.activePlayerId)}'s turn.`
+      : `${getPlayerLabel(snapshot.activePlayerId)} is holding priority.`;
+  const statusMessage = snapshot.winner
+    ? `${getPlayerLabel(snapshot.winner)} wins`
+    : snapshot.lastRejectedReason
+      ? `Reject: ${snapshot.lastRejectedReason}`
+      : null;
+  const activePlayerControlsLocked =
+    Boolean(snapshot.winner) ||
+    snapshot.stackItems.length > 0 ||
+    !snapshot.priorityPlayerId ||
+    snapshot.priorityPlayerId !== snapshot.activePlayerId;
 
   return (
     <aside className="command-stack-panel">
@@ -114,6 +158,51 @@ export function CommandStackPanel() {
           )}
         </ul>
       )}
+
+      <section className="command-stack-controls" aria-label="Turn controls">
+        <div className="command-stack-controls-head">
+          <div className="command-stack-controls-status">
+            <span
+              className={["command-stack-badge", "priority", responseWindowOpen ? "response-window" : ""].join(" ")}
+              title={priorityDetail}
+            >
+              {priorityLabel}
+            </span>
+            {statusMessage ? <span className="command-stack-badge status">{statusMessage}</span> : null}
+          </div>
+          <div className="command-stack-controls-metrics">
+            <span className="command-stack-badge metric">Stack {snapshot.stackItems.length}</span>
+            <span className="command-stack-badge metric">Pass {snapshot.consecutivePasses}</span>
+          </div>
+        </div>
+        <ol className="game-phase-track command-stack-phase-track">
+          {PHASE_ORDER.map((phase, index) => (
+            <li
+              key={phase}
+              className={[
+                index < phaseIndex ? "done" : "",
+                index === phaseIndex ? "active" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {PHASE_LABELS[phase]}
+            </li>
+          ))}
+        </ol>
+        <div className="command-stack-controls-actions">
+          <button type="button" disabled={activePlayerControlsLocked} onClick={() => runtime.debugAdvancePhase()}>
+            End Phase
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(snapshot.winner) || !snapshot.priorityPlayerId}
+            onClick={() => runtime.debugPassPriority()}
+          >
+            Pass Priority
+          </button>
+        </div>
+      </section>
     </aside>
   );
 }
