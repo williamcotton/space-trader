@@ -112,6 +112,7 @@ function validateHexTargetForEffect(
 function validateAdvancePhase(state: GameState, playerId: string): CommandValidationResult {
   return requireActivePlayer(state, playerId, "advance the phase")
     ?? requireEmptyStack(state, "advance phases")
+    ?? requirePriority(state, playerId, "advance the phase")
     ?? (state.phase === "discard" && state.zones[state.activePlayerId].hand.length > MAX_HAND_SIZE
       ? { ok: false, reason: `Discard down to ${MAX_HAND_SIZE} cards before ending the turn.` }
       : null)
@@ -121,6 +122,7 @@ function validateAdvancePhase(state: GameState, playerId: string): CommandValida
 function validateEndPhase(state: GameState, playerId: string): CommandValidationResult {
   return requireActivePlayer(state, playerId, "end the phase")
     ?? requireEmptyStack(state, "end phases")
+    ?? requirePriority(state, playerId, "end the phase")
     ?? (state.phase === "discard" && state.zones[state.activePlayerId].hand.length > MAX_HAND_SIZE
       ? { ok: false, reason: `Discard down to ${MAX_HAND_SIZE} cards before ending the turn.` }
       : null)
@@ -175,7 +177,8 @@ function validateRespondStack(state: GameState, command: Extract<GameCommand, { 
 function validateSelectEntity(state: GameState, command: Extract<GameCommand, { type: "SELECT_ENTITY" }>): CommandValidationResult {
   const fail = requireActivePlayer(state, command.playerId, "select entities")
     ?? requireNotDiscardPhase(state, "select entities")
-    ?? requireEmptyStack(state, "select units");
+    ?? requireEmptyStack(state, "select units")
+    ?? requirePriority(state, command.playerId, "select entities");
   if (fail) return fail;
 
   const entity = getEntity(state, command.entityId);
@@ -190,6 +193,7 @@ function validateClearSelection(state: GameState, command: Extract<GameCommand, 
   return requireActivePlayer(state, command.playerId, "clear selection")
     ?? requireNotDiscardPhase(state, "clear selection")
     ?? requireEmptyStack(state, "clear selection")
+    ?? requirePriority(state, command.playerId, "clear selection")
     ?? (!state.selectedEntityId ? { ok: false, reason: "No selected entity to clear." } : null)
     ?? { ok: true };
 }
@@ -197,6 +201,7 @@ function validateClearSelection(state: GameState, command: Extract<GameCommand, 
 function validateMoveUnit(state: GameState, command: Extract<GameCommand, { type: "MOVE_UNIT" }>): CommandValidationResult {
   const fail = requireActivePlayer(state, command.playerId, "move units")
     ?? requireEmptyStack(state, "move units")
+    ?? requirePriority(state, command.playerId, "move units")
     ?? requireTacticalPhase(state, "Moving units");
   if (fail) return fail;
 
@@ -219,6 +224,7 @@ function validateMoveUnit(state: GameState, command: Extract<GameCommand, { type
 function validateAttackUnit(state: GameState, command: Extract<GameCommand, { type: "ATTACK_UNIT" }>): CommandValidationResult {
   const fail = requireActivePlayer(state, command.playerId, "attack")
     ?? requireEmptyStack(state, "attack")
+    ?? requirePriority(state, command.playerId, "attack")
     ?? requireTacticalPhase(state, "Attacking");
   if (fail) return fail;
 
@@ -246,6 +252,7 @@ function validateAttackUnit(state: GameState, command: Extract<GameCommand, { ty
 function validateHarvestNode(state: GameState, command: Extract<GameCommand, { type: "HARVEST_NODE" }>): CommandValidationResult {
   const fail = requireActivePlayer(state, command.playerId, "harvest")
     ?? requireEmptyStack(state, "harvest")
+    ?? requirePriority(state, command.playerId, "harvest")
     ?? requireTacticalPhase(state, "Harvesting");
   if (fail) return fail;
 

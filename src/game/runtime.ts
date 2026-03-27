@@ -13,6 +13,14 @@ import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
 import { canAttackEntityDirectly } from "./systems/keywords";
 import { getAutoFlowCommand } from "./turn/autoFlow";
+import {
+  PRIORITY_STOP_LABELS,
+  createDefaultPlayerPriorityStopSettings,
+  getPriorityStopWindow,
+  type PlayerPriorityStopSettings,
+  type PriorityStopKey,
+  type PriorityStopSettings,
+} from "./turn/priorityStops";
 import { createEmptyDerivedState, rebuildDerivedState, type DerivedState } from "./derived";
 import type { GameState } from "./model/state";
 import type { CanvasAnimation, GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
@@ -117,6 +125,8 @@ class GameRuntime {
     player_1: false,
     player_2: true,
   };
+  private priorityStopSettings: PlayerPriorityStopSettings = createDefaultPlayerPriorityStopSettings();
+  private consumedPriorityStopKeys: Set<string> = new Set();
   private pendingCardTargeting: PendingCardTargeting | null = null;
   private listeners: Set<() => void> = new Set();
   private stateVersion = 0;
@@ -152,6 +162,18 @@ class GameRuntime {
         player_1: false,
         player_2: true,
       };
+    }
+    if (!this.priorityStopSettings) {
+      this.priorityStopSettings = createDefaultPlayerPriorityStopSettings();
+    } else {
+      const defaults = createDefaultPlayerPriorityStopSettings();
+      this.priorityStopSettings = {
+        player_1: { ...defaults.player_1, ...this.priorityStopSettings.player_1 },
+        player_2: { ...defaults.player_2, ...this.priorityStopSettings.player_2 },
+      };
+    }
+    if (!(this.consumedPriorityStopKeys instanceof Set)) {
+      this.consumedPriorityStopKeys = new Set();
     }
     if (!this.pendingCardTargeting) {
       this.pendingCardTargeting = null;
@@ -214,6 +236,28 @@ class GameRuntime {
   toggleBotAutoplay(playerId: PlayerId): boolean {
     const next = !this.botAutoplayEnabled[playerId];
     this.setBotAutoplayEnabled(playerId, next);
+    return next;
+  }
+
+  getPriorityStopSettings(playerId: PlayerId): PriorityStopSettings {
+    return { ...this.priorityStopSettings[playerId] };
+  }
+
+  setPriorityStopSetting(playerId: PlayerId, stopKey: PriorityStopKey, enabled: boolean): void {
+    this.priorityStopSettings[playerId] = {
+      ...this.priorityStopSettings[playerId],
+      [stopKey]: enabled,
+    };
+    this.state.log.push({
+      turn: this.state.turn,
+      text: `${playerId} ${enabled ? "enabled" : "disabled"} ${PRIORITY_STOP_LABELS[stopKey]}.`,
+    });
+    this.notifyListeners();
+  }
+
+  togglePriorityStopSetting(playerId: PlayerId, stopKey: PriorityStopKey): boolean {
+    const next = !this.priorityStopSettings[playerId][stopKey];
+    this.setPriorityStopSetting(playerId, stopKey, next);
     return next;
   }
 
@@ -546,6 +590,14 @@ class GameRuntime {
     this.botDecisionSystem = system;
   }
 
+  private getPendingPriorityStopWindow() {
+    const window = getPriorityStopWindow(this.state, this.botAutoplayEnabled, this.priorityStopSettings);
+    if (!window || this.consumedPriorityStopKeys.has(window.key)) {
+      return null;
+    }
+    return window;
+  }
+
   private stepBotAutoplay(deltaSeconds: number): void {
     this.botActionCooldownSeconds = Math.max(0, this.botActionCooldownSeconds - deltaSeconds);
     if (this.botActionCooldownSeconds > 0 || this.state.winner) {
@@ -554,6 +606,24 @@ class GameRuntime {
 
     const priorityPlayerId = this.state.priorityPlayerId;
     if (!priorityPlayerId || !this.botAutoplayEnabled[priorityPlayerId]) {
+      return;
+    }
+
+    const priorityStopWindow = this.getPendingPriorityStopWindow();
+    if (priorityStopWindow) {
+      this.consumedPriorityStopKeys.add(priorityStopWindow.key);
+      this.state.log.push({
+        turn: this.state.turn,
+        text: `Priority stop ${PRIORITY_STOP_LABELS[priorityStopWindow.stopKey]}: ${priorityStopWindow.priorityPlayerId} yielded to ${priorityStopWindow.yieldedToPlayerId}.`,
+      });
+      const result = this.dispatch({
+        type: "PASS_PRIORITY",
+        playerId: priorityStopWindow.priorityPlayerId,
+      });
+      this.botActionCooldownSeconds = BOT_ACTION_INTERVAL_SECONDS;
+      if (!result.ok) {
+        this.botActionCooldownSeconds = BOT_ACTION_INTERVAL_SECONDS * 2;
+      }
       return;
     }
 

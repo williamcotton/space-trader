@@ -1797,6 +1797,42 @@ describe("dispatchCommand", () => {
     expect(expectRejected(result)).toContain("active player");
   });
 
+  it("rejects END_PHASE after the active player passes priority away", () => {
+    const state = setupState();
+
+    const pass = dispatchCommand(state, {
+      type: "PASS_PRIORITY",
+      playerId: "player_1",
+    });
+    expect(pass.ok).toBe(true);
+    expect(state.priorityPlayerId).toBe("player_2");
+
+    const result = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+
+    expect(expectRejected(result)).toContain("priority player");
+  });
+
+  it("rejects active-player unit selection after priority is passed away", () => {
+    const state = setupState();
+
+    const pass = dispatchCommand(state, {
+      type: "PASS_PRIORITY",
+      playerId: "player_1",
+    });
+    expect(pass.ok).toBe(true);
+
+    const result = dispatchCommand(state, {
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: "unit_player_1_scout",
+    });
+
+    expect(expectRejected(result)).toContain("priority player");
+  });
+
   it("tracks priority passing and resolves top stack item after both players pass", () => {
     const state = setupState();
 

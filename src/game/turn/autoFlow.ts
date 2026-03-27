@@ -1,9 +1,7 @@
 import type { GameCommand } from "../actions/commands";
-import { getCardDefinition } from "../content/cards/catalog";
 import { getMapAxialBounds, hexDistance, isWithinMapBounds } from "../model/hex";
 import { MAX_HAND_SIZE, type GameState, type UnitEntity } from "../model/state";
 import type { PlayerId } from "../model/ids";
-import { hasLegalPlayCardTargetOption } from "../rules/cardPlayOptions";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../systems/harvesting";
 import {
   canAttackEntityDirectly,
@@ -11,21 +9,7 @@ import {
   isUnitBlockedFromMovingBySummoningSickness,
 } from "../systems/keywords";
 import { hasEntityAtCoord } from "../model/queries";
-
-function hasAnyPlayableCard(state: GameState, playerId: PlayerId): boolean {
-  for (const cardInstance of state.zones[playerId].hand) {
-    const card = getCardDefinition(cardInstance.cardId);
-    if (!card) {
-      continue;
-    }
-
-    if (hasLegalPlayCardTargetOption(state, playerId, cardInstance.instanceId, card)) {
-      return true;
-    }
-  }
-
-  return false;
-}
+import { hasAnyPlayableCard } from "./playableCards";
 
 function hasAvailableMove(state: GameState, unit: UnitEntity): boolean {
   if (isUnitBlockedFromMovingBySummoningSickness(unit) || unit.movesRemaining <= 0) {

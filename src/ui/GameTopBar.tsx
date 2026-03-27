@@ -4,6 +4,7 @@ import { useGameSnapshot } from "./useGameSnapshot";
 import type { Faction, GamePhase, ResourceType } from "../game/model/enums";
 import type { PlayerId } from "../game/model/ids";
 import { formatFactionName, getPlayerLabel, getResourceTheme } from "../game/presentation";
+import { PRIORITY_STOP_LABELS, type PriorityStopKey, type PriorityStopSettings } from "../game/turn/priorityStops";
 import { ResourceIcon } from "./ResourceIcon";
 
 const PHASE_ORDER: GamePhase[] = ["start", "economy", "main", "tactical", "end", "discard"];
@@ -16,6 +17,7 @@ const PHASE_LABELS: Record<GamePhase, string> = {
   discard: "Disc",
 };
 const RESOURCE_ORDER: ResourceType[] = ["credits", "alloy", "flux", "biomass"];
+const PRIORITY_STOP_ORDER: PriorityStopKey[] = ["opponentMain", "opponentTactical", "opponentStack"];
 
 type PlayerTopBarSnapshot = {
   id: PlayerId;
@@ -24,6 +26,7 @@ type PlayerTopBarSnapshot = {
   hand: number;
   deck: number;
   botAutoplay: boolean;
+  priorityStops: PriorityStopSettings;
 };
 
 type TopBarSnapshot = {
@@ -36,12 +39,23 @@ type TopBarSnapshot = {
   consecutivePasses: number;
   winner: PlayerId | null;
   lastRejectedReason: string | null;
+  priorityHeadline: string;
+  priorityDetail: string;
+  responseWindowOpen: boolean;
   players: PlayerTopBarSnapshot[];
 };
 
 function readSnapshot(): TopBarSnapshot {
   const runtime = getGameRuntime();
   const state = runtime.state;
+  const responseWindowOpen = Boolean(state.priorityPlayerId && state.priorityPlayerId !== state.activePlayerId);
+  const priorityHeadline = state.priorityPlayerId ? `Priority: ${getPlayerLabel(state.priorityPlayerId)}` : "Priority: None";
+  const priorityDetail = !state.priorityPlayerId
+    ? "No player can act right now."
+    : responseWindowOpen
+      ? `${getPlayerLabel(state.priorityPlayerId)} can act during ${getPlayerLabel(state.activePlayerId)}'s turn.`
+      : `${getPlayerLabel(state.activePlayerId)} is holding priority.`;
+
   return {
     mapName: state.map.name,
     turn: state.turn,
@@ -52,6 +66,9 @@ function readSnapshot(): TopBarSnapshot {
     consecutivePasses: state.consecutivePriorityPasses,
     winner: state.winner,
     lastRejectedReason: state.lastRejectedReason,
+    priorityHeadline,
+    priorityDetail,
+    responseWindowOpen,
     players: (["player_1", "player_2"] as const).map((playerId) => ({
       id: playerId,
       faction: state.players[playerId].faction,
@@ -59,6 +76,7 @@ function readSnapshot(): TopBarSnapshot {
       hand: state.zones[playerId].hand.length,
       deck: state.zones[playerId].deck.length,
       botAutoplay: runtime.isBotAutoplayEnabled(playerId),
+      priorityStops: runtime.getPriorityStopSettings(playerId),
     })),
   };
 }
@@ -66,6 +84,11 @@ function readSnapshot(): TopBarSnapshot {
 export function GameTopBar() {
   const runtime = getGameRuntime();
   const snapshot = useGameSnapshot(readSnapshot);
+  const activePlayerControlsLocked =
+    Boolean(snapshot.winner) ||
+    snapshot.stackSize > 0 ||
+    !snapshot.priorityPlayerId ||
+    snapshot.priorityPlayerId !== snapshot.activePlayerId;
 
   const phaseIndex = PHASE_ORDER.indexOf(snapshot.phase);
   const statusMessage = useMemo(() => {
@@ -85,6 +108,11 @@ export function GameTopBar() {
           <span className="eyebrow">{snapshot.mapName}</span>
           <strong>Turn {snapshot.turn}</strong>
           {statusMessage ? <span className="game-top-bar-inline-status">{statusMessage}</span> : null}
+        </div>
+
+        <div className={["game-top-bar-priority-banner", snapshot.responseWindowOpen ? "response-window" : ""].join(" ")}>
+          <strong>{snapshot.priorityHeadline}</strong>
+          <span>{snapshot.priorityDetail}</span>
         </div>
 
         <div className="game-top-bar-players-inline">
@@ -124,6 +152,19 @@ export function GameTopBar() {
                   H{player.hand} D{player.deck}
                 </span>
               </div>
+              <div className="top-bar-priority-stops">
+                <span className="top-bar-priority-stops-label">Yield</span>
+                {PRIORITY_STOP_ORDER.map((stopKey) => (
+                  <button
+                    key={stopKey}
+                    type="button"
+                    className={["top-bar-priority-stop", player.priorityStops[stopKey] ? "enabled" : "disabled"].join(" ")}
+                    onClick={() => runtime.togglePriorityStopSetting(player.id, stopKey)}
+                  >
+                    {PRIORITY_STOP_LABELS[stopKey]}
+                  </button>
+                ))}
+              </div>
             </article>
           ))}
         </div>
@@ -151,18 +192,18 @@ export function GameTopBar() {
         </div>
 
         <div className="game-top-bar-actions">
-          <button type="button" disabled={Boolean(snapshot.winner)} onClick={() => runtime.debugAdvancePhase()}>
-            Phase
+          <button type="button" disabled={activePlayerControlsLocked} onClick={() => runtime.debugAdvancePhase()}>
+            End Phase
           </button>
           <button
             type="button"
             disabled={Boolean(snapshot.winner) || !snapshot.priorityPlayerId}
             onClick={() => runtime.debugPassPriority()}
           >
-            Pass
+            Pass Priority
           </button>
-          <button type="button" disabled={Boolean(snapshot.winner)} onClick={() => runtime.debugSelectFirstActiveUnit()}>
-            Select
+          <button type="button" disabled={activePlayerControlsLocked} onClick={() => runtime.debugSelectFirstActiveUnit()}>
+            Select Unit
           </button>
         </div>
       </div>
