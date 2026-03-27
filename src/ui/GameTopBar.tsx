@@ -39,7 +39,7 @@ type TopBarSnapshot = {
   consecutivePasses: number;
   winner: PlayerId | null;
   lastRejectedReason: string | null;
-  priorityHeadline: string;
+  priorityLabel: string;
   priorityDetail: string;
   responseWindowOpen: boolean;
   players: PlayerTopBarSnapshot[];
@@ -49,7 +49,7 @@ function readSnapshot(): TopBarSnapshot {
   const runtime = getGameRuntime();
   const state = runtime.state;
   const responseWindowOpen = Boolean(state.priorityPlayerId && state.priorityPlayerId !== state.activePlayerId);
-  const priorityHeadline = state.priorityPlayerId ? `Priority: ${getPlayerLabel(state.priorityPlayerId)}` : "Priority: None";
+  const priorityLabel = state.priorityPlayerId ? `Priority ${getPlayerLabel(state.priorityPlayerId)}` : "Priority None";
   const priorityDetail = !state.priorityPlayerId
     ? "No player can act right now."
     : responseWindowOpen
@@ -66,7 +66,7 @@ function readSnapshot(): TopBarSnapshot {
     consecutivePasses: state.consecutivePriorityPasses,
     winner: state.winner,
     lastRejectedReason: state.lastRejectedReason,
-    priorityHeadline,
+    priorityLabel,
     priorityDetail,
     responseWindowOpen,
     players: (["player_1", "player_2"] as const).map((playerId) => ({
@@ -107,12 +107,13 @@ export function GameTopBar() {
         <div className="game-top-bar-match">
           <span className="eyebrow">{snapshot.mapName}</span>
           <strong>Turn {snapshot.turn}</strong>
+          <span
+            className={["game-top-bar-priority-chip", snapshot.responseWindowOpen ? "response-window" : ""].join(" ")}
+            title={snapshot.priorityDetail}
+          >
+            {snapshot.priorityLabel}
+          </span>
           {statusMessage ? <span className="game-top-bar-inline-status">{statusMessage}</span> : null}
-        </div>
-
-        <div className={["game-top-bar-priority-banner", snapshot.responseWindowOpen ? "response-window" : ""].join(" ")}>
-          <strong>{snapshot.priorityHeadline}</strong>
-          <span>{snapshot.priorityDetail}</span>
         </div>
 
         <div className="game-top-bar-players-inline">
@@ -201,9 +202,6 @@ export function GameTopBar() {
             onClick={() => runtime.debugPassPriority()}
           >
             Pass Priority
-          </button>
-          <button type="button" disabled={activePlayerControlsLocked} onClick={() => runtime.debugSelectFirstActiveUnit()}>
-            Select Unit
           </button>
         </div>
       </div>

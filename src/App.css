@@ -267,7 +267,7 @@ body {
 
 .game-top-bar-line {
   display: grid;
-  grid-template-columns: auto minmax(220px, auto) minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 6px;
   align-items: center;
 }
@@ -306,36 +306,25 @@ body {
   white-space: nowrap;
 }
 
-.game-top-bar-priority-banner {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-  padding: 6px 10px;
-  border-radius: 12px;
+.game-top-bar-priority-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 3px 8px;
+  border-radius: 999px;
   border: 1px solid rgba(87, 120, 193, 0.38);
   background: rgba(17, 28, 63, 0.82);
+  color: #d9e6ff;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.game-top-bar-priority-banner.response-window {
+.game-top-bar-priority-chip.response-window {
   border-color: rgba(124, 232, 202, 0.56);
   background: linear-gradient(180deg, rgba(22, 58, 70, 0.92), rgba(15, 29, 63, 0.82));
+  color: #d4fff1;
   box-shadow: inset 0 0 0 1px rgba(127, 245, 209, 0.12);
-}
-
-.game-top-bar-priority-banner strong {
-  color: #eff6ff;
-  font-size: 12px;
-  line-height: 1.1;
-}
-
-.game-top-bar-priority-banner span {
-  color: #9fb3dd;
-  font-size: 10px;
-  line-height: 1.25;
-}
-
-.game-top-bar-priority-banner.response-window span {
-  color: #c7fff1;
 }
 
 .game-top-bar-chip {
@@ -1100,7 +1089,7 @@ body {
 
   .game-top-bar-actions {
     grid-auto-flow: row;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .game-workspace {
