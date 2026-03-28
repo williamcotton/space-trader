@@ -2,7 +2,20 @@ import { getMapAxialBounds } from "../model/hex";
 import type { MapState } from "../model/state";
 import type { GameViewport } from "../types";
 
-function getNormalizedMapBounds(map: MapState): { minX: number; maxX: number; minY: number; maxY: number } {
+const SQRT3 = Math.sqrt(3);
+
+type MapBounds = { minX: number; maxX: number; minY: number; maxY: number };
+type HexMetrics = { size: number; origin: { x: number; y: number } };
+
+let cachedMapBounds: MapBounds | null = null;
+let cachedMapBoundsKey = "";
+
+function getNormalizedMapBounds(map: MapState): MapBounds {
+  const key = `${map.width},${map.height}`;
+  if (cachedMapBounds && cachedMapBoundsKey === key) {
+    return cachedMapBounds;
+  }
+
   const { qMin, qMax, rMin, rMax } = getMapAxialBounds(map);
   let minX = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
@@ -11,7 +24,7 @@ function getNormalizedMapBounds(map: MapState): { minX: number; maxX: number; mi
 
   for (let r = rMin; r <= rMax; r += 1) {
     for (let q = qMin; q <= qMax; q += 1) {
-      const centerX = Math.sqrt(3) * (q + r / 2);
+      const centerX = SQRT3 * (q + r / 2);
       const centerY = 1.5 * r;
       minX = Math.min(minX, centerX - 1);
       maxX = Math.max(maxX, centerX + 1);
@@ -20,10 +33,20 @@ function getNormalizedMapBounds(map: MapState): { minX: number; maxX: number; mi
     }
   }
 
-  return { minX, maxX, minY, maxY };
+  cachedMapBounds = { minX, maxX, minY, maxY };
+  cachedMapBoundsKey = key;
+  return cachedMapBounds;
 }
 
-export function getHexMetrics(viewport: GameViewport, map: MapState): { size: number; origin: { x: number; y: number } } {
+let cachedMetrics: HexMetrics | null = null;
+let cachedMetricsKey = "";
+
+export function getHexMetrics(viewport: GameViewport, map: MapState): HexMetrics {
+  const key = `${viewport.width},${viewport.height},${map.width},${map.height}`;
+  if (cachedMetrics && cachedMetricsKey === key) {
+    return cachedMetrics;
+  }
+
   const bounds = getNormalizedMapBounds(map);
   const paddingX = Math.max(28, viewport.width * 0.055);
   const paddingY = Math.max(28, viewport.height * 0.07);
@@ -35,11 +58,13 @@ export function getHexMetrics(viewport: GameViewport, map: MapState): { size: nu
   const extraX = usableWidth - mapWidth * size;
   const extraY = usableHeight - mapHeight * size;
 
-  return {
+  cachedMetrics = {
     size,
     origin: {
       x: paddingX + extraX / 2 - bounds.minX * size,
       y: paddingY + extraY / 2 - bounds.minY * size,
     },
   };
+  cachedMetricsKey = key;
+  return cachedMetrics;
 }

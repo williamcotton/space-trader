@@ -662,10 +662,13 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
 }
 
 export function stepAnimations(animations: CanvasAnimation[], deltaSeconds: number): CanvasAnimation[] {
-  return animations
-    .map((animation) => ({
-      ...animation,
-      ageSeconds: animation.ageSeconds + deltaSeconds,
-    }))
-    .filter((animation) => animation.ageSeconds < animation.durationSeconds);
+  const result: CanvasAnimation[] = [];
+  for (let i = 0; i < animations.length; i++) {
+    const animation = animations[i];
+    animation.ageSeconds += deltaSeconds;
+    if (animation.ageSeconds < animation.durationSeconds) {
+      result.push(animation);
+    }
+  }
+  return result;
 }

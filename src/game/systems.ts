@@ -34,12 +34,13 @@ export function renderGame(state: GameState, frame: GameFrame): void {
   }
   drawAnimations(context, frame, originX, originY, hexSize, "base");
 
-  for (const entity of Object.values(state.entities)) {
-    drawBase(entity, context, originX, originY, hexSize);
+  const entities = Object.values(state.entities);
+  for (let i = 0; i < entities.length; i++) {
+    drawBase(entities[i], context, originX, originY, hexSize);
   }
 
-  for (const entity of Object.values(state.entities)) {
-    drawUnit(state, entity, context, originX, originY, hexSize, frame.transients.timeSeconds);
+  for (let i = 0; i < entities.length; i++) {
+    drawUnit(state, entities[i], context, originX, originY, hexSize, frame.transients.timeSeconds);
   }
 
   drawAnimations(context, frame, originX, originY, hexSize, "foreground");

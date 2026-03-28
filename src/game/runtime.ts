@@ -221,7 +221,7 @@ export class GameRuntime {
   }
 
   getAnimations(): CanvasAnimation[] {
-    return [...this.animations];
+    return this.animations;
   }
 
   dispatch(command: GameCommand): DispatchResult {

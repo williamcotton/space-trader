@@ -4,38 +4,50 @@ import { getPlayerTheme, getResourceTheme } from "../presentation";
 import type { GameFrame } from "../types";
 import { toPixel, clamp, drawHexOutline, drawResourceGlyph } from "./primitives";
 
+let backdropCache: OffscreenCanvas | null = null;
+let backdropCacheKey = "";
+
 export function drawBackdrop(context: CanvasRenderingContext2D, frame: GameFrame): void {
   const { width, height } = frame.viewport;
-  const gradient = context.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, "#071121");
-  gradient.addColorStop(0.5, "#05091a");
-  gradient.addColorStop(1, "#040612");
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, width, height);
+  const key = `${width},${height}`;
 
-  const glow = context.createRadialGradient(width * 0.3, height * 0.2, 0, width * 0.3, height * 0.2, width * 0.6);
-  glow.addColorStop(0, "rgba(70, 123, 223, 0.14)");
-  glow.addColorStop(1, "rgba(70, 123, 223, 0)");
-  context.fillStyle = glow;
-  context.fillRect(0, 0, width, height);
+  if (!backdropCache || backdropCacheKey !== key) {
+    backdropCache = new OffscreenCanvas(width, height);
+    backdropCacheKey = key;
+    const offCtx = backdropCache.getContext("2d")!;
 
-  const accent = context.createRadialGradient(width * 0.74, height * 0.18, 0, width * 0.74, height * 0.18, width * 0.45);
-  accent.addColorStop(0, "rgba(90, 214, 180, 0.12)");
-  accent.addColorStop(1, "rgba(90, 214, 180, 0)");
-  context.fillStyle = accent;
-  context.fillRect(0, 0, width, height);
+    const gradient = offCtx.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, "#071121");
+    gradient.addColorStop(0.5, "#05091a");
+    gradient.addColorStop(1, "#040612");
+    offCtx.fillStyle = gradient;
+    offCtx.fillRect(0, 0, width, height);
 
-  context.fillStyle = "rgba(214, 232, 255, 0.52)";
-  for (let index = 0; index < 42; index += 1) {
-    const x = (index * 187) % width;
-    const y = ((index * 113) % height) * 0.92 + (index % 3) * 7;
-    const radius = 0.6 + (index % 4) * 0.35;
-    context.globalAlpha = 0.22 + ((index * 17) % 100) / 420;
-    context.beginPath();
-    context.arc(x, y, radius, 0, Math.PI * 2);
-    context.fill();
+    const glow = offCtx.createRadialGradient(width * 0.3, height * 0.2, 0, width * 0.3, height * 0.2, width * 0.6);
+    glow.addColorStop(0, "rgba(70, 123, 223, 0.14)");
+    glow.addColorStop(1, "rgba(70, 123, 223, 0)");
+    offCtx.fillStyle = glow;
+    offCtx.fillRect(0, 0, width, height);
+
+    const accent = offCtx.createRadialGradient(width * 0.74, height * 0.18, 0, width * 0.74, height * 0.18, width * 0.45);
+    accent.addColorStop(0, "rgba(90, 214, 180, 0.12)");
+    accent.addColorStop(1, "rgba(90, 214, 180, 0)");
+    offCtx.fillStyle = accent;
+    offCtx.fillRect(0, 0, width, height);
+
+    offCtx.fillStyle = "rgba(214, 232, 255, 0.52)";
+    for (let index = 0; index < 42; index += 1) {
+      const x = (index * 187) % width;
+      const y = ((index * 113) % height) * 0.92 + (index % 3) * 7;
+      const radius = 0.6 + (index % 4) * 0.35;
+      offCtx.globalAlpha = 0.22 + ((index * 17) % 100) / 420;
+      offCtx.beginPath();
+      offCtx.arc(x, y, radius, 0, Math.PI * 2);
+      offCtx.fill();
+    }
   }
-  context.globalAlpha = 1;
+
+  context.drawImage(backdropCache, 0, 0);
 }
 
 export function drawHexGrid(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
