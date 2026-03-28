@@ -1,72 +1,91 @@
 import type { Faction } from "../../model/enums";
 import { getCardDefinition } from "../cards/catalog";
 
-function expandToSixty(uniqueCardIds: string[]): string[] {
+type DeckEntry = readonly [cardId: string, copies: number];
+
+function expandDeck(entries: readonly DeckEntry[]): string[] {
   const cards: string[] = [];
-  for (const cardId of uniqueCardIds) {
-    cards.push(cardId, cardId, cardId, cardId);
+  for (const [cardId, copies] of entries) {
+    for (let index = 0; index < copies; index += 1) {
+      cards.push(cardId);
+    }
   }
   return cards;
 }
 
-const ALLOY_STARTER_UNIQUE: string[] = [
-  "frontline_scout_card",
-  "alloy_guard_card",
-  "forge_captain_card",
-  "patchwork_barrier",
-  "brace_protocol",
-  "shrapnel_relay",
-  "rivet_volley",
-  "expedition_harvester_card",
-  "escort_drone_card",
-  "salvage_hauler_card",
-  "bulwark_drone_card",
-  "pathfinder_buggy_card",
-  "chain_beacon",
-  "failsafe_redirect",
-  "slag_barrage",
+function defineStarterDeck(entries: readonly DeckEntry[]): string[] {
+  const cards = expandDeck(entries);
+  const errors = validateDeckCardIds(cards);
+  if (errors.length > 0) {
+    throw new Error(`Invalid starter deck definition: ${errors.join(" | ")}`);
+  }
+  return cards;
+}
+
+const ALLOY_STARTER_ENTRIES: readonly DeckEntry[] = [
+  ["expedition_harvester_card", 4],
+  ["brace_protocol", 4],
+  ["patchwork_barrier", 4],
+  ["rivet_volley", 4],
+  ["slag_barrage", 4],
+  ["escort_drone_card", 2],
+  ["failsafe_redirect", 4],
+  ["pathfinder_buggy_card", 2],
+  ["salvage_hauler_card", 2],
+  ["frontline_scout_card", 4],
+  ["forge_captain_card", 4],
+  ["shrapnel_relay", 4],
+  ["bulwark_drone_card", 4],
+  ["chain_beacon", 4],
+  ["alloy_guard_card", 4],
+  ["scorched_protocol", 4],
+  ["orbital_purge", 2],
 ];
 
-const FLUX_STARTER_UNIQUE: string[] = [
-  "orbital_ping",
-  "flux_runner_card",
-  "relay_savant_card",
-  "arc_snap",
-  "overload_finish",
-  "counter_pulse",
-  "echo_recall",
-  "ion_shower",
-  "expedition_harvester_card",
-  "escort_drone_card",
-  "salvage_hauler_card",
-  "bulwark_drone_card",
-  "pathfinder_buggy_card",
-  "chain_beacon",
-  "failsafe_redirect",
+const FLUX_STARTER_ENTRIES: readonly DeckEntry[] = [
+  ["expedition_harvester_card", 4],
+  ["orbital_ping", 4],
+  ["arc_snap", 4],
+  ["counter_pulse", 4],
+  ["escort_drone_card", 4],
+  ["failsafe_redirect", 4],
+  ["pathfinder_buggy_card", 2],
+  ["salvage_hauler_card", 2],
+  ["echo_recall", 4],
+  ["flux_runner_card", 4],
+  ["ion_shower", 4],
+  ["overload_finish", 4],
+  ["relay_savant_card", 4],
+  ["bulwark_drone_card", 2],
+  ["chain_beacon", 2],
+  ["ion_surge_archive", 4],
+  ["meteor_chain", 4],
 ];
 
-const BIOMASS_STARTER_UNIQUE: string[] = [
-  "swarm_harvester_card",
-  "spore_burst",
-  "neural_echo",
-  "spore_bloom",
-  "expedition_harvester_card",
-  "support_drone_card",
-  "escort_drone_card",
-  "salvage_hauler_card",
-  "bulwark_drone_card",
-  "pathfinder_buggy_card",
-  "null_intercept",
-  "chain_beacon",
-  "failsafe_redirect",
-  "emergency_thrust",
-  "holdfast_protocol",
+const BIOMASS_STARTER_ENTRIES: readonly DeckEntry[] = [
+  ["expedition_harvester_card", 4],
+  ["neural_echo", 4],
+  ["spore_burst", 4],
+  ["emergency_thrust", 4],
+  ["escort_drone_card", 4],
+  ["failsafe_redirect", 2],
+  ["null_intercept", 2],
+  ["pathfinder_buggy_card", 4],
+  ["salvage_hauler_card", 2],
+  ["spore_bloom", 4],
+  ["support_drone_card", 4],
+  ["swarm_harvester_card", 4],
+  ["bulwark_drone_card", 4],
+  ["chain_beacon", 4],
+  ["holdfast_protocol", 4],
+  ["overgrowth_wave", 4],
+  ["orbital_purge", 2],
 ];
 
 const STARTER_DECKS: Record<Faction, string[]> = {
-  alloy_clan: expandToSixty(ALLOY_STARTER_UNIQUE),
-  flux_collective: expandToSixty(FLUX_STARTER_UNIQUE),
-  biomass_swarm: expandToSixty(BIOMASS_STARTER_UNIQUE),
+  alloy_clan: defineStarterDeck(ALLOY_STARTER_ENTRIES),
+  flux_collective: defineStarterDeck(FLUX_STARTER_ENTRIES),
+  biomass_swarm: defineStarterDeck(BIOMASS_STARTER_ENTRIES),
 };
 
 export function getStarterDeckCardIds(faction: Faction): string[] {

@@ -48,6 +48,18 @@ function moveCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: 
   return card.instanceId;
 }
 
+function moveTopCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: "player_1" | "player_2"): string {
+  const card = state.zones[playerId].deck.shift();
+  if (!card) {
+    throw new Error(`Expected a card in deck for ${playerId}.`);
+  }
+
+  state.zones[playerId].hand.push(card);
+  state.players[playerId].handSize = state.zones[playerId].hand.length;
+  state.players[playerId].deckSize = state.zones[playerId].deck.length;
+  return card.instanceId;
+}
+
 function addCardToHand(state: ReturnType<typeof setupState>, playerId: "player_1" | "player_2", cardId: string): string {
   const instanceId = `${playerId}_${cardId}_test_${state.zones[playerId].hand.length}_${state.turn}`;
   state.zones[playerId].hand.push({
@@ -565,8 +577,8 @@ describe("dispatchCommand", () => {
   it("still draws at the soft cap of seven cards in hand", () => {
     const state = setupState();
 
-    moveCardFromDeckToHand(state, "player_2", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_2", "failsafe_redirect");
+    moveTopCardFromDeckToHand(state, "player_2");
+    moveTopCardFromDeckToHand(state, "player_2");
     expect(state.zones.player_2.hand).toHaveLength(7);
 
     advanceToPhase(state, "end");
@@ -587,9 +599,9 @@ describe("dispatchCommand", () => {
   it("still draws at start of turn even when already above the hand limit", () => {
     const state = setupState();
 
-    moveCardFromDeckToHand(state, "player_2", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_2", "failsafe_redirect");
-    moveCardFromDeckToHand(state, "player_2", "relay_savant_card");
+    moveTopCardFromDeckToHand(state, "player_2");
+    moveTopCardFromDeckToHand(state, "player_2");
+    moveTopCardFromDeckToHand(state, "player_2");
     expect(state.zones.player_2.hand).toHaveLength(8);
 
     advanceToPhase(state, "end");
@@ -610,9 +622,9 @@ describe("dispatchCommand", () => {
   it("enters discard phase at end of turn when the active player is above the soft cap", () => {
     const state = setupState();
 
-    moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
-    moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    moveTopCardFromDeckToHand(state, "player_1");
+    moveTopCardFromDeckToHand(state, "player_1");
+    moveTopCardFromDeckToHand(state, "player_1");
     expect(state.zones.player_1.hand).toHaveLength(8);
 
     advanceToPhase(state, "end");
@@ -631,9 +643,9 @@ describe("dispatchCommand", () => {
   it("requires discarding down to seven before the turn can hand off", () => {
     const state = setupState();
 
-    const discardedId = moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
-    moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    const discardedId = moveTopCardFromDeckToHand(state, "player_1");
+    moveTopCardFromDeckToHand(state, "player_1");
+    moveTopCardFromDeckToHand(state, "player_1");
     expect(state.zones.player_1.hand).toHaveLength(8);
 
     advanceToPhase(state, "end");
@@ -862,11 +874,7 @@ describe("dispatchCommand", () => {
 
   it("casts a main-speed unit card to stack and resolves it to battlefield with summoning sickness", () => {
     const state = setupState();
-    const cardInHand = state.zones.player_1.hand.find((card) => card.cardId === "frontline_scout_card");
-    expect(cardInHand).toBeDefined();
-    if (!cardInHand) {
-      throw new Error("Expected frontline scout in opening hand.");
-    }
+    const unitCardInstanceId = addCardToHand(state, "player_1", "frontline_scout_card");
 
     state.players.player_1.resources.credits = 4;
     state.players.player_1.resources.alloy = 3;
@@ -878,7 +886,7 @@ describe("dispatchCommand", () => {
     const play = dispatchCommand(state, {
       type: "PLAY_CARD",
       playerId: "player_1",
-      cardInstanceId: cardInHand.instanceId,
+      cardInstanceId: unitCardInstanceId,
     });
 
     expect(play.ok).toBe(true);
@@ -887,7 +895,7 @@ describe("dispatchCommand", () => {
     expect(state.stack[0]?.pendingUnitEntityId).toContain("frontline_scout_card");
     expect(state.players.player_1.resources.credits).toBe(3);
     expect(state.players.player_1.resources.alloy).toBe(2);
-    expect(state.zones.player_1.hand.some((card) => card.instanceId === cardInHand.instanceId)).toBe(false);
+    expect(state.zones.player_1.hand.some((card) => card.instanceId === unitCardInstanceId)).toBe(false);
 
     const whileOnStackUnits = Object.values(state.entities).filter((entity) => entity.kind === "unit" && entity.ownerId === "player_1");
     expect(whileOnStackUnits.length).toBe(beforeUnitCount);
@@ -906,16 +914,12 @@ describe("dispatchCommand", () => {
     expect(deployed.hasSummoningSickness).toBe(true);
     expect(deployed.movesRemaining).toBe(0);
     expect(deployed.attacksRemaining).toBe(0);
-    expect(state.zones.player_1.discard.some((card) => card.instanceId === cardInHand.instanceId)).toBe(false);
+    expect(state.zones.player_1.discard.some((card) => card.instanceId === unitCardInstanceId)).toBe(false);
   });
 
   it("allows countering a unit spell to discard before it resolves", () => {
     const state = setupState();
-    const unitCardInstanceId = state.zones.player_1.hand.find((card) => card.cardId === "frontline_scout_card")?.instanceId;
-    expect(unitCardInstanceId).toBeDefined();
-    if (!unitCardInstanceId) {
-      throw new Error("Expected frontline scout in opening hand.");
-    }
+    const unitCardInstanceId = addCardToHand(state, "player_1", "frontline_scout_card");
 
     const counterInstanceId = moveCardFromDeckToHand(state, "player_2", "counter_pulse");
     state.players.player_1.resources.credits = 4;
@@ -1035,11 +1039,7 @@ describe("dispatchCommand", () => {
 
   it("allows returning a unit spell to hand with a counter-to-hand effect", () => {
     const state = setupState();
-    const unitCardInstanceId = state.zones.player_1.hand.find((card) => card.cardId === "frontline_scout_card")?.instanceId;
-    expect(unitCardInstanceId).toBeDefined();
-    if (!unitCardInstanceId) {
-      throw new Error("Expected frontline scout in opening hand.");
-    }
+    const unitCardInstanceId = addCardToHand(state, "player_1", "frontline_scout_card");
 
     const recallInstanceId = moveCardFromDeckToHand(state, "player_2", "echo_recall");
     state.players.player_1.resources.credits = 4;

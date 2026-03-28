@@ -24,6 +24,15 @@ function moveCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: 
   return card.instanceId;
 }
 
+function moveTopCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: "player_1" | "player_2"): string {
+  const card = state.zones[playerId].deck.shift();
+  if (!card) {
+    throw new Error(`Expected a card in ${playerId} deck.`);
+  }
+  state.zones[playerId].hand.push(card);
+  return card.instanceId;
+}
+
 function addCardToHand(state: ReturnType<typeof setupState>, playerId: "player_1" | "player_2", cardId: string): string {
   const instanceId = `${playerId}_${cardId}_bot_test_${state.zones[playerId].hand.length}_${state.turn}`;
   state.zones[playerId].hand.push({
@@ -106,9 +115,9 @@ describe("decideMvpBotCommand", () => {
     state.priorityPlayerId = "player_2";
     state.phase = "discard";
 
-    moveCardFromDeckToHand(state, "player_2", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_2", "failsafe_redirect");
-    moveCardFromDeckToHand(state, "player_2", "relay_savant_card");
+    moveTopCardFromDeckToHand(state, "player_2");
+    moveTopCardFromDeckToHand(state, "player_2");
+    moveTopCardFromDeckToHand(state, "player_2");
 
     const command = decideMvpBotCommand(state, "player_2");
     expect(command?.type).toBe("DISCARD_CARD");
@@ -126,9 +135,11 @@ describe("decideMvpBotCommand", () => {
     state.priorityPlayerId = "player_2";
     state.phase = "main";
     state.stack = [];
+    state.zones.player_2.hand = [];
 
     delete state.entities.unit_player_2_scout;
     moveCardFromDeckToHand(state, "player_2", "echo_recall");
+    moveCardFromDeckToHand(state, "player_2", "flux_runner_card");
 
     state.players.player_2.resources.credits = 3;
     state.players.player_2.resources.flux = 1;
@@ -442,6 +453,7 @@ describe("decideMvpBotCommand", () => {
     state.priorityPlayerId = "player_1";
     state.phase = "tactical";
     state.stack = [];
+    state.zones.player_1.hand = [];
     state.players.player_1.resources.credits = 4;
     state.players.player_1.resources.alloy = 4;
 
@@ -591,6 +603,7 @@ describe("decideMvpBotCommand", () => {
     state.priorityPlayerId = "player_1";
     state.phase = "tactical";
     state.stack = [];
+    state.zones.player_1.hand = [];
 
     const scout = state.entities.unit_player_1_scout;
     const harvester = state.entities.unit_player_1_harvester;

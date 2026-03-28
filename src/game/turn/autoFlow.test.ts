@@ -25,6 +25,16 @@ function moveCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: 
   return card.instanceId;
 }
 
+function moveTopCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: "player_1" | "player_2"): string {
+  const card = state.zones[playerId].deck.shift();
+  if (!card) {
+    throw new Error(`Expected a card in ${playerId} deck.`);
+  }
+
+  state.zones[playerId].hand.push(card);
+  return card.instanceId;
+}
+
 describe("getAutoFlowCommand", () => {
   it("auto-advances out of main when the active player has no playable cards", () => {
     const state = setupState();
@@ -230,9 +240,9 @@ describe("getAutoFlowCommand", () => {
     const state = setupState();
     state.phase = "discard";
     state.priorityPlayerId = "player_1";
-    moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
-    moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    moveTopCardFromDeckToHand(state, "player_1");
+    moveTopCardFromDeckToHand(state, "player_1");
+    moveTopCardFromDeckToHand(state, "player_1");
     expect(state.zones.player_1.hand).toHaveLength(MAX_HAND_SIZE + 1);
 
     expect(getAutoFlowCommand(state)).toBeNull();
@@ -242,8 +252,8 @@ describe("getAutoFlowCommand", () => {
     const state = setupState();
     state.phase = "discard";
     state.priorityPlayerId = "player_1";
-    moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
+    moveTopCardFromDeckToHand(state, "player_1");
+    moveTopCardFromDeckToHand(state, "player_1");
     expect(state.zones.player_1.hand).toHaveLength(MAX_HAND_SIZE);
 
     expect(getAutoFlowCommand(state)).toEqual({

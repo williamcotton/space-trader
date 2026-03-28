@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { getCardDefinition } from "../cards/catalog";
 import { getStarterDeckCardIds, validateDeckCardIds } from "./starterDecks";
 
+function countCopies(cardIds: string[], targetCardId: string): number {
+  return cardIds.filter((cardId) => cardId === targetCardId).length;
+}
+
 describe("starter decks", () => {
   it("builds valid 60-card starter decks for each faction", () => {
     for (const faction of ["alloy_clan", "flux_collective", "biomass_swarm"] as const) {
@@ -29,8 +33,7 @@ describe("starter decks", () => {
   it("includes cheap resource harvester access in each starter deck", () => {
     for (const faction of ["alloy_clan", "flux_collective", "biomass_swarm"] as const) {
       const cards = getStarterDeckCardIds(faction);
-      const expeditionHarvesters = cards.filter((cardId) => cardId === "expedition_harvester_card");
-      expect(expeditionHarvesters).toHaveLength(4);
+      expect(countCopies(cards, "expedition_harvester_card")).toBe(4);
     }
   });
 
@@ -39,21 +42,48 @@ describe("starter decks", () => {
     const fluxCards = getStarterDeckCardIds("flux_collective");
     const biomassCards = getStarterDeckCardIds("biomass_swarm");
 
-    expect(alloyCards.filter((cardId) => cardId === "shrapnel_relay")).toHaveLength(4);
-    expect(fluxCards.filter((cardId) => cardId === "ion_shower")).toHaveLength(4);
-    expect(biomassCards.filter((cardId) => cardId === "spore_bloom")).toHaveLength(4);
+    expect(countCopies(alloyCards, "shrapnel_relay")).toBe(4);
+    expect(countCopies(fluxCards, "ion_shower")).toBe(4);
+    expect(countCopies(biomassCards, "spore_bloom")).toBe(4);
 
     for (const cards of [alloyCards, fluxCards, biomassCards]) {
-      expect(cards.filter((cardId) => cardId === "chain_beacon")).toHaveLength(4);
+      expect(countCopies(cards, "chain_beacon")).toBeGreaterThanOrEqual(2);
     }
   });
 
-  it("surfaces updated on-pie faction tactics in alloy and flux starters", () => {
+  it("surfaces updated on-pie faction tactics and haymakers in the starters", () => {
     const alloyCards = getStarterDeckCardIds("alloy_clan");
     const fluxCards = getStarterDeckCardIds("flux_collective");
+    const biomassCards = getStarterDeckCardIds("biomass_swarm");
 
-    expect(alloyCards.filter((cardId) => cardId === "patchwork_barrier")).toHaveLength(4);
-    expect(fluxCards.filter((cardId) => cardId === "orbital_ping")).toHaveLength(4);
+    expect(countCopies(alloyCards, "patchwork_barrier")).toBe(4);
+    expect(countCopies(fluxCards, "orbital_ping")).toBe(4);
+    expect(countCopies(alloyCards, "scorched_protocol")).toBe(4);
+    expect(countCopies(fluxCards, "meteor_chain")).toBe(4);
+    expect(countCopies(fluxCards, "ion_surge_archive")).toBe(4);
+    expect(countCopies(biomassCards, "overgrowth_wave")).toBe(4);
+    expect(countCopies(biomassCards, "orbital_purge")).toBe(2);
+  });
+
+  it("uses an actual starter curve instead of uniform four-ofs", () => {
+    for (const faction of ["alloy_clan", "flux_collective", "biomass_swarm"] as const) {
+      const cards = getStarterDeckCardIds(faction);
+      const expensiveCards = cards.filter((cardId) => {
+        const definition = getCardDefinition(cardId);
+        if (!definition) {
+          return false;
+        }
+        const cost = definition.cost;
+        const primary =
+          (cost.alloy ?? 0) +
+          (cost.flux ?? 0) +
+          (cost.biomass ?? 0);
+        return (cost.credits ?? 0) + primary >= 5;
+      });
+
+      expect(expensiveCards.length).toBeGreaterThanOrEqual(6);
+      expect(new Set(cards).size).toBeGreaterThan(15);
+    }
   });
 
   it("does not include off-faction splash cards in starter decks", () => {
