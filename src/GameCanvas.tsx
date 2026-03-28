@@ -1,15 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { getGameRuntime } from "./game/runtime";
-
-const FALLBACK_CANVAS_SIZE = {
-  width: 1024,
-  height: 768,
-};
 
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const runtimeRef = useRef(getGameRuntime());
-  const [canvasSize, setCanvasSize] = useState(FALLBACK_CANVAS_SIZE);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -18,12 +12,17 @@ export function GameCanvas() {
       return;
     }
 
+    const runtime = runtimeRef.current;
     const resize = () => {
       const rect = parent.getBoundingClientRect();
-      setCanvasSize({
-        width: Math.max(320, Math.floor(rect.width)),
-        height: Math.max(320, Math.floor(rect.height)),
-      });
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(1, Math.floor(Math.max(320, Math.floor(rect.width)) * dpr));
+      const h = Math.max(1, Math.floor(Math.max(320, Math.floor(rect.height)) * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        runtime.setViewport(w, h);
+      }
     };
 
     resize();
@@ -34,19 +33,6 @@ export function GameCanvas() {
       observer.disconnect();
     };
   }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-
-    const runtime = runtimeRef.current;
-    const devicePixelRatio = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.floor(canvasSize.width * devicePixelRatio));
-    canvas.height = Math.max(1, Math.floor(canvasSize.height * devicePixelRatio));
-    runtime.setViewport(canvas.width, canvas.height);
-  }, [canvasSize]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -201,5 +187,5 @@ export function GameCanvas() {
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="game-canvas" style={{ width: `${canvasSize.width}px`, height: `${canvasSize.height}px` }} />;
+  return <canvas ref={canvasRef} className="game-canvas" style={{ width: "100%", height: "100%", display: "block" }} />;
 }
