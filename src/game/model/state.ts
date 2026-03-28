@@ -109,6 +109,7 @@ export type StackItem = {
   ownerId: PlayerId;
   effectId: string;
   effectMagnitude: number;
+  surgeActive?: boolean;
   targetStackItemId: string | null;
   targetEntityId: EntityId | null;
   targetHex?: HexCoord | null;
@@ -147,6 +148,7 @@ export type GameState = {
   log: MatchLogEntry[];
   winner: PlayerId | null;
   lastRejectedReason: string | null;
+  tacticsCastThisTurn: Record<PlayerId, number>;
   tacticalHarvestEligibleUnitIds: EntityId[];
   tacticalHarvestedUnitIds: EntityId[];
 };
@@ -164,6 +166,7 @@ type CreateInitialGameStateOptions = {
   matchId?: string;
   randomSource?: () => number;
   rules?: Partial<GameRules>;
+  factions?: { player_1: Faction; player_2: Faction };
 };
 
 export const DEFAULT_GAME_RULES: GameRules = {
@@ -263,6 +266,8 @@ export function syncPlayerZoneCounts(state: Pick<GameState, "players" | "zones">
 
 export function createInitialGameState(options: CreateInitialGameStateOptions): GameState {
   const map = cloneMap(options.map);
+  const factionOne = options.factions?.player_1 ?? "alloy_clan";
+  const factionTwo = options.factions?.player_2 ?? "flux_collective";
   const rules = {
     ...createDefaultGameRules(),
     ...(options.rules ?? {}),
@@ -407,8 +412,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   };
 
   const zones = {
-    player_1: createInitialZonesForPlayer(PLAYER_ONE, "alloy_clan", OPENING_HAND_SIZE, options.randomSource),
-    player_2: createInitialZonesForPlayer(PLAYER_TWO, "flux_collective", OPENING_HAND_SIZE, options.randomSource),
+    player_1: createInitialZonesForPlayer(PLAYER_ONE, factionOne, OPENING_HAND_SIZE, options.randomSource),
+    player_2: createInitialZonesForPlayer(PLAYER_TWO, factionTwo, OPENING_HAND_SIZE, options.randomSource),
   } satisfies Record<PlayerId, PlayerZones>;
 
   return {
@@ -427,8 +432,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       player_1: {
         id: PLAYER_ONE,
         name: "Player 1",
-        faction: "alloy_clan",
-        resources: createStartingResources(PLAYER_ONE, "alloy_clan"),
+        faction: factionOne,
+        resources: createStartingResources(PLAYER_ONE, factionOne),
         handSize: zones.player_1.hand.length,
         deckSize: zones.player_1.deck.length,
         baseEntityId: baseOneId,
@@ -436,8 +441,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       player_2: {
         id: PLAYER_TWO,
         name: "Player 2",
-        faction: "flux_collective",
-        resources: createStartingResources(PLAYER_TWO, "flux_collective"),
+        faction: factionTwo,
+        resources: createStartingResources(PLAYER_TWO, factionTwo),
         handSize: zones.player_2.hand.length,
         deckSize: zones.player_2.deck.length,
         baseEntityId: baseTwoId,
@@ -456,6 +461,10 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     ],
     winner: null,
     lastRejectedReason: null,
+    tacticsCastThisTurn: {
+      player_1: 0,
+      player_2: 0,
+    },
     tacticalHarvestEligibleUnitIds: [],
     tacticalHarvestedUnitIds: [],
   };

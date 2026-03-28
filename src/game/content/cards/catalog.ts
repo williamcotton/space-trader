@@ -154,6 +154,7 @@ type CardBase = {
 type CardPlayBase = {
   stackEffectId: string;
   effectConfig?: CardPlayEffectConfig;
+  surgeEffectConfig?: CardPlayEffectConfig;
   sourceDestinationOnResolve: CardSourceDestination;
   requiresOpenBaseAdjacentTile?: boolean;
   reserveEntityId?: boolean;
@@ -211,6 +212,7 @@ function tacticPlay(
     isValidTarget?: TargetPredicate;
     isValidHexTarget?: HexTargetPredicate;
     effectConfig?: CardPlayEffectConfig;
+    surgeEffectConfig?: CardPlayEffectConfig;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
@@ -223,6 +225,7 @@ function tacticPlay(
     return {
       stackEffectId,
       effectConfig: options?.effectConfig,
+      surgeEffectConfig: options?.surgeEffectConfig,
       targetMode,
       sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
       isValidTarget: options.isValidTarget,
@@ -236,6 +239,7 @@ function tacticPlay(
     return {
       stackEffectId,
       effectConfig: options?.effectConfig,
+      surgeEffectConfig: options?.surgeEffectConfig,
       targetMode,
       sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
       isValidHexTarget: options.isValidHexTarget,
@@ -245,6 +249,7 @@ function tacticPlay(
   return {
     stackEffectId,
     effectConfig: options?.effectConfig,
+    surgeEffectConfig: options?.surgeEffectConfig,
     targetMode,
     sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
   };
@@ -361,6 +366,7 @@ function createHexAreaDamageEffectConfig(options: HexAreaDamageOptions): HexArea
 function cascadeTacticPlay(
   options: CascadeUnitBuffOptions & {
     isValidHexTarget: HexTargetPredicate;
+    surgeBonus?: CascadeUnitBuffOptions;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
@@ -369,56 +375,66 @@ function cascadeTacticPlay(
     isValidHexTarget: options.isValidHexTarget,
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createCascadeUnitBuffEffectConfig(options),
+    surgeEffectConfig: options.surgeBonus ? createCascadeUnitBuffEffectConfig(options.surgeBonus) : undefined,
   });
 }
 
 function massDamageTacticPlay(
   options: MassDamageOptions & {
+    surgeBonus?: MassDamageOptions;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
   return tacticPlay("mass_damage", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createMassDamageEffectConfig(options),
+    surgeEffectConfig: options.surgeBonus ? createMassDamageEffectConfig(options.surgeBonus) : undefined,
   });
 }
 
 function globalUnitBuffTacticPlay(
   options: GlobalUnitBuffOptions & {
+    surgeBonus?: GlobalUnitBuffOptions;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
   return tacticPlay("global_unit_buff", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createGlobalUnitBuffEffectConfig(options),
+    surgeEffectConfig: options.surgeBonus ? createGlobalUnitBuffEffectConfig(options.surgeBonus) : undefined,
   });
 }
 
 function destroyDamagedUnitsTacticPlay(
   options: DestroyDamagedUnitsOptions & {
+    surgeBonus?: DestroyDamagedUnitsOptions;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
   return tacticPlay("destroy_damaged_units", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createDestroyDamagedUnitsEffectConfig(options),
+    surgeEffectConfig: options.surgeBonus ? createDestroyDamagedUnitsEffectConfig(options.surgeBonus) : undefined,
   });
 }
 
 function drawAndGainResourcesTacticPlay(
   options: DrawAndGainResourcesOptions & {
+    surgeBonus?: DrawAndGainResourcesOptions;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
   return tacticPlay("draw_and_gain_resources", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createDrawAndGainResourcesEffectConfig(options),
+    surgeEffectConfig: options.surgeBonus ? createDrawAndGainResourcesEffectConfig(options.surgeBonus) : undefined,
   });
 }
 
 function hexAreaDamageTacticPlay(
   options: HexAreaDamageOptions & {
     isValidHexTarget: HexTargetPredicate;
+    surgeBonus?: HexAreaDamageOptions;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
@@ -427,17 +443,20 @@ function hexAreaDamageTacticPlay(
     isValidHexTarget: options.isValidHexTarget,
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createHexAreaDamageEffectConfig(options),
+    surgeEffectConfig: options.surgeBonus ? createHexAreaDamageEffectConfig(options.surgeBonus) : undefined,
   });
 }
 
 function resourcesByUnitCountTacticPlay(
   options: ResourcesByUnitCountOptions & {
+    surgeBonus?: ResourcesByUnitCountOptions;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
   return tacticPlay("resources_by_unit_count", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createResourcesByUnitCountEffectConfig(options),
+    surgeEffectConfig: options.surgeBonus ? createResourcesByUnitCountEffectConfig(options.surgeBonus) : undefined,
   });
 }
 
@@ -445,17 +464,23 @@ export function getCardPlayEffectConfig(card: CardDefinition | undefined): CardP
   return card?.play.effectConfig;
 }
 
+export function getCardSurgeEffectConfig(card: CardDefinition | undefined): CardPlayEffectConfig | undefined {
+  return card?.play.surgeEffectConfig;
+}
+
+export function getResolvedCardPlayEffectConfigs(card: CardDefinition | undefined, surgeActive = false): CardPlayEffectConfig[] {
+  const baseEffectConfig = getCardPlayEffectConfig(card);
+  const surgeEffectConfig = surgeActive ? getCardSurgeEffectConfig(card) : undefined;
+
+  return [baseEffectConfig, surgeEffectConfig].filter((effectConfig): effectConfig is CardPlayEffectConfig => Boolean(effectConfig));
+}
+
 export function getCardCascadeUnitBuffConfig(card: CardDefinition | undefined): CascadeUnitBuffPlayEffectConfig | undefined {
   const effectConfig = getCardPlayEffectConfig(card);
   return effectConfig?.type === "cascade_unit_buff" ? effectConfig : undefined;
 }
 
-export function getCardPlayEffectMagnitude(card: CardDefinition | undefined): number {
-  const effectConfig = getCardPlayEffectConfig(card);
-  if (!effectConfig) {
-    return 0;
-  }
-
+function getEffectConfigMagnitude(effectConfig: CardPlayEffectConfig): number {
   switch (effectConfig.type) {
     case "mass_damage":
       return effectConfig.amount;
@@ -483,8 +508,15 @@ export function getCardPlayEffectMagnitude(card: CardDefinition | undefined): nu
         effectConfig.grantedKeywords && effectConfig.grantedKeywords.length > 0 ? 1 : 0
       );
   }
+}
 
-  return 0;
+export function getCardPlayEffectMagnitude(card: CardDefinition | undefined, surgeActive = false): number {
+  const effectConfigs = getResolvedCardPlayEffectConfigs(card, surgeActive);
+  if (effectConfigs.length === 0) {
+    return 0;
+  }
+
+  return effectConfigs.reduce((sum, effectConfig) => sum + getEffectConfigMagnitude(effectConfig), 0);
 }
 
 function hasFriendlyUnitNearHex(state: Readonly<GameState>, playerId: PlayerId, target: HexCoord): boolean {
@@ -926,6 +958,74 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       },
     },
   },
+  static_insight: {
+    id: "static_insight",
+    name: "Static Insight",
+    faction: "flux_collective",
+    kind: "tactic",
+    speed: "instant",
+    cost: { flux: 1 },
+    text: "Draw 1 card. Surge — gain 1 credit and 1 flux.",
+    keywords: ["surge"],
+    play: drawAndGainResourcesTacticPlay({
+      drawCount: 1,
+      resources: {},
+      surgeBonus: {
+        resources: {
+          credits: 1,
+          flux: 1,
+        },
+      },
+    }),
+  },
+  surge_matrix: {
+    id: "surge_matrix",
+    name: "Surge Matrix",
+    faction: "flux_collective",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 1, flux: 1 },
+    text: "Friendly units get +1 ATK until end of turn. Surge — they also get +1 ARM until end of turn.",
+    keywords: ["surge"],
+    play: globalUnitBuffTacticPlay({
+      attackBonus: 1,
+      armorBonus: 0,
+      relation: "ally",
+      surgeBonus: {
+        attackBonus: 0,
+        armorBonus: 1,
+        relation: "ally",
+      },
+    }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Surge Matrix",
+        accent: "flux",
+      },
+    },
+  },
+  arc_bloom: {
+    id: "arc_bloom",
+    name: "Arc Bloom",
+    faction: "flux_collective",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 2, flux: 1 },
+    text: "Choose a hex. Deal 1 damage to each enemy unit there. Surge — deal 1 more damage there and to each adjacent enemy unit.",
+    keywords: ["surge"],
+    play: hexAreaDamageTacticPlay({
+      amount: 1,
+      radius: 0,
+      relation: "enemy",
+      isValidHexTarget: (state, target) => isWithinMapBounds(target, state.map),
+      surgeBonus: {
+        amount: 1,
+        radius: 1,
+        relation: "enemy",
+      },
+    }),
+  },
   orbital_purge: {
     id: "orbital_purge",
     name: "Orbital Purge",
@@ -987,10 +1087,14 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "tactic",
     speed: "main",
     cost: { credits: 3, flux: 2 },
-    text: "Draw 2 cards. Gain 2 flux.",
+    text: "Draw 2 cards. Gain 1 flux. Surge — gain 2 more flux.",
+    keywords: ["surge"],
     play: drawAndGainResourcesTacticPlay({
       drawCount: 2,
-      resources: { flux: 2 },
+      resources: { flux: 1 },
+      surgeBonus: {
+        resources: { flux: 2 },
+      },
     }),
   },
   overgrowth_wave: {

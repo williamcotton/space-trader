@@ -25,26 +25,80 @@ type RoleTheme = {
   accent: string;
 };
 
-const PLAYER_THEMES: Record<PlayerId, PlayerTheme> = {
-  player_1: {
-    label: "Player 1",
-    primary: "#63d5ff",
-    secondary: "#89f4ca",
-    glow: "rgba(99, 213, 255, 0.28)",
-    shadow: "rgba(13, 32, 52, 0.95)",
-    fillDark: "#10284e",
-    line: "#9ae8ff",
+const FACTION_THEMES: Record<Faction, PlayerTheme> = {
+  alloy_clan: {
+    label: "Alloy Clan",
+    primary: "#b7c9de",
+    secondary: "#e0eaf6",
+    glow: "rgba(183, 201, 222, 0.28)",
+    shadow: "rgba(20, 28, 42, 0.95)",
+    fillDark: "#1a2436",
+    line: "#d0dded",
   },
-  player_2: {
-    label: "Player 2",
-    primary: "#ff9969",
-    secondary: "#ffd36d",
-    glow: "rgba(255, 153, 105, 0.28)",
-    shadow: "rgba(56, 25, 17, 0.95)",
-    fillDark: "#472113",
-    line: "#ffd0b7",
+  flux_collective: {
+    label: "Flux Collective",
+    primary: "#6ea8ff",
+    secondary: "#a0c8ff",
+    glow: "rgba(110, 168, 255, 0.28)",
+    shadow: "rgba(14, 24, 52, 0.95)",
+    fillDark: "#0f1a3a",
+    line: "#97c4ff",
+  },
+  biomass_swarm: {
+    label: "Biomass Swarm",
+    primary: "#5fe38f",
+    secondary: "#a4f4c0",
+    glow: "rgba(95, 227, 143, 0.28)",
+    shadow: "rgba(12, 38, 22, 0.95)",
+    fillDark: "#0e2816",
+    line: "#8af0aa",
   },
 };
+
+const FACTION_ALT_THEMES: Record<Faction, PlayerTheme> = {
+  alloy_clan: {
+    label: "Alloy Clan",
+    primary: "#d4a86a",
+    secondary: "#f0d4a0",
+    glow: "rgba(212, 168, 106, 0.28)",
+    shadow: "rgba(42, 30, 16, 0.95)",
+    fillDark: "#2e2010",
+    line: "#e8c896",
+  },
+  flux_collective: {
+    label: "Flux Collective",
+    primary: "#c084ff",
+    secondary: "#dab4ff",
+    glow: "rgba(192, 132, 255, 0.28)",
+    shadow: "rgba(30, 16, 52, 0.95)",
+    fillDark: "#1e1038",
+    line: "#d4a8ff",
+  },
+  biomass_swarm: {
+    label: "Biomass Swarm",
+    primary: "#e8d44e",
+    secondary: "#f4eea0",
+    glow: "rgba(232, 212, 78, 0.28)",
+    shadow: "rgba(40, 36, 12, 0.95)",
+    fillDark: "#28240e",
+    line: "#f0e078",
+  },
+};
+
+let activePlayerThemes: Record<PlayerId, PlayerTheme> = {
+  player_1: FACTION_THEMES.alloy_clan,
+  player_2: FACTION_THEMES.flux_collective,
+};
+
+export function configurePlayerThemes(factions: Record<PlayerId, Faction>): void {
+  const sameFaction = factions.player_1 === factions.player_2;
+  activePlayerThemes = {
+    player_1: FACTION_THEMES[factions.player_1],
+    player_2: sameFaction
+      ? FACTION_ALT_THEMES[factions.player_2]
+      : FACTION_THEMES[factions.player_2],
+  };
+}
 
 const RESOURCE_THEMES: Record<ResourceType, ResourceTheme> = {
   credits: {
@@ -102,11 +156,11 @@ function formatWords(value: string): string {
 }
 
 export function getPlayerTheme(playerId: PlayerId): PlayerTheme {
-  return PLAYER_THEMES[playerId];
+  return activePlayerThemes[playerId];
 }
 
 export function getPlayerLabel(playerId: PlayerId): string {
-  return PLAYER_THEMES[playerId].label;
+  return playerId === "player_1" ? "Player 1" : "Player 2";
 }
 
 export function getResourceTheme(resourceType: ResourceType): ResourceTheme {

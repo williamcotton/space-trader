@@ -45,23 +45,26 @@ const ALLOY_STARTER_ENTRIES: readonly DeckEntry[] = [
 
 const FLUX_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["expedition_harvester_card", 4],
-  ["orbital_ping", 4],
+  ["orbital_ping", 2],
   ["arc_snap", 4],
   ["counter_pulse", 2],
   ["emergency_war_chest", 2],
   ["ion_skimmer_card", 4],
   ["salvage_hauler_card", 4],
-  ["echo_recall", 4],
+  ["echo_recall", 2],
   ["flux_runner_card", 4],
   ["ion_shower", 4],
   ["signal_fork", 2],
+  ["static_insight", 2],
+  ["surge_matrix", 2],
+  ["arc_bloom", 2],
   ["phase_coil", 2],
   ["overload_finish", 4],
   ["arc_repeater_card", 2],
   ["relay_savant_card", 4],
   ["chain_beacon", 2],
   ["ion_surge_archive", 4],
-  ["meteor_chain", 4],
+  ["meteor_chain", 2],
 ];
 
 const BIOMASS_STARTER_ENTRIES: readonly DeckEntry[] = [

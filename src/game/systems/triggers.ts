@@ -93,6 +93,7 @@ export function evaluateTriggers(
       ownerId: playerId,
       effectId: trigger.effectId,
       effectMagnitude: getStackEffectMagnitude(trigger.effectId),
+      surgeActive: false,
       targetStackItemId: null,
       targetEntityId,
       objectKind: effectDefinition.object.kind,

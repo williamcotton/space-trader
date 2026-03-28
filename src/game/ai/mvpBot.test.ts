@@ -363,6 +363,39 @@ describe("decideMvpBotCommand", () => {
     });
   });
 
+  it("uses Arc Bloom as a surged area spell against clustered enemies", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_2.hand = [];
+    state.players.player_2.resources.credits = 2;
+    state.players.player_2.resources.flux = 1;
+    state.tacticsCastThisTurn.player_2 = 1;
+
+    const enemyScout = state.entities.unit_player_1_scout;
+    const enemyHarvester = state.entities.unit_player_1_harvester;
+    if (!enemyScout || enemyScout.kind !== "unit" || !enemyHarvester || enemyHarvester.kind !== "unit") {
+      throw new Error("Expected clustered enemy units for Arc Bloom bot test.");
+    }
+
+    enemyScout.coord = { q: 0, r: 0 };
+    enemyHarvester.coord = { q: 1, r: 0 };
+    enemyScout.hp = 2;
+    enemyHarvester.hp = 1;
+
+    const cardInstanceId = addCardToHand(state, "player_2", "arc_bloom");
+
+    const command = decideMvpBotCommand(state, "player_2");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetHex: { q: 1, r: 0 },
+    });
+  });
+
   it("casts Emergency War Chest when low on hand and flush with credits", () => {
     const state = setupState();
     state.activePlayerId = "player_2";

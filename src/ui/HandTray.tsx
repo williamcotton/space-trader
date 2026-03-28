@@ -75,14 +75,14 @@ export function HandTray() {
         <span>
           Hand - {snapshot.visiblePlayerId}
           {snapshot.showingPriorityHand ? " · Priority" : ""}
+          {priorityPrompt ? <span className="hand-tray-targeting-hint"> {priorityPrompt}</span> : null}
+          {discardPrompt ? <span className="hand-tray-targeting-hint"> {discardPrompt}</span> : null}
+          {snapshot.pendingTargetingPrompt ? <span className="hand-tray-targeting-hint"> {snapshot.pendingTargetingPrompt}</span> : null}
         </span>
         <span>
           Hand {snapshot.cards.length} | Deck {snapshot.deckCount}
         </span>
       </header>
-      {priorityPrompt ? <p className="hand-tray-targeting-hint">{priorityPrompt}</p> : null}
-      {discardPrompt ? <p className="hand-tray-targeting-hint">{discardPrompt}</p> : null}
-      {snapshot.pendingTargetingPrompt ? <p className="hand-tray-targeting-hint">{snapshot.pendingTargetingPrompt}</p> : null}
       <div className="hand-tray-cards">
         {snapshot.cards.length === 0 ? (
           <p className="hand-tray-empty">No cards in hand.</p>

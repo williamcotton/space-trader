@@ -1,5 +1,5 @@
 import type { GameEvent } from "../actions/events";
-import { getCardCascadeUnitBuffConfig, getCardDefinition, getCardPlayEffectConfig, type CardAnimationAccent } from "../content/cards/catalog";
+import { getCardCascadeUnitBuffConfig, getCardDefinition, getResolvedCardPlayEffectConfigs, type CardAnimationAccent } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, HexCoord } from "../model/state";
@@ -319,22 +319,23 @@ function buildStackResolutionAnimation(
     }
   }
   if (cardResolveAnimation?.kind === "board_blast") {
-    const effectConfig = getCardPlayEffectConfig(sourceCard);
+    const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, Boolean(event.surgeActive));
     const controllerBase = state.entities[state.players[event.controllerId].baseEntityId];
-    const affectedHexes =
-      effectConfig?.type === "mass_damage"
+    const affectedHexes = getUniqueHexes(effectConfigs.flatMap((effectConfig) =>
+      effectConfig.type === "mass_damage"
         ? getAffectedUnitHexes(before, event.controllerId, effectConfig.relation)
-        : effectConfig?.type === "global_unit_buff"
+        : effectConfig.type === "global_unit_buff"
           ? getLiveUnitHexes(state, event.controllerId, effectConfig.relation, effectConfig.roleFilter)
-        : effectConfig?.type === "destroy_damaged_units"
-          ? getDestroyedUnitHexes(before, state, event.controllerId, effectConfig.relation)
-          : effectConfig?.type === "draw_and_gain_resources"
-            ? controllerBase && controllerBase.kind === "base"
-              ? [controllerBase.coord]
-              : []
-            : effectConfig?.type === "resources_by_unit_count"
-              ? getLiveUnitHexes(state, event.controllerId, effectConfig.relation, effectConfig.roleFilter)
-        : [];
+          : effectConfig.type === "destroy_damaged_units"
+            ? getDestroyedUnitHexes(before, state, event.controllerId, effectConfig.relation)
+            : effectConfig.type === "draw_and_gain_resources"
+              ? controllerBase && controllerBase.kind === "base"
+                ? [controllerBase.coord]
+                : []
+              : effectConfig.type === "resources_by_unit_count"
+                ? getLiveUnitHexes(state, event.controllerId, effectConfig.relation, effectConfig.roleFilter)
+                : []
+    ));
 
     if (affectedHexes.length > 0) {
       return {
@@ -344,7 +345,7 @@ function buildStackResolutionAnimation(
         ageSeconds: 0,
         durationSeconds: 1.15,
         center:
-          effectConfig?.type === "mass_damage" || effectConfig?.type === "destroy_damaged_units"
+          effectConfigs.some((effectConfig) => effectConfig.type === "mass_damage" || effectConfig.type === "destroy_damaged_units")
             ? getMapCenterHex(state)
             : controllerBase && controllerBase.kind === "base"
               ? controllerBase.coord
@@ -487,8 +488,10 @@ function buildStackResolutionAnimation(
   }
 
   if (definition?.behavior.type === "hex_area_damage" && event.targetHex) {
-    const effectConfig = getCardPlayEffectConfig(sourceCard);
-    if (effectConfig?.type !== "hex_area_damage") {
+    const targetHex = event.targetHex;
+    const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, Boolean(event.surgeActive))
+      .filter((effectConfig) => effectConfig.type === "hex_area_damage");
+    if (effectConfigs.length === 0) {
       return null;
     }
 
@@ -498,8 +501,8 @@ function buildStackResolutionAnimation(
       playerId: event.controllerId,
       ageSeconds: 0,
       durationSeconds: 1,
-      origin: event.targetHex,
-      hexes: getRadiusAffectedHexes(state, event.targetHex, effectConfig.radius),
+      origin: targetHex,
+      hexes: getUniqueHexes(effectConfigs.flatMap((effectConfig) => getRadiusAffectedHexes(state, targetHex, effectConfig.radius))),
       label: event.label,
       accent: getCardAnimationAccent(event.sourceCardId),
     };

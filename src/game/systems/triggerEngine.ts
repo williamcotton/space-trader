@@ -236,6 +236,7 @@ export function evaluateTriggersFromEvent(
         ownerId: unit.ownerId,
         effectId: trigger.effectId,
         effectMagnitude: getStackEffectMagnitude(trigger.effectId),
+        surgeActive: false,
         targetStackItemId: null,
         targetEntityId,
         objectKind: effectDefinition.object.kind,

@@ -43,6 +43,8 @@ export function advancePhase(state: GameState): void {
     clearTemporaryUnitModifiers(state);
     state.turn += 1;
     state.activePlayerId = getNextActivePlayer(state.activePlayerId);
+    state.tacticsCastThisTurn.player_1 = 0;
+    state.tacticsCastThisTurn.player_2 = 0;
     clearTemporaryUnitModifiers(state);
     resetUnitActionBudgetsForPlayer(state, state.activePlayerId);
   }

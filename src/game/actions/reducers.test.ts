@@ -1874,8 +1874,142 @@ describe("dispatchCommand", () => {
 
     expect(state.zones.player_2.hand.length).toBe(handBefore + 1);
     expect(state.zones.player_2.deck.length).toBe(deckBefore - 2);
-    expect(state.players.player_2.resources.flux).toBe(2);
+    expect(state.players.player_2.resources.flux).toBe(1);
     expect(state.players.player_2.resources.credits).toBe(0);
+  });
+
+  it("applies Surge only when another tactic was cast earlier that turn", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_2.hand = [];
+    state.players.player_2.resources.credits = 3;
+    state.players.player_2.resources.flux = 3;
+
+    const staticInsightId = addCardToHand(state, "player_2", "static_insight");
+    const archiveId = addCardToHand(state, "player_2", "ion_surge_archive");
+
+    const firstPlay = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId: staticInsightId,
+    });
+    expect(firstPlay.ok).toBe(true);
+    const firstStackItem = state.stack[state.stack.length - 1];
+    expect(firstStackItem?.sourceCardId).toBe("static_insight");
+    expect(firstStackItem?.surgeActive).toBe(false);
+    expect(state.tacticsCastThisTurn.player_2).toBe(1);
+
+    resolveStackByPassing(state);
+
+    const secondPlay = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId: archiveId,
+    });
+    expect(secondPlay.ok).toBe(true);
+    const secondStackItem = state.stack[state.stack.length - 1];
+    expect(secondStackItem?.sourceCardId).toBe("ion_surge_archive");
+    expect(secondStackItem?.surgeActive).toBe(true);
+    expect(state.tacticsCastThisTurn.player_2).toBe(2);
+
+    resolveStackByPassing(state);
+
+    expect(state.zones.player_2.hand).toHaveLength(3);
+    expect(state.players.player_2.resources.credits).toBe(0);
+    expect(state.players.player_2.resources.flux).toBe(3);
+  });
+
+  it("resets surge tactic counts when the turn passes", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_2.hand = [];
+    state.players.player_2.resources.flux = 1;
+
+    const cardInstanceId = addCardToHand(state, "player_2", "static_insight");
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+    expect(state.tacticsCastThisTurn.player_2).toBe(1);
+
+    resolveStackByPassing(state);
+    advanceToPhase(state, "end");
+    const handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_2",
+    });
+    expect(handoff.ok).toBe(true);
+
+    expect(state.activePlayerId).toBe("player_1");
+    expect(state.phase).toBe("start");
+    expect(state.tacticsCastThisTurn.player_1).toBe(0);
+    expect(state.tacticsCastThisTurn.player_2).toBe(0);
+  });
+
+  it("Arc Bloom expands to adjacent enemy units when surged", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_2.hand = [];
+    state.players.player_2.resources.credits = 3;
+    state.players.player_2.resources.flux = 2;
+
+    const setupSpellId = addCardToHand(state, "player_2", "static_insight");
+    const arcBloomId = addCardToHand(state, "player_2", "arc_bloom");
+
+    const centerEnemy = state.entities.unit_player_1_scout;
+    const adjacentEnemy = state.entities.unit_player_1_harvester;
+    if (!centerEnemy || centerEnemy.kind !== "unit" || !adjacentEnemy || adjacentEnemy.kind !== "unit") {
+      throw new Error("Expected enemy units for Arc Bloom.");
+    }
+
+    centerEnemy.coord = { q: 0, r: 0 };
+    adjacentEnemy.coord = { q: 1, r: 0 };
+    centerEnemy.hp = centerEnemy.maxHp;
+    adjacentEnemy.hp = adjacentEnemy.maxHp;
+
+    const firstPlay = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId: setupSpellId,
+    });
+    expect(firstPlay.ok).toBe(true);
+    const opponentPass = dispatchCommand(state, {
+      type: "PASS_PRIORITY",
+      playerId: "player_1",
+    });
+    expect(opponentPass.ok).toBe(true);
+
+    const surgePlay = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId: arcBloomId,
+      targetHex: { q: 0, r: 0 },
+    });
+    expect(surgePlay.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    const resolvedCenterEnemy = state.entities[centerEnemy.id];
+    const resolvedAdjacentEnemy = state.entities[adjacentEnemy.id];
+    expect(resolvedCenterEnemy?.kind).toBe("unit");
+    expect(resolvedAdjacentEnemy?.kind).toBe("unit");
+    if (!resolvedCenterEnemy || resolvedCenterEnemy.kind !== "unit" || !resolvedAdjacentEnemy || resolvedAdjacentEnemy.kind !== "unit") {
+      throw new Error("Expected Arc Bloom targets after resolution.");
+    }
+
+    expect(resolvedCenterEnemy.hp).toBe(centerEnemy.maxHp - 2);
+    expect(resolvedAdjacentEnemy.hp).toBe(adjacentEnemy.maxHp - 1);
   });
 
   it("Spore Harvest pays out based on the number of friendly units", () => {

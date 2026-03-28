@@ -84,13 +84,16 @@ describe("starter decks", () => {
     const biomassCards = getStarterDeckCardIds("biomass_swarm");
 
     expect(countCopies(alloyCards, "patchwork_barrier")).toBe(4);
-    expect(countCopies(fluxCards, "orbital_ping")).toBe(4);
+    expect(countCopies(fluxCards, "orbital_ping")).toBe(2);
     expect(countCopies(alloyCards, "scorched_protocol")).toBe(4);
     expect(countCopies(alloyCards, "war_protocol")).toBe(2);
     expect(countCopies(fluxCards, "emergency_war_chest")).toBe(2);
-    expect(countCopies(fluxCards, "meteor_chain")).toBe(4);
+    expect(countCopies(fluxCards, "meteor_chain")).toBe(2);
     expect(countCopies(fluxCards, "ion_surge_archive")).toBe(4);
     expect(countCopies(fluxCards, "signal_fork")).toBe(2);
+    expect(countCopies(fluxCards, "static_insight")).toBe(2);
+    expect(countCopies(fluxCards, "surge_matrix")).toBe(2);
+    expect(countCopies(fluxCards, "arc_bloom")).toBe(2);
     expect(countCopies(fluxCards, "phase_coil")).toBe(2);
     expect(countCopies(fluxCards, "arc_repeater_card")).toBe(2);
     expect(countCopies(biomassCards, "overgrowth_wave")).toBe(4);

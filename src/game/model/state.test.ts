@@ -57,6 +57,10 @@ describe("createInitialGameState", () => {
       flux: STARTING_PRIMARY_RESOURCE,
       biomass: 0,
     });
+    expect(state.tacticsCastThisTurn).toEqual({
+      player_1: 0,
+      player_2: 0,
+    });
   });
 
   it("hydrates starting unit keywords from source card definitions", () => {

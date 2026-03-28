@@ -201,6 +201,7 @@ export function handleRespondStack(
       ownerId: command.playerId,
       effectId: command.effectId,
       effectMagnitude: getStackEffectMagnitude(command.effectId),
+      surgeActive: false,
       targetStackItemId: command.targetStackItemId ?? null,
       targetEntityId: null,
       objectKind: definition.object.kind,
@@ -229,6 +230,7 @@ export function handlePlayCard(
     return [];
   }
 
+  const surgeActive = card.kind === "tactic" && state.tacticsCastThisTurn[command.playerId] > 0;
   const effectId = card.play.stackEffectId;
   const effectDefinition = getStackEffectDefinition(effectId);
   if (!effectDefinition) {
@@ -246,6 +248,7 @@ export function handlePlayCard(
       stackItemId: createStackItemId(state.turn, state.log.length),
       effectId,
       effectMagnitude: getStackEffectMagnitude(effectId, handCard.cardId),
+      surgeActive,
       targetStackItemId: command.targetStackItemId ?? null,
       targetEntityId: command.targetEntityId ?? null,
       targetHex: command.targetHex ?? null,
@@ -298,6 +301,7 @@ export function reduceCardPlayedToStack(
     ownerId: event.playerId,
     effectId: event.effectId,
     effectMagnitude: event.effectMagnitude,
+    surgeActive: event.surgeActive ?? false,
     targetStackItemId: event.targetStackItemId,
     targetEntityId: event.targetEntityId,
     targetHex: event.targetHex ?? null,
@@ -311,9 +315,12 @@ export function reduceCardPlayedToStack(
   });
   state.priorityPlayerId = event.nextPriorityPlayerId;
   state.consecutivePriorityPasses = 0;
+  if (cardDefinition.kind === "tactic") {
+    state.tacticsCastThisTurn[event.playerId] += 1;
+  }
   state.log.push({
     turn: state.turn,
-    text: `${event.playerId} cast ${event.cardName} from hand to stack.`,
+    text: `${event.playerId} cast ${event.cardName} from hand to stack${event.surgeActive ? " with Surge" : ""}.`,
   });
 }
 
@@ -360,6 +367,7 @@ export function reduceStackItemPushed(
     ownerId: event.ownerId,
     effectId: event.effectId,
     effectMagnitude: event.effectMagnitude,
+    surgeActive: event.surgeActive ?? false,
     targetStackItemId: event.targetStackItemId,
     targetEntityId: event.targetEntityId,
     targetHex: event.targetHex ?? null,

@@ -1,5 +1,5 @@
 import type { GameInstruction, InstructionContext } from "../actions/instructions";
-import { getCardCascadeUnitBuffConfig, getCardDefinition, getCardPlayEffectConfig, getCardPlayEffectMagnitude } from "./cards/catalog";
+import { getCardDefinition, getCardPlayEffectMagnitude, getResolvedCardPlayEffectConfigs } from "./cards/catalog";
 import {
   createCascadeUnitBuffInstructions,
   createDestroyDamagedUnitsInstructions,
@@ -241,72 +241,71 @@ function createModifyUnitUntilEndOfTurnInstructions(attackBonus: number, armorBo
 
 function createCardOwnedCascadeUnitBuffInstructions(context: InstructionContext): GameInstruction[] {
   const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
-  const effectConfig = getCardCascadeUnitBuffConfig(sourceCard);
-  if (!effectConfig) {
+  const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, Boolean(context.item.surgeActive))
+    .filter((effectConfig) => effectConfig.type === "cascade_unit_buff");
+  if (effectConfigs.length === 0) {
     return [{ type: "LOG", text: `Resolved ${context.item.label}: missing cascade config on source card.` }];
   }
 
-  return createCascadeUnitBuffInstructions(effectConfig)(context);
+  return effectConfigs.flatMap((effectConfig) => createCascadeUnitBuffInstructions(effectConfig)(context));
+}
+
+function createInstructionsForPlayEffectConfig(context: InstructionContext, effectConfig: ReturnType<typeof getResolvedCardPlayEffectConfigs>[number]): GameInstruction[] {
+  switch (effectConfig.type) {
+    case "mass_damage":
+      return createMassDamageInstructions(effectConfig)(context);
+    case "global_unit_buff":
+      return createGlobalUnitBuffInstructions(effectConfig)(context);
+    case "destroy_damaged_units":
+      return createDestroyDamagedUnitsInstructions(effectConfig)(context);
+    case "draw_and_gain_resources":
+      return createDrawAndGainResourcesInstructions(effectConfig)(context);
+    case "resources_by_unit_count":
+      return createResourcesByUnitCountInstructions(effectConfig)(context);
+    case "hex_area_damage":
+      return createHexAreaDamageInstructions(effectConfig)(context);
+    case "cascade_unit_buff":
+      return createCascadeUnitBuffInstructions(effectConfig)(context);
+  }
+}
+
+function createCardOwnedConfiguredInstructions(
+  context: InstructionContext,
+  effectType: ReturnType<typeof getResolvedCardPlayEffectConfigs>[number]["type"],
+  missingMessage: string
+): GameInstruction[] {
+  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
+  const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, Boolean(context.item.surgeActive))
+    .filter((effectConfig) => effectConfig.type === effectType);
+  if (effectConfigs.length === 0) {
+    return [{ type: "LOG", text: `Resolved ${context.item.label}: ${missingMessage}` }];
+  }
+
+  return effectConfigs.flatMap((effectConfig) => createInstructionsForPlayEffectConfig(context, effectConfig));
 }
 
 function createCardOwnedMassDamageInstructions(context: InstructionContext): GameInstruction[] {
-  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
-  const effectConfig = getCardPlayEffectConfig(sourceCard);
-  if (!effectConfig || effectConfig.type !== "mass_damage") {
-    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing mass-damage config on source card.` }];
-  }
-
-  return createMassDamageInstructions(effectConfig)(context);
+  return createCardOwnedConfiguredInstructions(context, "mass_damage", "missing mass-damage config on source card.");
 }
 
 function createCardOwnedGlobalUnitBuffInstructions(context: InstructionContext): GameInstruction[] {
-  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
-  const effectConfig = getCardPlayEffectConfig(sourceCard);
-  if (!effectConfig || effectConfig.type !== "global_unit_buff") {
-    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing global-buff config on source card.` }];
-  }
-
-  return createGlobalUnitBuffInstructions(effectConfig)(context);
+  return createCardOwnedConfiguredInstructions(context, "global_unit_buff", "missing global-buff config on source card.");
 }
 
 function createCardOwnedDestroyDamagedUnitsInstructions(context: InstructionContext): GameInstruction[] {
-  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
-  const effectConfig = getCardPlayEffectConfig(sourceCard);
-  if (!effectConfig || effectConfig.type !== "destroy_damaged_units") {
-    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing destroy-damaged config on source card.` }];
-  }
-
-  return createDestroyDamagedUnitsInstructions(effectConfig)(context);
+  return createCardOwnedConfiguredInstructions(context, "destroy_damaged_units", "missing destroy-damaged config on source card.");
 }
 
 function createCardOwnedDrawAndGainResourcesInstructions(context: InstructionContext): GameInstruction[] {
-  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
-  const effectConfig = getCardPlayEffectConfig(sourceCard);
-  if (!effectConfig || effectConfig.type !== "draw_and_gain_resources") {
-    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing draw-and-gain config on source card.` }];
-  }
-
-  return createDrawAndGainResourcesInstructions(effectConfig)(context);
+  return createCardOwnedConfiguredInstructions(context, "draw_and_gain_resources", "missing draw-and-gain config on source card.");
 }
 
 function createCardOwnedResourcesByUnitCountInstructions(context: InstructionContext): GameInstruction[] {
-  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
-  const effectConfig = getCardPlayEffectConfig(sourceCard);
-  if (!effectConfig || effectConfig.type !== "resources_by_unit_count") {
-    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing unit-count resource config on source card.` }];
-  }
-
-  return createResourcesByUnitCountInstructions(effectConfig)(context);
+  return createCardOwnedConfiguredInstructions(context, "resources_by_unit_count", "missing unit-count resource config on source card.");
 }
 
 function createCardOwnedHexAreaDamageInstructions(context: InstructionContext): GameInstruction[] {
-  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
-  const effectConfig = getCardPlayEffectConfig(sourceCard);
-  if (!effectConfig || effectConfig.type !== "hex_area_damage") {
-    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing area-damage config on source card.` }];
-  }
-
-  return createHexAreaDamageInstructions(effectConfig)(context);
+  return createCardOwnedConfiguredInstructions(context, "hex_area_damage", "missing area-damage config on source card.");
 }
 
 function createCounterInstructions(destination: CounterDestination) {
@@ -635,7 +634,7 @@ export function isCounterResponse(effectId: string): boolean {
   return effect?.behavior.type === "counter";
 }
 
-export function getStackEffectMagnitude(effectId: string, sourceCardId?: string | null): number {
+export function getStackEffectMagnitude(effectId: string, sourceCardId?: string | null, surgeActive = false): number {
   const effect = getStackEffectDefinition(effectId);
   if (!effect) return 0;
 
@@ -650,12 +649,12 @@ export function getStackEffectMagnitude(effectId: string, sourceCardId?: string 
     case "resources_by_unit_count":
     case "hex_area_damage":
       if (sourceCardId) {
-        return getCardPlayEffectMagnitude(getCardDefinition(sourceCardId));
+        return getCardPlayEffectMagnitude(getCardDefinition(sourceCardId), surgeActive);
       }
       return 0;
     case "cascade_unit_buff":
       if (sourceCardId) {
-        return getCardPlayEffectMagnitude(getCardDefinition(sourceCardId));
+        return getCardPlayEffectMagnitude(getCardDefinition(sourceCardId), surgeActive);
       }
       return Math.max(Math.abs(effect.behavior.attackBonus), Math.abs(effect.behavior.armorBonus));
     default:

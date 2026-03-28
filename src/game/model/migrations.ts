@@ -4,7 +4,7 @@ import { ensureEntityPresentation } from "../presentation";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createDefaultGameRules, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
 
-export const CURRENT_STATE_VERSION = 19;
+export const CURRENT_STATE_VERSION = 20;
 
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
@@ -109,13 +109,30 @@ export function migrateRuntimeState(state: GameState): void {
     state.tacticalHarvestedUnitIds = [];
   }
 
+  if (!state.tacticsCastThisTurn) {
+    state.tacticsCastThisTurn = {
+      player_1: 0,
+      player_2: 0,
+    };
+  } else {
+    if (typeof state.tacticsCastThisTurn.player_1 !== "number") {
+      state.tacticsCastThisTurn.player_1 = 0;
+    }
+    if (typeof state.tacticsCastThisTurn.player_2 !== "number") {
+      state.tacticsCastThisTurn.player_2 = 0;
+    }
+  }
+
   for (const stackItem of state.stack) {
     if (typeof stackItem.effectId === "undefined") {
       stackItem.effectId = "noop_log";
     }
+    if (typeof stackItem.surgeActive !== "boolean") {
+      stackItem.surgeActive = false;
+    }
     const definition = getStackEffectDefinition(stackItem.effectId);
     if (typeof stackItem.effectMagnitude !== "number") {
-      stackItem.effectMagnitude = getStackEffectMagnitude(stackItem.effectId, stackItem.sourceCardId);
+      stackItem.effectMagnitude = getStackEffectMagnitude(stackItem.effectId, stackItem.sourceCardId, stackItem.surgeActive);
     }
     if (typeof stackItem.targetStackItemId === "undefined") {
       stackItem.targetStackItemId = null;
@@ -238,7 +255,7 @@ export function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v19 (hex target support).",
+      text: "State migrated to v20 (surge tracking).",
     });
   }
 }

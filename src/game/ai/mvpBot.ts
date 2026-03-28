@@ -1,5 +1,5 @@
 import type { GameCommand } from "../actions/commands";
-import { getCardPlayEffectConfig, getCardDefinition, type CardDefinition } from "../content/cards/catalog";
+import { getCardDefinition, getResolvedCardPlayEffectConfigs, type CardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import type { Faction, ResourceType } from "../model/enums";
@@ -846,6 +846,15 @@ function scoreHexAreaDamageSpell(
   return score + enemyHits * AI_WEIGHTS.sweepClusterBonus;
 }
 
+function combineConfiguredSpellScores(scores: number[]): number {
+  const finiteScores = scores.filter((score) => Number.isFinite(score));
+  if (finiteScores.length === 0) {
+    return -Infinity;
+  }
+
+  return finiteScores.reduce((sum, score) => sum + score, 0);
+}
+
 function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
   if (state.phase !== "main" && state.phase !== "tactical") {
     return null;
@@ -864,7 +873,8 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
     if (!effect) {
       continue;
     }
-    const effectConfig = getCardPlayEffectConfig(card);
+    const surgeActive = state.tacticsCastThisTurn[botPlayerId] > 0;
+    const effectConfigs = getResolvedCardPlayEffectConfigs(card, surgeActive);
 
     const legalTargets = getLegalPlayCardTargetOptions(state, botPlayerId, cardInstance.instanceId, card);
     for (const targeting of legalTargets) {
@@ -888,32 +898,59 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
           continue;
         }
         score = scoreBraceProtocolTarget(state, botPlayerId, entity);
-      } else if (effect.behavior.type === "mass_damage" && effectConfig?.type === "mass_damage" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
-        score = scoreMassDamageSpell(state, botPlayerId, effectConfig);
-      } else if (effect.behavior.type === "global_unit_buff" && effectConfig?.type === "global_unit_buff" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
-        score = scoreGlobalBuffSpell(state, botPlayerId, effectConfig);
-      } else if (effect.behavior.type === "destroy_damaged_units" && effectConfig?.type === "destroy_damaged_units" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
-        score = scoreDestroyDamagedUnitsSpell(state, botPlayerId, effectConfig.relation);
-      } else if (effect.behavior.type === "draw_and_gain_resources" && effectConfig?.type === "draw_and_gain_resources" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
-        score = scoreDrawAndGainResourcesSpell(state, botPlayerId, effectConfig);
-      } else if (effect.behavior.type === "resources_by_unit_count" && effectConfig?.type === "resources_by_unit_count" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
-        score = scoreResourcesByUnitCountSpell(state, botPlayerId, effectConfig);
+      } else if (effect.behavior.type === "mass_damage" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = combineConfiguredSpellScores(
+          effectConfigs
+            .filter((effectConfig) => effectConfig.type === "mass_damage")
+            .map((effectConfig) => scoreMassDamageSpell(state, botPlayerId, effectConfig))
+        );
+      } else if (effect.behavior.type === "global_unit_buff" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = combineConfiguredSpellScores(
+          effectConfigs
+            .filter((effectConfig) => effectConfig.type === "global_unit_buff")
+            .map((effectConfig) => scoreGlobalBuffSpell(state, botPlayerId, effectConfig))
+        );
+      } else if (effect.behavior.type === "destroy_damaged_units" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = combineConfiguredSpellScores(
+          effectConfigs
+            .filter((effectConfig) => effectConfig.type === "destroy_damaged_units")
+            .map((effectConfig) => scoreDestroyDamagedUnitsSpell(state, botPlayerId, effectConfig.relation))
+        );
+      } else if (effect.behavior.type === "draw_and_gain_resources" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = combineConfiguredSpellScores(
+          effectConfigs
+            .filter((effectConfig) => effectConfig.type === "draw_and_gain_resources")
+            .map((effectConfig) => scoreDrawAndGainResourcesSpell(state, botPlayerId, effectConfig))
+        );
+      } else if (effect.behavior.type === "resources_by_unit_count" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = combineConfiguredSpellScores(
+          effectConfigs
+            .filter((effectConfig) => effectConfig.type === "resources_by_unit_count")
+            .map((effectConfig) => scoreResourcesByUnitCountSpell(state, botPlayerId, effectConfig))
+        );
       } else if (effect.behavior.type === "damage_enemy_base" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
         score = scoreBaseDamageSpell(state, botPlayerId, effect.behavior.amount, state.phase);
-      } else if (effect.behavior.type === "hex_area_damage" && effectConfig?.type === "hex_area_damage" && targeting.targetHex) {
-        score = scoreHexAreaDamageSpell(state, botPlayerId, targeting.targetHex, effectConfig);
+      } else if (effect.behavior.type === "hex_area_damage" && targeting.targetHex) {
+        const targetHex = targeting.targetHex;
+        score = combineConfiguredSpellScores(
+          effectConfigs
+            .filter((effectConfig) => effectConfig.type === "hex_area_damage")
+            .map((effectConfig) => scoreHexAreaDamageSpell(state, botPlayerId, targetHex, effectConfig))
+        );
       } else if (effect.behavior.type === "cascade_unit_buff" && targeting.targetHex) {
-        if (!effectConfig || effectConfig.type !== "cascade_unit_buff") {
-          continue;
-        }
-        score = scoreCascadeAttackBuffTarget(state, botPlayerId, targeting.targetHex, {
-          attackBonus: effectConfig.attackBonus,
-          armorBonus: effectConfig.armorBonus,
-          waves: effectConfig.waves,
-          roleFilter: effectConfig.roleFilter,
-          grantedKeywords: effectConfig.grantedKeywords,
-          reward: effectConfig.reward,
-        });
+        const targetHex = targeting.targetHex;
+        score = combineConfiguredSpellScores(
+          effectConfigs
+            .filter((effectConfig) => effectConfig.type === "cascade_unit_buff")
+            .map((effectConfig) => scoreCascadeAttackBuffTarget(state, botPlayerId, targetHex, {
+              attackBonus: effectConfig.attackBonus,
+              armorBonus: effectConfig.armorBonus,
+              waves: effectConfig.waves,
+              roleFilter: effectConfig.roleFilter,
+              grantedKeywords: effectConfig.grantedKeywords,
+              reward: effectConfig.reward,
+            }))
+        );
       }
 
       if (score === -Infinity) {

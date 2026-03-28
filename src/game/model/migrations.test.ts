@@ -20,4 +20,38 @@ describe("migrateRuntimeState", () => {
 
     expect(relayCandidate.keywords).toContain(RELAY_KEYWORD);
   });
+
+  it("hydrates missing surge tracking fields", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    state.stack.push({
+      id: "legacy_stack_item",
+      label: "Legacy",
+      controllerId: "player_1",
+      ownerId: "player_1",
+      effectId: "draw_and_gain_resources",
+      effectMagnitude: 0,
+      targetStackItemId: null,
+      targetEntityId: null,
+      targetHex: null,
+      objectKind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+      sourceCardInstanceId: null,
+      sourceCardId: "ion_surge_archive",
+      sourceCardOwnerId: null,
+      pendingUnitEntityId: null,
+    });
+
+    // Simulate older serialized state.
+    Reflect.deleteProperty(state as typeof state & { tacticsCastThisTurn?: unknown }, "tacticsCastThisTurn");
+    Reflect.deleteProperty(state.stack[0] as typeof state.stack[number] & { surgeActive?: unknown }, "surgeActive");
+
+    migrateRuntimeState(state);
+
+    expect(state.tacticsCastThisTurn).toEqual({
+      player_1: 0,
+      player_2: 0,
+    });
+    expect(state.stack[0]?.surgeActive).toBe(false);
+  });
 });

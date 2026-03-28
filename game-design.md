@@ -1,6 +1,6 @@
 # Space Trader - Game Design (Living Draft)
 
-Last updated: March 21, 2026
+Last updated: March 28, 2026
 
 ## Purpose
 This is the working game design document for Space Trader.
@@ -26,7 +26,7 @@ These are the rules the prototype should generally be designed around unless exp
 - Current playable factions:
   - `Alloy Clan`
   - `Flux Collective`
-- `Biomass Swarm` remains part of the intended three-faction design space, but is not yet the focus of current content iteration
+  - `Biomass Swarm`
 
 ### Win Condition
 - Destroy the opposing base
@@ -35,8 +35,10 @@ These are the rules the prototype should generally be designed around unless exp
 
 ### Turn Structure
 1. Start
-   - Active player draws 1 card
+   - Active player draws 1 card when the turn enters Start
+   - The first player does not get an extra opening-turn draw
 2. Economy
+   - Active player gains `+1 Credit`
    - Loaded harvesters on base-adjacent tiles deposit cargo
 3. Main
    - Main-speed cards can be cast
@@ -44,6 +46,8 @@ These are the rules the prototype should generally be designed around unless exp
    - Units move, attack, and harvest
 5. End
    - Node control updates by occupancy
+6. Discard
+   - If the active player is above `7` cards, they discard down to `7`
 
 ### Stack and Priority
 - The game uses a full LIFO stack
@@ -58,14 +62,15 @@ These are the rules the prototype should generally be designed around unless exp
 - Copy limit: `max 4` of any card
 - Current starter decks are single-faction plus neutral support cards
 - Opening hand: `5`
-- Soft hand cap for passive draw: `7`
+- Max hand size: `7`, enforced by end-of-turn discard
 - Flavor: cards drawn each turn are downloaded plans from an orbital satellite
 
 ### Starting Economy
 - Each player starts with:
-  - `4` Credits
+  - `Player 1: 2 Credits`
+  - `Player 2: 5 Credits`
   - `2` of that faction's primary resource
-- This is intentionally generous for prototyping and may be tuned later
+- This asymmetry is currently being used to smooth seat bias in mirrors
 
 ### Resource Model
 - Universal resource:
@@ -78,7 +83,9 @@ These are the rules the prototype should generally be designed around unless exp
 - A node must be controlled before it can be harvested
 - Resource units harvest cargo from controlled nodes and return it to a base-adjacent dropoff tile
 - Deposit occurs during the Economy phase
-- Node control grants harvesting rights, not passive income
+- Current deposit values are `2` for all resource types
+- Current passive income is `+1 Credit` during Economy and no passive primary-resource income
+- Node control grants harvesting rights, not direct passive resource generation
 
 ### Unit Roles
 Current unit roles are:
@@ -97,9 +104,13 @@ Current unit stat vocabulary is:
 
 ### Tactical Model
 - Summoning sickness is enabled
-- Newly deployed units cannot act on the turn they resolve onto the battlefield unless a future effect says otherwise
+- Newly deployed units cannot act on the turn they resolve onto the battlefield unless a keyword or effect says otherwise
 - Units act with Civ-like per-turn budgets
 - Tactical auto-flow exists, but harvesting opportunities should not be skipped automatically
+- Keywords currently matter in live rules, not just future design:
+  - `sprout`
+  - `stealth`
+  - `relay`
 
 ## Core Pillars
 - Faction identity matters: each faction should have a distinct economic and tactical rhythm
@@ -119,48 +130,84 @@ Current unit stat vocabulary is:
 ## Factions and Resource Identity
 ### Alloy Clan
 Theme:
-- industrial, armored, formation-based, direct pressure
+- industrial, disciplined, armored, line-based pressure
 
 Mechanical identity:
-- adjacency buffs
+- adjacency and formation payoffs
 - armor and durability
-- stronger siege attacks on bases
-- rewards clustered formations and disciplined lines
+- siege
+- durable combat units
+- damaged-matters finishers
 
 What Alloy should be best at:
 - holding territory
 - turning support positioning into stronger combat math
-- finishing games once it has board control
+- converting board control into base pressure
+- punishing already-weakened enemies
 
 ### Flux Collective
 Theme:
-- high-tech, reactive, tempo-oriented, precision strikes
+- high-tech, reactive, spatial, precision strikes
 
 Mechanical identity:
 - stack interaction
-- mobility and repositioning
-- spell-matter synergies
-- combo turns that chain tactics with board effects
+- spell chaining
+- precise removal
+- spatial and hex-based tactics
+- tempo
+- card flow and selection
+- combo turns built around cascade geometry and spell sequencing
 
 What Flux should be best at:
 - punishing expensive plays with counters or tempo loss
 - converting tactic cards into extra value
 - finding clever swing turns rather than brute-force board presence
+- manipulating cascade/spatial effects better than the other factions
 
 ### Biomass Swarm
 Theme:
-- organic, recursive, sacrificial, growth through attrition
+- organic, spreading, adaptive, growth through board presence
 
 Mechanical identity:
-- death triggers
-- swarm pressure
-- sacrifice/value conversion
-- board snowball through unit losses and battlefield churn
+- sprout / immediate board presence
+- go-wide play
+- global buffs
+- growth over time
+- board-based resource generation
+- recursion/regrowth themes
+
+Secondary identity, not the main axis:
+- death payoffs
+- battlefield churn
+- rebuilding after trades
 
 What Biomass should be best at:
-- turning losses into value
-- wide boards and layered synergies
-- growing pressure over several linked exchanges
+- spreading bodies early
+- scaling from already having a board
+- turning cluster play into payoff
+- snowballing from buffs and presence
+- rebuilding after trades
+
+### Neutral
+Theme:
+- generic infrastructure, salvage, and broad-spectrum tactical tools
+
+Mechanical identity:
+- simple bodies
+- generic staples
+- symmetrical effects
+- expensive catch-all tools
+
+What Neutral should be best at:
+- filling holes in faction decks
+- offering baseline answers and utility
+- supporting archetypes without becoming the best payoff for them
+
+### Neutral Tax
+- Neutral cards should generally be weaker on rate than faction cards
+- Faction cards should get better efficiency and synergy
+- Neutral cards should get flexibility and accessibility
+- Splashing outside your faction pie should cost tempo, stats, ceiling, or all three
 
 ## Map Resource Layer
 ### Canonical Resource Types
@@ -224,56 +271,67 @@ The current system should get deeper before it gets broader.
 - `Instant`: playable whenever you have priority and the card has a legal target/context
 
 ### Current Content Problem
-The current card pool is too flat.
-Most cards are either:
-- stat-line unit cards
-- counterspells
-- direct damage to enemy base
+The current card pool is no longer purely flat, but it is still uneven.
 
-That is enough for rules testing, but not enough for fun long-term play.
+What is already live:
+- battlefield-targeting tactics
+- support and synergy units
+- cascade/spatial tactics
+- haymaker tactics
+- an initial `Relay` combo shell
+
+What still needs work:
+- tighter faction balance
+- stronger monofaction archetype depth
+- more combo payoffs beyond the first Relay package
+- a cleaner Biomass secondary identity package
 
 ## New Content Direction: Make the Game More Exciting
 The next wave of design should focus on:
-- units that boost other units
-- units with battlefield synergies
-- small combo lines between units and tactics
-- direct damage and interaction with battlefield units
+- monofaction archetypes inside each faction
+- combo packages that are readable and position-sensitive
+- stronger support/payoff loops instead of isolated rate cards
 - more reasons to care about support pieces, positioning, and sequencing
+- faction-signature haymakers that still respect the faction pie
 
 ## Ability Vocabulary (Recommended)
 Do not solve this by creating bespoke rules text for every card.
 Build a small reusable vocabulary and make many cards out of it.
 
 ### Triggers
-- `on_deploy`
-- `on_attack`
-- `on_harvest`
-- `on_spell_cast`
+- `on_owner_tactic_played`
+- `on_cascaded`
+- `on_enter_battlefield`
 - `on_death`
-- `on_damage`
+- `on_damage_dealt`
+- `at_start_of_phase`
+- `at_end_of_turn`
 
 ### Continuous / Positional Effects
 - `adjacent_aura`
-- `same_row_or_within_range_bonus` if needed later
-- `while_controlling_node`
+- `global_unit_buff`
+- `temporary_stat_buff`
+- `temporary_keyword_grant`
+- `while_controlling_node` if needed later
+- `cascade_geometry`
 
 ### Effect Payloads
 - `deal_damage`
-- `modify_attack`
-- `modify_armor`
-- `modify_range`
-- `modify_move`
-- `modify_siege`
-- `destroy_target`
-- `return_to_hand`
-- `ready_unit` or `grant_attack_action` later
+- `destroy_entity`
+- `deploy_unit`
+- `apply_continuous_effect`
+- `draw_cards`
+- `gain_resources`
+- `counter_stack_item`
+- `return_to_hand` later
 - `create_token` later
 
 ### Duration Buckets
 - `until_end_of_turn`
 - `permanent`
-- `next_attack`
-- `next_time_this_takes_damage` later
+- `start_of_next_turn`
+- `while_source_alive`
+- `until_used` for future one-shot shields / wards
 
 This keeps the design extensible without requiring a giant one-off exception list.
 
@@ -299,24 +357,25 @@ They should either:
 - effects so broad that they are always correct and never interesting
 
 ## Battlefield-Targeting Tactics
-This is the highest-value content addition.
-The prototype needs tactics that interact with units, not just the enemy base or stack.
+This baseline is now online in the prototype and should remain a major content lane.
 
-### Priority Additions
+### Current Baseline
 - Deal damage to target unit
 - Deal damage to target unit or base
 - Buff target allied unit until end of turn
 - Destroy target damaged unit
 - Protect or reinforce a unit for a turn
+- Hex-targeted cascade/spatial tactics
 
 ### Example Patterns
 - `Arc Snap`: deal 2 damage to target unit
 - `Slag Barrage`: deal 2 damage to target unit or base
 - `Brace Protocol`: target allied unit gets +2 armor until end of turn
 - `Overload Finish`: destroy target damaged unit
-- `Feeding Frenzy`: target allied unit gets +2 attack this turn when attacking a damaged target
+- `Ion Shower`: choose a hex and cascade an attack buff
+- `Meteor Chain`: choose a hex and hit that area
 
-These create tactical swing turns immediately.
+These should remain one of the most important gameplay layers because they convert stack play into real board-state swings.
 
 ## Combo Philosophy
 The game should support combos, but they should mostly be:
@@ -324,264 +383,42 @@ The game should support combos, but they should mostly be:
 - three-card sequences
 - board-plus-spell setups
 
-Avoid building around true infinite loops or opaque combo trees this early.
-The target is satisfying linked plays, not rules-lawyer complexity.
+Avoid building around true infinite loops or opaque combo trees for now.
+The target is satisfying linked plays and bounded loop-feeling engines, not rules-lawyer complexity.
 
 ### Good Combo Shapes
 - Support unit + attacker + combat trick
 - Spell-matter unit + two tactics in one stack exchange
 - Harvester/value trigger + payoff card
 - Damage spell + damaged-unit finisher
-- Death trigger + sacrifice or disposable frontliner
+- Cascade setup + Relay extension + payoff
+- Growth engine + wide board + anthem or resource conversion
 
 ### Combo Design Rules
 - Combo pieces should be useful alone and stronger together
 - Counterplay should exist through stack interaction, board removal, or positioning denial
 - Combo turns should have strong visual feedback
 - The best combos should feel earned, not automatic
+- Loop-feeling mechanics should be bounded by per-turn or per-resolution limits unless the game deliberately grows into true infinite-combo support later
 
-## Faction-Specific Synergy Direction
-### Alloy Clan Synergy Package
+## Current Archetype Expansion Priorities
+### Alloy Clan
 What Alloy should gain next:
-- support commanders that buff adjacent combat units
-- armor and siege enhancers
-- formation rewards for clustered units
-- combat tricks that make trades favorable
+- one more formation or siege payoff
+- another damaged-matters finisher
+- more incentives for disciplined board shape instead of isolated stats
 
-Example cards:
-- `Forge Captain`: adjacent allied combat units get +1 attack
-- `Siege Coordinator`: adjacent allies get +1 siege
-- `Brace Protocol`: instant defensive buff
-- `Slag Barrage`: direct damage to unit or base
-
-### Flux Collective Synergy Package
+### Flux Collective
 What Flux should gain next:
-- tactic-cast triggers
-- precise unit removal and tempo spells
-- mobility or range enhancers
-- combo turns that reward good sequencing
+- a full spell-chain package
+- more `Relay` payoffs and support cards
+- `Surge` or another sequencing keyword to deepen mono-flux archetypes
 
-Example cards:
-- `Relay Savant`: whenever you cast a tactic, ping an enemy unit for 1
-- `Phase Conduit`: adjacent allies get +1 move
-- `Arc Snap`: direct unit damage
-- `Overload Finish`: destroy damaged unit
-
-### Biomass Swarm Synergy Package
+### Biomass Swarm
 What Biomass should gain next:
-- death triggers
-- growth through attrition
-- expendable units feeding stronger pieces
-- aggressive buffs that reward trading units away
-
-Example cards:
-- `Spore Matron`: when an allied unit dies, another ally gains a bonus
-- `Carrion Caller`: deploy trigger that buffs a nearby ally
-- `Tendril Lash`: small unit damage with rider payoff
-- `Feeding Frenzy`: bonus against damaged enemies
-
-## Concrete Card Pass - Wave 1
-This is the first concrete content pass to make the game more fun.
-It is intentionally small and focused.
-
-Goals of this wave:
-- give each faction at least one support/synergy card
-- add direct damage that hits battlefield units
-- create simple two-card and three-card combo lines
-- stay within an ability vocabulary that the rules engine can plausibly support next
-
-Implementation priority:
-- first implement the `Alloy Clan` and `Flux Collective` cards
-- keep the `Biomass Swarm` cards as the next faction package unless Biomass becomes active immediately
-
-### Alloy Clan - Wave 1
-#### Forge Captain
-- Faction: `Alloy Clan`
-- Type: `Unit`
-- Speed: `Main`
-- Role: `utility`
-- Cost: `C2 A1`
-- Suggested stats:
-  - HP 5
-  - ATK 1
-  - ARM 1
-  - MOV 2
-  - RNG 1
-- Rules text:
-  - Adjacent allied combat units get `+1 ATK`.
-- Design job:
-  - First real formation-support unit for Alloy.
-  - Makes clustered combat lines rewarding.
-- Combo hooks:
-  - pairs with `Frontline Scout` to turn cheap attackers into real threats
-  - pairs with `Alloy Guard` to create stronger base-pressure turns
-
-#### Brace Protocol
-- Faction: `Alloy Clan`
-- Type: `Tactic`
-- Speed: `Instant`
-- Cost: `C1 A1`
-- Rules text:
-  - Target allied unit gets `+2 ARM` until end of turn.
-- Design job:
-  - First Alloy combat trick.
-  - Lets Alloy win trades and protect key support pieces.
-- Combo hooks:
-  - strong with `Forge Captain`
-  - strong with `Alloy Guard` when holding a chokepoint
-
-#### Rivet Volley
-- Faction: `Alloy Clan`
-- Type: `Tactic`
-- Speed: `Instant`
-- Cost: `C1 A1`
-- Rules text:
-  - Deal `2` damage to target unit or base.
-- Design job:
-  - Gives Alloy direct tactical reach instead of only base pings.
-  - Helps finish damaged units or push final base damage.
-- Combo hooks:
-  - combines with `Forge Captain`-buffed attacks to finish defenders
-  - softens blockers so `Alloy Guard` can punch through
-
-### Flux Collective - Wave 1
-#### Relay Savant
-- Faction: `Flux Collective`
-- Type: `Unit`
-- Speed: `Main`
-- Role: `utility`
-- Cost: `C2 F1`
-- Suggested stats:
-  - HP 4
-  - ATK 1
-  - ARM 0
-  - MOV 2
-  - RNG 1
-- Rules text:
-  - Whenever you cast a tactic, deal `1` damage to target enemy unit.
-- Design job:
-  - First spell-matter engine card.
-  - Turns reactive play into board control.
-- Combo hooks:
-  - makes every tactic better
-  - enables damage-based setup for finishers
-
-#### Arc Snap
-- Faction: `Flux Collective`
-- Type: `Tactic`
-- Speed: `Instant`
-- Cost: `C1 F1`
-- Rules text:
-  - Deal `2` damage to target unit.
-- Design job:
-  - Clean precision removal tool.
-  - Gives Flux a concrete answer to support units and damaged frontliners.
-- Combo hooks:
-  - with `Relay Savant`, this effectively becomes a 3-damage sequence
-  - sets up `Overload Finish`
-
-#### Overload Finish
-- Faction: `Flux Collective`
-- Type: `Tactic`
-- Speed: `Instant`
-- Cost: `C2 F1`
-- Rules text:
-  - Destroy target damaged unit.
-- Design job:
-  - First payoff card for damage-marking and spell sequencing.
-  - Gives Flux an actual combo closer instead of pure tempo stalls.
-- Combo hooks:
-  - ideal follow-up to `Arc Snap`
-  - also turns `Relay Savant` pings into meaningful setup
-
-### Biomass Swarm - Wave 1
-#### Spore Matron
-- Faction: `Biomass Swarm`
-- Type: `Unit`
-- Speed: `Main`
-- Role: `utility`
-- Cost: `C2 B1`
-- Suggested stats:
-  - HP 5
-  - ATK 1
-  - ARM 0
-  - MOV 2
-  - RNG 1
-- Rules text:
-  - Whenever an allied unit is destroyed, another allied unit gets `+1 ATK` until end of turn.
-- Design job:
-  - Establishes Biomass as the death-trigger faction.
-  - Makes trading disposable bodies feel productive.
-- Combo hooks:
-  - rewards swarm attacks and sacrificial blocking
-  - creates chain-attack turns when several units collide
-
-#### Tendril Lash
-- Faction: `Biomass Swarm`
-- Type: `Tactic`
-- Speed: `Instant`
-- Cost: `C1 B1`
-- Rules text:
-  - Deal `1` damage to target unit.
-  - If that unit is already damaged, deal `2` instead.
-- Design job:
-  - Simple damage card that naturally cares about prior combat.
-  - Establishes Biomass as a faction that piles pressure onto wounded targets.
-- Combo hooks:
-  - combines with ordinary combat to finish units efficiently
-  - works well with death-trigger support pieces
-
-#### Feeding Frenzy
-- Faction: `Biomass Swarm`
-- Type: `Tactic`
-- Speed: `Instant`
-- Cost: `C1 B1`
-- Rules text:
-  - Target allied unit gets `+2 ATK` until end of turn.
-  - If it attacks a damaged unit this turn, it also gets `+1 ARM`.
-- Design job:
-  - First aggressive Biomass combat trick.
-  - Pushes the faction toward opportunistic finishing blows.
-- Combo hooks:
-  - works with `Tendril Lash`
-  - works with `Spore Matron`-style attrition turns
-
-### Wave 1 Combo Lines
-These are the intended first combo patterns created by the above cards.
-
-#### Alloy Combo Line
-- `Forge Captain` + `Frontline Scout`
-  - Scout attacks above rate because of adjacency buff.
-- `Forge Captain` + `Alloy Guard` + `Brace Protocol`
-  - Alloy creates a durable front line that wins trades and keeps pressure on the base.
-- `Rivet Volley` + any buffed attacker
-  - direct damage clears the last blocker or finishes a weakened base.
-
-#### Flux Combo Line
-- `Relay Savant` + `Arc Snap`
-  - one tactic cast turns into layered unit damage.
-- `Arc Snap` + `Overload Finish`
-  - clean two-card removal combo.
-- `Relay Savant` + `Counter Pulse` / `Echo Recall`
-  - even reactive stack play contributes to battlefield advantage.
-
-#### Biomass Combo Line
-- `Tendril Lash` + `Feeding Frenzy`
-  - wound a unit, then send in a buffed attacker for the kill.
-- `Spore Matron` + swarm attacks
-  - dead allies turn into more pressure instead of lost tempo.
-
-### Narrow-Scope Implementation Order
-If we need to implement these in smaller slices, do it in this order:
-1. `Rivet Volley`
-2. `Arc Snap`
-3. `Overload Finish`
-4. `Brace Protocol`
-5. `Forge Captain`
-6. `Relay Savant`
-7. Biomass package
-
-This order gets battlefield-targeting tactics online first, then adds support engines.
+- a real growth-engine package
+- more board-based resource conversion
+- a cleaner bridge between sprout/go-wide play and regrowth/death-value as a secondary module
 
 ## Economy Design Principles
 - Resource gathering should continue to feel StarCraft-like, not abstract
@@ -628,12 +465,13 @@ Readable feedback is part of the fun. If a combo happens, the player should feel
 
 ## Open Questions
 - How much of the final game should remain single-map tactical skirmish versus broader campaign/trading structure?
-- Do we want all factions to share the same neutral support package, or should neutral cards be minimal?
+- How much neutral support is healthy before it starts flattening faction identity?
 - How much terrain complexity do we want in MVP before it slows iteration too much?
 - Should support effects mostly be adjacency-based, or do we want some global engines too?
 - How far should stack interaction go for battlefield abilities and triggered effects?
-- When do we add damaged-unit targeting, death triggers, and deploy triggers to the actual rules engine?
-- Do we want Biomass in the active implementation immediately, or after Alloy/Flux become genuinely fun?
+- Should spell damage continue to bypass armor, or should some spell families respect it?
+- How much of Biomass should lean into growth/board engines versus regrowth/death-value?
+- When do we support true infinite combos, if ever, versus staying with bounded loop-feeling mechanics?
 
 ## Decision Log
 - 2026-03-18: Direction set to CCG + army tactics + turn-based hex grid.
@@ -651,22 +489,26 @@ Readable feedback is part of the fun. If a combo happens, the player should feel
 - 2026-03-18: Summoning sickness enabled for newly deployed units.
 - 2026-03-18: Deck rules locked to 60 cards with max 4 copies.
 - 2026-03-21: Opening hand target updated from draft `7` to current build `5`.
-- 2026-03-21: Passive draw cap updated to current build `7`.
+- 2026-03-21: Hand-size target updated to current build `7`.
 - 2026-03-21: Starter decks clarified as single-faction plus neutral, not mixed-faction splashes.
 - 2026-03-21: Unit cards now cast to the stack before entering play.
 - 2026-03-21: Unresolved stack items now halt phase changes and battlefield actions until resolution.
 - 2026-03-21: Base HP target updated from old draft `100` to current build `20`.
 - 2026-03-21: Siege reframed as a unit stat, not a global combat rule.
 - 2026-03-21: Design direction shifted toward support units, synergy engines, battlefield-targeting tactics, and small combo lines.
-- 2026-03-21: First concrete content wave drafted with 9 cards across Alloy, Flux, and Biomass, prioritizing support units, direct unit damage, and simple combo lines.
+- 2026-03-28: Three-faction premade-deck prototype is now the live baseline, not Alloy/Flux-only focus.
+- 2026-03-28: Turn flow now includes a discard phase when players finish above `7` cards.
+- 2026-03-28: Live opening resources are asymmetric: `Player 1 = 2 Credits`, `Player 2 = 5 Credits`, both with `2` primary.
+- 2026-03-28: Live economy now includes `+1 Credit` in Economy and `2`-resource cargo deposits for all resource types.
+- 2026-03-28: Biomass primary identity clarified toward sprout, go-wide growth, and board-based resource engines; death/regrowth remains a secondary axis.
+- 2026-03-28: Neutral cards are now intentionally governed by a neutral-tax philosophy rather than being generic best-rate glue.
+- 2026-03-28: Cascade and Relay are now part of the live combo vocabulary.
 
 ## Backlog Seeds
-- Add battlefield-targeting tactic rules and UI targeting flow
-- Add temporary stat-modifier effect system
-- Add support-unit aura system
-- Add trigger system for deploy / spell-cast / death / harvest events
-- Add direct-damage, finisher, and combat-trick cards for active factions
-- Add at least one support/combo package to Alloy Clan and Flux Collective
-- Re-evaluate Biomass implementation timing after Alloy and Flux become fun to play
+- Add `Surge` as the next combo keyword after `Relay`
+- Add a `Bloom`-style Biomass engine package
+- Add more Alloy formation/siege payoffs
+- Decide whether spell damage families should ever respect armor
+- Continue tightening neutral rates so faction cards remain the best synergy homes
 - Define terrain/tile rules only after support and spell interaction are interesting
-- Build clearer in-game previews for buffs, auras, and triggered effects
+- Build clearer in-game previews for buffs, keywords, and triggered effects

@@ -61,6 +61,7 @@ export type CardPlayedToStackEvent = {
   stackItemId: string;
   effectId: string;
   effectMagnitude: number;
+  surgeActive?: boolean;
   targetStackItemId: string | null;
   targetEntityId: EntityId | null;
   targetHex?: HexCoord | null;
@@ -106,6 +107,7 @@ export type StackItemPushedEvent = {
   ownerId: PlayerId;
   effectId: string;
   effectMagnitude: number;
+  surgeActive?: boolean;
   targetStackItemId: string | null;
   targetEntityId: EntityId | null;
   targetHex?: HexCoord | null;
@@ -127,6 +129,7 @@ export type StackItemResolvedEvent = {
   ownerId: PlayerId;
   effectId: string;
   effectMagnitude: number;
+  surgeActive?: boolean;
   targetStackItemId: string | null;
   targetEntityId: EntityId | null;
   targetHex?: HexCoord | null;

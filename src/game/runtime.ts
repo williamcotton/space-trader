@@ -6,9 +6,11 @@ import { getCardDefinition } from "./content/cards/catalog";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
 import { findEntityAtHex } from "./model/queries";
 import { createInitialGameState } from "./model/state";
+import type { Faction } from "./model/enums";
 import type { PlayerId } from "./model/ids";
 import { migrateRuntimeState } from "./model/migrations";
 import { buildMatchIntroAnimation, buildVictoryAnimation, captureAnimationSnapshot, buildAnimationsFromEvents, stepAnimations } from "./render/animations";
+import { configurePlayerThemes } from "./presentation";
 import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
 import { canAttackEntityDirectly } from "./systems/keywords";
@@ -144,7 +146,30 @@ export class GameRuntime {
     this.state = state;
     migrateRuntimeState(this.state);
     this.rehydrateHotState();
+    configurePlayerThemes({
+      player_1: this.state.players.player_1.faction,
+      player_2: this.state.players.player_2.faction,
+    });
     this.pushAnimations([buildMatchIntroAnimation(this.state)]);
+  }
+
+  resetWithFactions(factions: { player_1: Faction; player_2: Faction }): void {
+    const newState = createInitialGameState({
+      map: FRONTIER_BELT_MAP,
+      matchId: createRuntimeMatchId(),
+      randomSource: () => Math.random(),
+      factions,
+    });
+    Object.assign(this.state, newState);
+    this.animations = [];
+    this.elapsedSeconds = 0;
+    this.botActionCooldownSeconds = 0;
+    this.pendingCardTargeting = null;
+    this.consumedPriorityStopKeys = new Set();
+    this.derivedState = createEmptyDerivedState();
+    configurePlayerThemes(factions);
+    this.pushAnimations([buildMatchIntroAnimation(this.state)]);
+    this.notifyListeners();
   }
 
   setViewport(width: number, height: number): void {

@@ -22,6 +22,11 @@ export function GameCanvas() {
         canvas.width = w;
         canvas.height = h;
         runtime.setViewport(w, h);
+        // Immediately redraw after resize clears the buffer to prevent blank flash
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          runtime.step(ctx, 0);
+        }
       }
     };
 

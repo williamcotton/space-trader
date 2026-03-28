@@ -1,6 +1,6 @@
 import { getGameRuntime } from "../game/runtime";
 import { useGameSnapshot } from "./useGameSnapshot";
-import type { Faction, ResourceType } from "../game/model/enums";
+import { FACTIONS, type Faction, type ResourceType } from "../game/model/enums";
 import type { PlayerId } from "../game/model/ids";
 import { formatFactionName, getPlayerLabel, getResourceTheme } from "../game/presentation";
 import { PRIORITY_STOP_LABELS, type PriorityStopKey, type PriorityStopSettings } from "../game/turn/priorityStops";
@@ -75,7 +75,23 @@ export function GameTopBar() {
             >
               <div className="top-bar-player-identity">
                 <strong>{getPlayerLabel(player.id)}</strong>
-                <span>{formatFactionName(player.faction)}</span>
+                <select
+                  className="top-bar-faction-select"
+                  value={player.faction}
+                  onChange={(e) => {
+                    const faction = e.target.value as Faction;
+                    const other = player.id === "player_1" ? "player_2" : "player_1";
+                    const otherFaction = snapshot.players.find((p) => p.id === other)!.faction;
+                    runtime.resetWithFactions({
+                      [player.id]: faction,
+                      [other]: otherFaction,
+                    } as { player_1: Faction; player_2: Faction });
+                  }}
+                >
+                  {FACTIONS.map((f) => (
+                    <option key={f} value={f}>{formatFactionName(f)}</option>
+                  ))}
+                </select>
               </div>
               <div className="top-bar-player-resources">
                 {RESOURCE_ORDER.map((resource) => (
