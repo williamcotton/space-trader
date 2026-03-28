@@ -178,8 +178,11 @@ export function migrateRuntimeState(state: GameState): void {
       if (typeof entity.carries === "undefined") {
         entity.carries = null;
       }
+      const sourceKeywords = getUnitCardKeywords(entity.sourceCardId);
       if (!Array.isArray(entity.keywords)) {
-        entity.keywords = getUnitCardKeywords(entity.sourceCardId);
+        entity.keywords = sourceKeywords;
+      } else if (sourceKeywords.length > 0) {
+        entity.keywords = [...new Set([...entity.keywords, ...sourceKeywords])];
       }
       if (typeof entity.temporaryAttackBonus !== "number") {
         entity.temporaryAttackBonus = 0;

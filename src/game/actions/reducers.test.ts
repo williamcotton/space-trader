@@ -5,7 +5,7 @@ import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/cata
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "../systems/unitStats";
-import { SPROUT_KEYWORD } from "../systems/keywords";
+import { RELAY_KEYWORD, SPROUT_KEYWORD } from "../systems/keywords";
 
 function setupState() {
   return createInitialGameState({ map: FRONTIER_BELT_MAP });
@@ -1313,6 +1313,101 @@ describe("dispatchCommand", () => {
     }
     expect(getEffectiveUnitAttackDamage(state, afterHandoffScout)).toBe(afterHandoffScout.attackDamage);
     expect(state.zones.player_2.discard.some((card) => card.instanceId === cardInstanceId)).toBe(true);
+  });
+
+  it("lets Relay Savant repeat a cascade from its hex once per resolution", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "tactical";
+    state.stack = [];
+    state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 4;
+
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_2", "ion_shower");
+
+    const scout = state.entities.unit_player_2_scout;
+    const harvester = state.entities.unit_player_2_harvester;
+    expect(scout?.kind).toBe("unit");
+    expect(harvester?.kind).toBe("unit");
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 2 units for Relay Savant cascade test.");
+    }
+
+    scout.coord = { q: 0, r: 0 };
+    scout.attacksRemaining = 1;
+    scout.hasSummoningSickness = false;
+    harvester.coord = { q: 2, r: 0 };
+
+    const relayUnitId = "unit_player_2_relay_keyword_test";
+    state.entities[relayUnitId] = {
+      id: relayUnitId,
+      kind: "unit",
+      name: "Relay Savant",
+      ownerId: "player_2",
+      role: "utility",
+      hp: 4,
+      maxHp: 4,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 1, r: 0 },
+      keywords: [RELAY_KEYWORD],
+      carries: null,
+      sourceCardId: "relay_savant_card",
+      hasSummoningSickness: false,
+      movesRemaining: 0,
+      attacksRemaining: 0,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const farUnitId = "unit_player_2_relay_far_target";
+    state.entities[farUnitId] = {
+      id: farUnitId,
+      kind: "unit",
+      name: "Relay Target",
+      ownerId: "player_2",
+      role: "combat",
+      hp: 4,
+      maxHp: 4,
+      attackDamage: 2,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 3, r: 0 },
+      keywords: [],
+      carries: null,
+      sourceCardId: null,
+      hasSummoningSickness: false,
+      movesRemaining: 0,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetHex: { q: 0, r: 0 },
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    const farUnit = state.entities[farUnitId];
+    expect(farUnit?.kind).toBe("unit");
+    if (!farUnit || farUnit.kind !== "unit") {
+      throw new Error("Expected far relay target to remain on the battlefield.");
+    }
+
+    expect(getEffectiveUnitAttackDamage(state, farUnit)).toBe(farUnit.attackDamage + 1);
   });
 
   it("Shrapnel Relay buffs only friendly combat units on affected hexes", () => {

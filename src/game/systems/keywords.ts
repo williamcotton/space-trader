@@ -4,9 +4,14 @@ import { unitHasKeyword } from "../model/state";
 
 export const STEALTH_KEYWORD = "stealth";
 export const SPROUT_KEYWORD = "sprout";
+export const RELAY_KEYWORD = "relay";
 
 export function hasSproutKeyword(keywords?: readonly string[]): boolean {
   return Boolean(keywords?.includes(SPROUT_KEYWORD));
+}
+
+export function hasRelayKeyword(keywords?: readonly string[]): boolean {
+  return Boolean(keywords?.includes(RELAY_KEYWORD));
 }
 
 export function isUnitBlockedFromMovingBySummoningSickness(

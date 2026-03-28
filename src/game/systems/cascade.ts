@@ -2,6 +2,7 @@ import { areSameHex, isWithinMapBounds } from "../model/hex";
 import { HEX_DIRECTIONS } from "../model/queries";
 import type { PlayerId } from "../model/ids";
 import type { GameState, HexCoord, UnitEntity } from "../model/state";
+import { hasRelayKeyword } from "./keywords";
 
 function toHexKey(coord: HexCoord): string {
   return `${coord.q},${coord.r}`;
@@ -32,47 +33,83 @@ export function getCascadeAffectedHexes(
   origin: HexCoord,
   totalWaves: number
 ): HexCoord[] {
+  type CascadeBranch = {
+    origin: HexCoord;
+    totalWaves: number;
+  };
+
   const visitedHexes = new Set<string>();
   const usedEchoUnits = new Set<string>();
+  const usedRelayUnits = new Set<string>();
   const affected: HexCoord[] = [];
-  let frontier: HexCoord[] = [{ ...origin }];
+  const branchQueue: CascadeBranch[] = [{ origin: { ...origin }, totalWaves }];
 
-  for (let wave = 0; wave < totalWaves && frontier.length > 0; wave += 1) {
-    const waveAffected: HexCoord[] = [];
-
-    for (const sourceHex of frontier) {
-      for (const coord of getWaveArea(state, sourceHex)) {
-        const key = toHexKey(coord);
-        if (visitedHexes.has(key)) {
-          continue;
-        }
-        visitedHexes.add(key);
-        waveAffected.push(coord);
-        affected.push(coord);
-      }
-    }
-
-    if (wave === totalWaves - 1 || waveAffected.length === 0) {
+  while (branchQueue.length > 0) {
+    const branch = branchQueue.shift();
+    if (!branch) {
       break;
     }
 
-    const nextFrontierSeen = new Set<string>();
-    const nextFrontier: HexCoord[] = [];
-    const echoUnits = getFriendlyUnitsOnHexes(state, controllerId, waveAffected);
-    for (const unit of echoUnits) {
-      if (usedEchoUnits.has(unit.id)) {
-        continue;
-      }
-      usedEchoUnits.add(unit.id);
-      const key = toHexKey(unit.coord);
-      if (nextFrontierSeen.has(key)) {
-        continue;
-      }
-      nextFrontierSeen.add(key);
-      nextFrontier.push({ ...unit.coord });
-    }
+    let frontier: HexCoord[] = [{ ...branch.origin }];
 
-    frontier = nextFrontier;
+    for (let wave = 0; wave < branch.totalWaves && frontier.length > 0; wave += 1) {
+      const waveAreaSeen = new Set<string>();
+      const waveArea: HexCoord[] = [];
+      const waveAffected: HexCoord[] = [];
+
+      for (const sourceHex of frontier) {
+        for (const coord of getWaveArea(state, sourceHex)) {
+          const waveKey = toHexKey(coord);
+          if (!waveAreaSeen.has(waveKey)) {
+            waveAreaSeen.add(waveKey);
+            waveArea.push(coord);
+          }
+
+          const key = toHexKey(coord);
+          if (visitedHexes.has(key)) {
+            continue;
+          }
+          visitedHexes.add(key);
+          waveAffected.push(coord);
+          affected.push(coord);
+        }
+      }
+
+      if (waveArea.length === 0) {
+        break;
+      }
+
+      const relayedUnits = getFriendlyUnitsOnHexes(state, controllerId, waveAffected);
+      for (const unit of relayedUnits) {
+        if (!hasRelayKeyword(unit.keywords) || usedRelayUnits.has(unit.id)) {
+          continue;
+        }
+        usedRelayUnits.add(unit.id);
+        branchQueue.push({ origin: { ...unit.coord }, totalWaves: branch.totalWaves });
+      }
+
+      if (wave === branch.totalWaves - 1) {
+        break;
+      }
+
+      const echoUnits = getFriendlyUnitsOnHexes(state, controllerId, waveArea);
+      const nextFrontierSeen = new Set<string>();
+      const nextFrontier: HexCoord[] = [];
+      for (const unit of echoUnits) {
+        if (usedEchoUnits.has(unit.id)) {
+          continue;
+        }
+        usedEchoUnits.add(unit.id);
+        const key = toHexKey(unit.coord);
+        if (nextFrontierSeen.has(key)) {
+          continue;
+        }
+        nextFrontierSeen.add(key);
+        nextFrontier.push({ ...unit.coord });
+      }
+
+      frontier = nextFrontier;
+    }
   }
 
   return affected;

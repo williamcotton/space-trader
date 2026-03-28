@@ -1118,7 +1118,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "unit",
     speed: "main",
     cost: { credits: 2, flux: 1 },
-    text: "Whenever you cast a tactic, Relay Savant deals 1 damage to an enemy unit.",
+    text: "Relay (The first time this unit is cascaded each resolution, repeat that cascade from this hex.) Whenever you cast a tactic, Relay Savant deals 1 damage to an enemy unit.",
     play: unitPlay(),
     onResolve: deployUnit("relay_savant_card"),
     unit: {
@@ -1130,6 +1130,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       moveRange: 2,
       attackRange: 1,
       attackActionsPerTurn: 1,
+      keywords: ["relay"],
     },
     triggers: [{
       condition: { type: "on_owner_tactic_played" },
