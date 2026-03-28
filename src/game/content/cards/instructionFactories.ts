@@ -43,6 +43,14 @@ export type DrawAndGainResourcesOptions = {
   resources?: CardCost;
 };
 
+export type ResourcesByUnitCountOptions = {
+  relation: EffectRelation;
+  threshold: number;
+  resourcesPerThreshold: CardCost;
+  roleFilter?: UnitRole;
+  maxThresholds?: number;
+};
+
 export type HexAreaDamageOptions = {
   amount: number;
   radius: number;
@@ -313,6 +321,41 @@ export function createDrawAndGainResourcesInstructions(options: DrawAndGainResou
     });
 
     return instructions;
+  };
+}
+
+export function createResourcesByUnitCountInstructions(options: ResourcesByUnitCountOptions) {
+  return (context: InstructionContext): GameInstruction[] => {
+    const targets = getUnitsByRelation(context, options.relation, options.roleFilter);
+    const thresholdsMet = Math.floor(targets.length / options.threshold);
+    const payoutMultiplier = options.maxThresholds
+      ? Math.min(thresholdsMet, options.maxThresholds)
+      : thresholdsMet;
+
+    if (payoutMultiplier <= 0) {
+      return [{
+        type: "LOG",
+        text: `Resolved ${context.item.label}: only ${targets.length} matching unit${targets.length === 1 ? "" : "s"}; needed ${options.threshold} for payout.`,
+      }];
+    }
+
+    const resources = Object.fromEntries(
+      Object.entries(options.resourcesPerThreshold)
+        .map(([resource, amount]) => [resource, (amount ?? 0) * payoutMultiplier])
+        .filter(([, amount]) => Number(amount) > 0)
+    ) as CardCost;
+
+    return [
+      {
+        type: "GAIN_RESOURCES",
+        playerId: context.controllerId,
+        resources,
+      },
+      {
+        type: "LOG",
+        text: `Resolved ${context.item.label}: converted ${targets.length} matching unit${targets.length === 1 ? "" : "s"} into ${payoutMultiplier} payout${payoutMultiplier === 1 ? "" : "s"}.`,
+      },
+    ];
   };
 }
 

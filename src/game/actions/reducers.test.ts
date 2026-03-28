@@ -1620,6 +1620,37 @@ describe("dispatchCommand", () => {
     expect(getEffectiveUnitArmor(state, nextScout)).toBe(nextScout.armor);
   });
 
+  it("War Protocol buffs only friendly combat units until end of turn", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 3;
+    state.players.player_1.resources.alloy = 2;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "war_protocol");
+    const scout = state.entities.unit_player_1_scout;
+    const harvester = state.entities.unit_player_1_harvester;
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected friendly units for War Protocol.");
+    }
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    expect(getEffectiveUnitAttackDamage(state, scout)).toBe(scout.attackDamage + 2);
+    expect(getEffectiveUnitArmor(state, scout)).toBe(scout.armor + 1);
+    expect(getEffectiveUnitAttackDamage(state, harvester)).toBe(harvester.attackDamage);
+    expect(getEffectiveUnitArmor(state, harvester)).toBe(harvester.armor);
+  });
+
   it("Ion Surge Archive draws cards and refunds flux", () => {
     const state = setupState();
     state.activePlayerId = "player_2";
@@ -1646,6 +1677,30 @@ describe("dispatchCommand", () => {
     expect(state.zones.player_2.deck.length).toBe(deckBefore - 2);
     expect(state.players.player_2.resources.flux).toBe(2);
     expect(state.players.player_2.resources.credits).toBe(0);
+  });
+
+  it("Spore Harvest pays out based on the number of friendly units", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.biomass = 2;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "spore_harvest");
+    const creditsBefore = state.players.player_1.resources.credits;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    expect(state.players.player_1.resources.credits).toBe(creditsBefore + 1);
+    expect(state.players.player_1.resources.biomass).toBe(1);
   });
 
   it("applies Brace Protocol until the start of its controller's next turn", () => {

@@ -313,4 +313,130 @@ describe("buildAnimationsFromEvents", () => {
 
     expect(animations.some((animation) => animation.kind === "board_blast")).toBe(true);
   });
+
+  it("uses a board-blast animation for War Protocol on allied combat hexes", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const before = captureAnimationSnapshot(state);
+
+    const animations = buildAnimationsFromEvents(
+      [
+        {
+          type: "STACK_ITEM_RESOLVED",
+          itemId: "stack_9_3",
+          label: "War Protocol",
+          controllerId: "player_1",
+          ownerId: "player_1",
+          effectId: "global_unit_buff",
+          effectMagnitude: 2,
+          targetStackItemId: null,
+          targetEntityId: null,
+          objectKind: "spell",
+          counterable: true,
+          defaultCounterDestination: "discard",
+          sourceCardInstanceId: "player_1_card_90",
+          sourceCardId: "war_protocol",
+          sourceCardOwnerId: "player_1",
+          pendingUnitEntityId: null,
+        },
+      ],
+      before,
+      state
+    );
+
+    expect(animations).toHaveLength(1);
+    expect(animations[0]).toMatchObject({
+      kind: "board_blast",
+      playerId: "player_1",
+      label: "War Protocol",
+      accent: "alloy",
+    });
+    if (animations[0]?.kind !== "board_blast") {
+      throw new Error("Expected board blast animation for War Protocol.");
+    }
+    expect(animations[0].hexes.some((hex) => hex.q === state.entities.unit_player_1_scout.coord.q && hex.r === state.entities.unit_player_1_scout.coord.r)).toBe(true);
+  });
+
+  it("uses a board-blast animation for Spore Harvest on friendly unit hexes", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const before = captureAnimationSnapshot(state);
+
+    const animations = buildAnimationsFromEvents(
+      [
+        {
+          type: "STACK_ITEM_RESOLVED",
+          itemId: "stack_9_4",
+          label: "Spore Harvest",
+          controllerId: "player_1",
+          ownerId: "player_1",
+          effectId: "resources_by_unit_count",
+          effectMagnitude: 3,
+          targetStackItemId: null,
+          targetEntityId: null,
+          objectKind: "spell",
+          counterable: true,
+          defaultCounterDestination: "discard",
+          sourceCardInstanceId: "player_1_card_91",
+          sourceCardId: "spore_harvest",
+          sourceCardOwnerId: "player_1",
+          pendingUnitEntityId: null,
+        },
+      ],
+      before,
+      state
+    );
+
+    expect(animations).toHaveLength(1);
+    expect(animations[0]).toMatchObject({
+      kind: "board_blast",
+      playerId: "player_1",
+      label: "Spore Harvest",
+      accent: "biomass",
+    });
+  });
+
+  it("uses a board-blast animation for Emergency War Chest centered on the caster base", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const before = captureAnimationSnapshot(state);
+    const base = state.entities.base_player_2;
+    if (!base || base.kind !== "base") {
+      throw new Error("Expected player 2 base for Emergency War Chest animation test.");
+    }
+
+    const animations = buildAnimationsFromEvents(
+      [
+        {
+          type: "STACK_ITEM_RESOLVED",
+          itemId: "stack_9_5",
+          label: "Emergency War Chest",
+          controllerId: "player_2",
+          ownerId: "player_2",
+          effectId: "draw_and_gain_resources",
+          effectMagnitude: 4,
+          targetStackItemId: null,
+          targetEntityId: null,
+          objectKind: "spell",
+          counterable: true,
+          defaultCounterDestination: "discard",
+          sourceCardInstanceId: "player_2_card_92",
+          sourceCardId: "emergency_war_chest",
+          sourceCardOwnerId: "player_2",
+          pendingUnitEntityId: null,
+        },
+      ],
+      before,
+      state
+    );
+
+    expect(animations).toHaveLength(1);
+    expect(animations[0]).toMatchObject({
+      kind: "board_blast",
+      playerId: "player_2",
+      label: "Emergency War Chest",
+      accent: "neutral",
+    });
+    if (animations[0]?.kind !== "board_blast") {
+      throw new Error("Expected board blast animation for Emergency War Chest.");
+    }
+    expect(animations[0].center).toEqual(base.coord);
+  });
 });

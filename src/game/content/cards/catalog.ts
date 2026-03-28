@@ -15,6 +15,7 @@ import type {
   GlobalUnitBuffOptions,
   HexAreaDamageOptions,
   MassDamageOptions,
+  ResourcesByUnitCountOptions,
 } from "./instructionFactories";
 
 export type TargetPredicate = (
@@ -83,6 +84,15 @@ export type DrawAndGainResourcesPlayEffectConfig = {
   resources: CardCost;
 };
 
+export type ResourcesByUnitCountPlayEffectConfig = {
+  type: "resources_by_unit_count";
+  relation: EffectRelation;
+  threshold: number;
+  resourcesPerThreshold: CardCost;
+  roleFilter?: UnitRole;
+  maxThresholds?: number;
+};
+
 export type HexAreaDamagePlayEffectConfig = {
   type: "hex_area_damage";
   amount: number;
@@ -104,6 +114,7 @@ export type CardPlayEffectConfig =
   | GlobalUnitBuffPlayEffectConfig
   | DestroyDamagedUnitsPlayEffectConfig
   | DrawAndGainResourcesPlayEffectConfig
+  | ResourcesByUnitCountPlayEffectConfig
   | HexAreaDamagePlayEffectConfig
   | CascadeUnitBuffPlayEffectConfig;
 
@@ -325,6 +336,17 @@ function createDrawAndGainResourcesEffectConfig(options: DrawAndGainResourcesOpt
   };
 }
 
+function createResourcesByUnitCountEffectConfig(options: ResourcesByUnitCountOptions): ResourcesByUnitCountPlayEffectConfig {
+  return {
+    type: "resources_by_unit_count",
+    relation: options.relation,
+    threshold: options.threshold,
+    resourcesPerThreshold: options.resourcesPerThreshold,
+    roleFilter: options.roleFilter,
+    maxThresholds: options.maxThresholds,
+  };
+}
+
 function createHexAreaDamageEffectConfig(options: HexAreaDamageOptions): HexAreaDamagePlayEffectConfig {
   return {
     type: "hex_area_damage",
@@ -406,6 +428,17 @@ function hexAreaDamageTacticPlay(
   });
 }
 
+function resourcesByUnitCountTacticPlay(
+  options: ResourcesByUnitCountOptions & {
+    sourceDestinationOnResolve?: CardSourceDestination;
+  }
+): CardPlayProfile {
+  return tacticPlay("resources_by_unit_count", {
+    sourceDestinationOnResolve: options.sourceDestinationOnResolve,
+    effectConfig: createResourcesByUnitCountEffectConfig(options),
+  });
+}
+
 export function getCardPlayEffectConfig(card: CardDefinition | undefined): CardPlayEffectConfig | undefined {
   return card?.play.effectConfig;
 }
@@ -432,6 +465,12 @@ export function getCardPlayEffectMagnitude(card: CardDefinition | undefined): nu
       return Math.max(
         effectConfig.drawCount,
         ...(["credits", "alloy", "flux", "biomass"] as const).map((resource) => effectConfig.resources[resource] ?? 0)
+      );
+    case "resources_by_unit_count":
+      return Math.max(
+        ...(["credits", "alloy", "flux", "biomass"] as const).map(
+          (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
+        )
       );
     case "hex_area_damage":
       return effectConfig.amount;
@@ -912,6 +951,80 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       armorBonus: 1,
       relation: "ally",
     }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Overgrowth Wave",
+        accent: "biomass",
+      },
+    },
+  },
+  war_protocol: {
+    id: "war_protocol",
+    name: "War Protocol",
+    faction: "alloy_clan",
+    kind: "tactic",
+    speed: "main",
+    cost: { credits: 3, alloy: 2 },
+    text: "Friendly combat units get +2 ATK and +1 ARM until end of turn.",
+    play: globalUnitBuffTacticPlay({
+      attackBonus: 2,
+      armorBonus: 1,
+      relation: "ally",
+      roleFilter: "combat",
+    }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "War Protocol",
+        accent: "alloy",
+      },
+    },
+  },
+  emergency_war_chest: {
+    id: "emergency_war_chest",
+    name: "Emergency War Chest",
+    faction: "neutral",
+    kind: "tactic",
+    speed: "main",
+    cost: { credits: 5 },
+    text: "Draw 2 cards. Gain 4 credits.",
+    play: drawAndGainResourcesTacticPlay({
+      drawCount: 2,
+      resources: { credits: 4 },
+    }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Emergency War Chest",
+        accent: "neutral",
+      },
+    },
+  },
+  spore_harvest: {
+    id: "spore_harvest",
+    name: "Spore Harvest",
+    faction: "biomass_swarm",
+    kind: "tactic",
+    speed: "main",
+    cost: { biomass: 2 },
+    text: "Gain 1 credit and 1 biomass for every 2 friendly units you control, up to 3 times.",
+    play: resourcesByUnitCountTacticPlay({
+      relation: "ally",
+      threshold: 2,
+      resourcesPerThreshold: {
+        credits: 1,
+        biomass: 1,
+      },
+      maxThresholds: 3,
+    }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Spore Harvest",
+        accent: "biomass",
+      },
+    },
   },
   frontline_scout_card: {
     id: "frontline_scout_card",

@@ -188,6 +188,33 @@ function getAffectedUnitHexes(
   return hexes;
 }
 
+function getLiveUnitHexes(
+  state: GameState,
+  controllerId: PlayerId,
+  relation: "ally" | "enemy" | "any",
+  roleFilter?: "combat" | "resource" | "utility"
+): HexCoord[] {
+  const seen = new Set<string>();
+  const hexes: HexCoord[] = [];
+  for (const entity of Object.values(state.entities)) {
+    if (
+      entity.kind !== "unit" ||
+      !getRelationMatches(entity.ownerId, controllerId, relation) ||
+      (roleFilter && entity.role !== roleFilter)
+    ) {
+      continue;
+    }
+
+    const key = `${entity.coord.q},${entity.coord.r}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    hexes.push(entity.coord);
+  }
+  return hexes;
+}
+
 function getUniqueHexes(coords: readonly HexCoord[]): HexCoord[] {
   const seen = new Set<string>();
   const unique: HexCoord[] = [];
@@ -291,11 +318,20 @@ function buildStackResolutionAnimation(
   }
   if (cardResolveAnimation?.kind === "board_blast") {
     const effectConfig = getCardPlayEffectConfig(sourceCard);
+    const controllerBase = state.entities[state.players[event.controllerId].baseEntityId];
     const affectedHexes =
       effectConfig?.type === "mass_damage"
         ? getAffectedUnitHexes(before, event.controllerId, effectConfig.relation)
+        : effectConfig?.type === "global_unit_buff"
+          ? getLiveUnitHexes(state, event.controllerId, effectConfig.relation, effectConfig.roleFilter)
         : effectConfig?.type === "destroy_damaged_units"
           ? getDestroyedUnitHexes(before, state, event.controllerId, effectConfig.relation)
+          : effectConfig?.type === "draw_and_gain_resources"
+            ? controllerBase && controllerBase.kind === "base"
+              ? [controllerBase.coord]
+              : []
+            : effectConfig?.type === "resources_by_unit_count"
+              ? getLiveUnitHexes(state, event.controllerId, effectConfig.relation, effectConfig.roleFilter)
         : [];
 
     if (affectedHexes.length > 0) {
@@ -305,7 +341,12 @@ function buildStackResolutionAnimation(
         playerId: event.controllerId,
         ageSeconds: 0,
         durationSeconds: 1.15,
-        center: getMapCenterHex(state),
+        center:
+          effectConfig?.type === "mass_damage" || effectConfig?.type === "destroy_damaged_units"
+            ? getMapCenterHex(state)
+            : controllerBase && controllerBase.kind === "base"
+              ? controllerBase.coord
+              : getMapCenterHex(state),
         hexes: affectedHexes,
         label: cardResolveAnimation.label,
         accent: cardResolveAnimation.accent,

@@ -744,6 +744,48 @@ function scoreDrawAndGainResourcesSpell(
   return score;
 }
 
+function scoreResourcesByUnitCountSpell(
+  state: GameState,
+  botPlayerId: PlayerId,
+  options: {
+    relation: "ally" | "enemy" | "any";
+    threshold: number;
+    resourcesPerThreshold: Partial<Record<ResourceType, number>>;
+    roleFilter?: "combat" | "resource" | "utility";
+    maxThresholds?: number;
+  }
+): number {
+  const matchingUnits = Object.values(state.entities)
+    .filter((entity): entity is UnitEntity =>
+      entity.kind === "unit" &&
+      (options.relation === "any" ||
+        (options.relation === "ally" ? entity.ownerId === botPlayerId : entity.ownerId !== botPlayerId)) &&
+      (!options.roleFilter || entity.role === options.roleFilter)
+    );
+
+  const thresholdsMet = Math.floor(matchingUnits.length / options.threshold);
+  const payoutMultiplier = options.maxThresholds
+    ? Math.min(thresholdsMet, options.maxThresholds)
+    : thresholdsMet;
+
+  if (payoutMultiplier <= 0) {
+    return -Infinity;
+  }
+
+  let score = matchingUnits.length * 4;
+  for (const resource of RESOURCE_ORDER) {
+    score += (options.resourcesPerThreshold[resource] ?? 0) * payoutMultiplier * AI_WEIGHTS.gainedResourceValue;
+  }
+  score += payoutMultiplier * 18;
+
+  const handSize = state.zones[botPlayerId].hand.length;
+  if (handSize <= 4) {
+    score += AI_WEIGHTS.burstLowHandBonus;
+  }
+
+  return score;
+}
+
 function scoreHexAreaDamageSpell(
   state: GameState,
   botPlayerId: PlayerId,
@@ -841,6 +883,8 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
         score = scoreDestroyDamagedUnitsSpell(state, botPlayerId, effectConfig.relation);
       } else if (effect.behavior.type === "draw_and_gain_resources" && effectConfig?.type === "draw_and_gain_resources" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
         score = scoreDrawAndGainResourcesSpell(state, botPlayerId, effectConfig);
+      } else if (effect.behavior.type === "resources_by_unit_count" && effectConfig?.type === "resources_by_unit_count" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = scoreResourcesByUnitCountSpell(state, botPlayerId, effectConfig);
       } else if (effect.behavior.type === "damage_enemy_base" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
         score = scoreBaseDamageSpell(state, botPlayerId, effect.behavior.amount, state.phase);
       } else if (effect.behavior.type === "hex_area_damage" && effectConfig?.type === "hex_area_damage" && targeting.targetHex) {

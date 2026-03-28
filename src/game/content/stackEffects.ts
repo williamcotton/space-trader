@@ -7,6 +7,7 @@ import {
   createGlobalUnitBuffInstructions,
   createHexAreaDamageInstructions,
   createMassDamageInstructions,
+  createResourcesByUnitCountInstructions,
 } from "./cards/instructionFactories";
 import { LAYER } from "../systems/continuousEffects";
 import type { ResourceType, UnitRole } from "../model/enums";
@@ -74,6 +75,9 @@ export type StackEffectBehavior =
     }
   | {
       type: "draw_and_gain_resources";
+    }
+  | {
+      type: "resources_by_unit_count";
     }
   | {
       type: "hex_area_damage";
@@ -283,6 +287,16 @@ function createCardOwnedDrawAndGainResourcesInstructions(context: InstructionCon
   }
 
   return createDrawAndGainResourcesInstructions(effectConfig)(context);
+}
+
+function createCardOwnedResourcesByUnitCountInstructions(context: InstructionContext): GameInstruction[] {
+  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
+  const effectConfig = getCardPlayEffectConfig(sourceCard);
+  if (!effectConfig || effectConfig.type !== "resources_by_unit_count") {
+    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing unit-count resource config on source card.` }];
+  }
+
+  return createResourcesByUnitCountInstructions(effectConfig)(context);
 }
 
 function createCardOwnedHexAreaDamageInstructions(context: InstructionContext): GameInstruction[] {
@@ -536,6 +550,22 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
     },
     createInstructions: createCardOwnedDrawAndGainResourcesInstructions,
   },
+  resources_by_unit_count: {
+    id: "resources_by_unit_count",
+    label: "Resources By Unit Count",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "resources_by_unit_count",
+    },
+    createInstructions: createCardOwnedResourcesByUnitCountInstructions,
+  },
   hex_area_damage: {
     id: "hex_area_damage",
     label: "Hex Area Damage",
@@ -617,6 +647,7 @@ export function getStackEffectMagnitude(effectId: string, sourceCardId?: string 
     case "global_unit_buff":
     case "destroy_damaged_units":
     case "draw_and_gain_resources":
+    case "resources_by_unit_count":
     case "hex_area_damage":
       if (sourceCardId) {
         return getCardPlayEffectMagnitude(getCardDefinition(sourceCardId));

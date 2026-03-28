@@ -363,6 +363,64 @@ describe("decideMvpBotCommand", () => {
     });
   });
 
+  it("casts Emergency War Chest when low on hand and flush with credits", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_2.hand = [];
+    state.players.player_2.resources.credits = 5;
+
+    delete state.entities.unit_player_2_scout;
+    delete state.entities.unit_player_2_harvester;
+
+    const cardInstanceId = addCardToHand(state, "player_2", "emergency_war_chest");
+
+    const command = decideMvpBotCommand(state, "player_2");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+    });
+  });
+
+  it("casts Spore Harvest when a wide board creates multiple payouts", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_1.hand = [];
+    state.players.player_1.resources.biomass = 2;
+
+    const scout = state.entities.unit_player_1_scout;
+    const harvester = state.entities.unit_player_1_harvester;
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 units for Spore Harvest bot test.");
+    }
+
+    state.entities.bot_test_spore_harvest_1 = {
+      ...scout,
+      id: "bot_test_spore_harvest_1",
+      coord: { q: -3, r: 1 },
+    };
+    state.entities.bot_test_spore_harvest_2 = {
+      ...harvester,
+      id: "bot_test_spore_harvest_2",
+      coord: { q: -2, r: 1 },
+    };
+
+    const cardInstanceId = addCardToHand(state, "player_1", "spore_harvest");
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+  });
+
   it("casts Rivet Volley at the enemy base when it is lethal", () => {
     const state = setupState();
     state.activePlayerId = "player_1";
