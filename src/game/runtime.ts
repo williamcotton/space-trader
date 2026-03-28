@@ -24,6 +24,7 @@ import {
 import { createEmptyDerivedState, rebuildDerivedState, type DerivedState } from "./derived";
 import type { GameState } from "./model/state";
 import type { CanvasAnimation, GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
+import { removeEffectsForEntity } from "./systems/continuousEffects";
 
 const INITIAL_VIEWPORT: GameViewport = {
   width: 1024,
@@ -113,7 +114,7 @@ export function getBoardClickCommand(state: GameState, clickedHex: { q: number; 
   };
 }
 
-class GameRuntime {
+export class GameRuntime {
   private viewport: GameViewport = { ...INITIAL_VIEWPORT };
   private updateSystem: UpdateSystem = updateGame;
   private renderSystem: RenderSystem = renderGame;
@@ -534,6 +535,55 @@ class GameRuntime {
       type: "PASS_PRIORITY",
       playerId: priorityPlayerId,
     });
+  }
+
+  debugAddTestResources(playerId: PlayerId, amount = 100): void {
+    const pool = this.state.players[playerId].resources;
+    for (const resource of ["credits", "alloy", "flux", "biomass"] as const) {
+      pool[resource] += amount;
+    }
+
+    this.state.log.push({
+      turn: this.state.turn,
+      text: `${playerId} gained ${amount} of each resource for testing.`,
+    });
+    this.notifyListeners();
+  }
+
+  debugKillTestUnit(playerId: PlayerId): void {
+    const selected = this.state.selectedEntityId ? this.state.entities[this.state.selectedEntityId] : null;
+    const target =
+      selected && selected.kind === "unit" && selected.ownerId === playerId
+        ? selected
+        : Object.values(this.state.entities).find((entity) => entity.kind === "unit" && entity.ownerId === playerId);
+
+    if (!target || target.kind !== "unit") {
+      return;
+    }
+
+    const before = captureAnimationSnapshot(this.state);
+
+    if (target.carries) {
+      this.state.log.push({
+        turn: this.state.turn,
+        text: `${target.id} was destroyed and cargo lost (${target.carries}).`,
+      });
+    }
+    if (this.state.selectedEntityId === target.id) {
+      this.state.selectedEntityId = null;
+    }
+    removeEffectsForEntity(this.state, target.id);
+    delete this.state.entities[target.id];
+    this.state.log.push({
+      turn: this.state.turn,
+      text: `${playerId} debug-killed ${target.id}.`,
+    });
+
+    this.animations.push(...buildAnimationsFromEvents([], before, this.state));
+    if (this.animations.length > 32) {
+      this.animations = this.animations.slice(-32);
+    }
+    this.notifyListeners();
   }
 
   debugRespondStack(): void {

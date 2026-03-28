@@ -47,6 +47,11 @@ export type CardResolveAnimationProfile =
       label: string;
       waves: number;
       accent: CardAnimationAccent;
+    }
+  | {
+      kind: "board_blast";
+      label: string;
+      accent: CardAnimationAccent;
     };
 
 export type CardAnimationProfile = {
@@ -839,6 +844,13 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       amount: 4,
       relation: "any",
     }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Orbital Purge",
+        accent: "neutral",
+      },
+    },
   },
   scorched_protocol: {
     id: "scorched_protocol",
@@ -851,6 +863,13 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     play: destroyDamagedUnitsTacticPlay({
       relation: "any",
     }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Scorched Protocol",
+        accent: "alloy",
+      },
+    },
   },
   meteor_chain: {
     id: "meteor_chain",

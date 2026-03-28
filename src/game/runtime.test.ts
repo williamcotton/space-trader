@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
 import { createInitialGameState } from "./model/state";
-import { getBoardClickCommand } from "./runtime";
+import { GameRuntime, getBoardClickCommand } from "./runtime";
 
 function setupState() {
   return createInitialGameState({ map: FRONTIER_BELT_MAP });
@@ -56,5 +56,31 @@ describe("getBoardClickCommand", () => {
       playerId: "player_1",
       reason: "clicked_empty_or_enemy_tile",
     });
+  });
+});
+
+describe("GameRuntime", () => {
+  it("adds test resources to a chosen player", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: FRONTIER_BELT_MAP }));
+    const before = { ...runtime.state.players.player_1.resources };
+
+    runtime.debugAddTestResources("player_1");
+
+    expect(runtime.state.players.player_1.resources).toEqual({
+      credits: before.credits + 100,
+      alloy: before.alloy + 100,
+      flux: before.flux + 100,
+      biomass: before.biomass + 100,
+    });
+  });
+
+  it("kills the selected test unit for the requested player", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: FRONTIER_BELT_MAP }));
+    runtime.state.selectedEntityId = "unit_player_1_harvester";
+
+    runtime.debugKillTestUnit("player_1");
+
+    expect(runtime.state.entities.unit_player_1_harvester).toBeUndefined();
+    expect(runtime.state.selectedEntityId).toBeNull();
   });
 });

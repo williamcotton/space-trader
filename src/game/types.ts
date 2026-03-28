@@ -93,6 +93,25 @@ export type CanvasAnimation =
       hexes: HexCoord[];
       label: string;
       accent: "alloy" | "flux" | "biomass" | "neutral";
+    }
+  | {
+      id: string;
+      kind: "board_blast";
+      playerId: PlayerId;
+      ageSeconds: number;
+      durationSeconds: number;
+      center: HexCoord;
+      hexes: HexCoord[];
+      label: string;
+      accent: "alloy" | "flux" | "biomass" | "neutral";
+    }
+  | {
+      id: string;
+      kind: "death_burst";
+      playerId: PlayerId;
+      ageSeconds: number;
+      durationSeconds: number;
+      coord: HexCoord;
     };
 
 export type FrameTransients = {

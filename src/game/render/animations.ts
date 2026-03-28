@@ -99,6 +99,14 @@ function buildHexShowerAnimation(
   };
 }
 
+function getRelationMatches(ownerId: PlayerId, controllerId: PlayerId, relation: "ally" | "enemy" | "any"): boolean {
+  if (relation === "any") {
+    return true;
+  }
+
+  return relation === "ally" ? ownerId === controllerId : ownerId !== controllerId;
+}
+
 function getCardAnimationAccent(sourceCardId: string | null): CardAnimationAccent {
   const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
   switch (sourceCard?.faction) {
@@ -113,6 +121,36 @@ function getCardAnimationAccent(sourceCardId: string | null): CardAnimationAccen
   }
 }
 
+function getMapCenterHex(state: GameState): HexCoord {
+  const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
+  const approximateCenter = {
+    q: Math.round((qMin + qMax) / 2),
+    r: Math.round((rMin + rMax) / 2),
+  };
+
+  if (isWithinMapBounds(approximateCenter, state.map)) {
+    return approximateCenter;
+  }
+
+  let bestCoord: HexCoord | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let q = qMin; q <= qMax; q += 1) {
+    for (let r = rMin; r <= rMax; r += 1) {
+      const coord = { q, r };
+      if (!isWithinMapBounds(coord, state.map)) {
+        continue;
+      }
+      const distance = hexDistance(coord, approximateCenter);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestCoord = coord;
+      }
+    }
+  }
+
+  return bestCoord ?? approximateCenter;
+}
+
 function getRadiusAffectedHexes(state: GameState, origin: HexCoord, radius: number): HexCoord[] {
   const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
   const hexes: HexCoord[] = [];
@@ -123,6 +161,51 @@ function getRadiusAffectedHexes(state: GameState, origin: HexCoord, radius: numb
         hexes.push(coord);
       }
     }
+  }
+  return hexes;
+}
+
+function getAffectedUnitHexes(
+  before: AnimationCapture,
+  controllerId: PlayerId,
+  relation: "ally" | "enemy" | "any"
+): HexCoord[] {
+  const seen = new Set<string>();
+  const hexes: HexCoord[] = [];
+  for (const entity of Object.values(before.entities)) {
+    if (entity.kind !== "unit" || !getRelationMatches(entity.ownerId, controllerId, relation)) {
+      continue;
+    }
+
+    const key = `${entity.coord.q},${entity.coord.r}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    hexes.push(entity.coord);
+  }
+  return hexes;
+}
+
+function getDestroyedUnitHexes(
+  before: AnimationCapture,
+  state: GameState,
+  controllerId: PlayerId,
+  relation: "ally" | "enemy" | "any"
+): HexCoord[] {
+  const seen = new Set<string>();
+  const hexes: HexCoord[] = [];
+  for (const [entityId, entity] of Object.entries(before.entities)) {
+    if (entity.kind !== "unit" || state.entities[entityId] || !getRelationMatches(entity.ownerId, controllerId, relation)) {
+      continue;
+    }
+
+    const key = `${entity.coord.q},${entity.coord.r}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    hexes.push(entity.coord);
   }
   return hexes;
 }
@@ -146,6 +229,29 @@ function buildStackResolutionAnimation(
     );
     if (customAnimation) {
       return customAnimation;
+    }
+  }
+  if (cardResolveAnimation?.kind === "board_blast") {
+    const effectConfig = getCardPlayEffectConfig(sourceCard);
+    const affectedHexes =
+      effectConfig?.type === "mass_damage"
+        ? getAffectedUnitHexes(before, event.controllerId, effectConfig.relation)
+        : effectConfig?.type === "destroy_damaged_units"
+          ? getDestroyedUnitHexes(before, state, event.controllerId, effectConfig.relation)
+        : [];
+
+    if (affectedHexes.length > 0) {
+      return {
+        id: baseId,
+        kind: "board_blast",
+        playerId: event.controllerId,
+        ageSeconds: 0,
+        durationSeconds: 1.15,
+        center: getMapCenterHex(state),
+        hexes: affectedHexes,
+        label: cardResolveAnimation.label,
+        accent: cardResolveAnimation.accent,
+      };
     }
   }
 
@@ -430,6 +536,21 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
       default:
         break;
     }
+  }
+
+  const destroyedUnits = Object.entries(before.entities)
+    .filter(([, entity]) => entity.kind === "unit")
+    .filter(([entityId]) => !state.entities[entityId]);
+
+  for (const [index, [, entity]] of destroyedUnits.entries()) {
+    animations.push({
+      id: `UNIT_DESTROYED_${state.turn}_${state.log.length}_${index}`,
+      kind: "death_burst",
+      playerId: entity.ownerId,
+      ageSeconds: 0,
+      durationSeconds: 0.72,
+      coord: entity.coord,
+    });
   }
 
   return animations;

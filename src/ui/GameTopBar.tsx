@@ -93,6 +93,24 @@ export function GameTopBar() {
                 >
                   {player.botAutoplay ? "Bot On" : "Bot Off"}
                 </button>
+                <button
+                  type="button"
+                  className="top-bar-debug-resource"
+                  onClick={() => runtime.debugAddTestResources(player.id)}
+                  title="Add 100 of each resource"
+                  aria-label={`Add 100 of each resource to ${getPlayerLabel(player.id)}`}
+                >
+                  +100
+                </button>
+                <button
+                  type="button"
+                  className="top-bar-debug-kill"
+                  onClick={() => runtime.debugKillTestUnit(player.id)}
+                  title="Destroy the selected or first unit for this player"
+                  aria-label={`Destroy a ${getPlayerLabel(player.id)} unit for testing`}
+                >
+                  Kill
+                </button>
                 <span className="top-bar-player-zones">
                   H{player.hand} D{player.deck}
                 </span>

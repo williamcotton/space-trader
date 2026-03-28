@@ -6,6 +6,13 @@ function countCopies(cardIds: string[], targetCardId: string): number {
   return cardIds.filter((cardId) => cardId === targetCardId).length;
 }
 
+function countResourceUnitCopies(cardIds: string[]): number {
+  return cardIds.filter((cardId) => {
+    const definition = getCardDefinition(cardId);
+    return definition?.kind === "unit" && definition.unit.role === "resource";
+  }).length;
+}
+
 describe("starter decks", () => {
   it("builds valid 60-card starter decks for each faction", () => {
     for (const faction of ["alloy_clan", "flux_collective", "biomass_swarm"] as const) {
@@ -35,6 +42,16 @@ describe("starter decks", () => {
       const cards = getStarterDeckCardIds(faction);
       expect(countCopies(cards, "expedition_harvester_card")).toBe(4);
     }
+  });
+
+  it("keeps resource unit density high enough to support deck economy", () => {
+    const alloyCards = getStarterDeckCardIds("alloy_clan");
+    const fluxCards = getStarterDeckCardIds("flux_collective");
+    const biomassCards = getStarterDeckCardIds("biomass_swarm");
+
+    expect(countResourceUnitCopies(alloyCards)).toBeGreaterThanOrEqual(8);
+    expect(countResourceUnitCopies(fluxCards)).toBeGreaterThanOrEqual(8);
+    expect(countResourceUnitCopies(biomassCards)).toBeGreaterThanOrEqual(10);
   });
 
   it("includes the new cascade cards in the intended starters", () => {

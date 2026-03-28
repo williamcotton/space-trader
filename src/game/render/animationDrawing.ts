@@ -297,6 +297,143 @@ function drawHexShowerAnimation(d: AnimationDrawContext, animation: Extract<Canv
   d.ctx.fillText(animation.label, origin.x, origin.y - d.hexSize * (0.78 + d.progress * 0.14));
 }
 
+function drawBoardBlastAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "board_blast" }>): void {
+  const center = toPixel(animation.center, d.originX, d.originY, d.hexSize);
+  const accentColors = {
+    alloy: { stroke: "255, 178, 118", fill: "255, 223, 194" },
+    flux: { stroke: "104, 223, 255", fill: "197, 246, 255" },
+    biomass: { stroke: "122, 246, 165", fill: "209, 255, 224" },
+    neutral: { stroke: "230, 237, 255", fill: "246, 249, 255" },
+  } as const;
+  const colors = accentColors[animation.accent];
+
+  for (let ringIndex = 0; ringIndex < 3; ringIndex += 1) {
+    const ringProgress = clamp((d.progress - ringIndex * 0.12) / (1 - ringIndex * 0.12 || 1), 0, 1);
+    if (ringProgress <= 0) {
+      continue;
+    }
+
+    d.ctx.beginPath();
+    drawHexOutline(d.ctx, center.x, center.y, d.hexSize * (0.7 + ringIndex * 0.18 + ringProgress * 0.72));
+    d.ctx.strokeStyle = `rgba(${colors.stroke}, ${0.42 - ringProgress * 0.22})`;
+    d.ctx.lineWidth = 2.8 - ringProgress * 1.2;
+    d.ctx.stroke();
+  }
+
+  for (const [index, hex] of animation.hexes.entries()) {
+    const position = toPixel(hex, d.originX, d.originY, d.hexSize);
+    const stagger = (index % 6) * 0.035;
+    const localProgress = clamp((d.progress - stagger) / (1 - stagger || 1), 0, 1);
+    if (localProgress <= 0) {
+      continue;
+    }
+
+    d.ctx.beginPath();
+    drawHexOutline(d.ctx, position.x, position.y, d.hexSize * (0.42 + localProgress * 0.08));
+    d.ctx.strokeStyle = `rgba(${colors.stroke}, ${0.78 - localProgress * 0.42})`;
+    d.ctx.lineWidth = 1.8;
+    d.ctx.stroke();
+
+    d.ctx.beginPath();
+    d.ctx.arc(position.x, position.y, d.hexSize * (0.12 + localProgress * 0.3), 0, Math.PI * 2);
+    d.ctx.fillStyle = `rgba(${colors.fill}, ${0.22 - localProgress * 0.12})`;
+    d.ctx.fill();
+
+    for (let streakIndex = 0; streakIndex < 3; streakIndex += 1) {
+      const laneOffset = (streakIndex - 1) * d.hexSize * 0.2;
+      d.ctx.beginPath();
+      d.ctx.moveTo(position.x + laneOffset, position.y - d.hexSize * (1.36 - localProgress * 0.22));
+      d.ctx.lineTo(position.x + laneOffset * 0.66, position.y - d.hexSize * (0.1 - localProgress * 0.1));
+      d.ctx.strokeStyle = `rgba(${colors.stroke}, ${0.86 - localProgress * 0.54})`;
+      d.ctx.lineWidth = 1.6 + (1 - localProgress) * 1.4;
+      d.ctx.stroke();
+    }
+
+    for (let shardIndex = 0; shardIndex < 2; shardIndex += 1) {
+      const shardOffset = (shardIndex === 0 ? -1 : 1) * d.hexSize * 0.18;
+      d.ctx.beginPath();
+      d.ctx.moveTo(position.x + shardOffset * 0.2, position.y - d.hexSize * 0.02);
+      d.ctx.lineTo(position.x + shardOffset, position.y + d.hexSize * (0.3 + localProgress * 0.22));
+      d.ctx.strokeStyle = `rgba(${colors.fill}, ${0.58 - localProgress * 0.34})`;
+      d.ctx.lineWidth = 1.2 + (1 - localProgress) * 0.8;
+      d.ctx.stroke();
+    }
+  }
+
+  d.ctx.beginPath();
+  d.ctx.arc(center.x, center.y, d.hexSize * (0.16 + d.progress * 0.42), 0, Math.PI * 2);
+  d.ctx.fillStyle = `rgba(${colors.fill}, ${0.28 - d.progress * 0.16})`;
+  d.ctx.fill();
+
+  for (let streakIndex = 0; streakIndex < 4; streakIndex += 1) {
+    const laneOffset = (streakIndex - 1.5) * d.hexSize * 0.22;
+    d.ctx.beginPath();
+    d.ctx.moveTo(center.x + laneOffset, center.y - d.hexSize * (1.7 - d.progress * 0.24));
+    d.ctx.lineTo(center.x + laneOffset * 0.7, center.y - d.hexSize * (0.22 - d.progress * 0.1));
+    d.ctx.strokeStyle = `rgba(${colors.stroke}, ${0.56 - d.progress * 0.3})`;
+    d.ctx.lineWidth = 2.2 + (1 - d.progress) * 1.2;
+    d.ctx.stroke();
+  }
+
+  d.ctx.fillStyle = `rgba(${colors.fill}, ${0.94 - d.progress * 0.56})`;
+  d.ctx.font = `${clamp(d.hexSize * 0.36, 11, 16)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+  d.ctx.textAlign = "center";
+  d.ctx.textBaseline = "bottom";
+  d.ctx.fillText(animation.label, center.x, center.y - d.hexSize * (1.2 + d.progress * 0.2));
+}
+
+function drawDeathBurstAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "death_burst" }>): void {
+  const position = toPixel(animation.coord, d.originX, d.originY, d.hexSize);
+  const hexAlpha = 0.8 - d.progress * 0.44;
+  const fillAlpha = 0.22 - d.progress * 0.12;
+
+  d.ctx.beginPath();
+  drawHexOutline(d.ctx, position.x, position.y, d.hexSize * (0.42 + d.progress * 0.1));
+  d.ctx.strokeStyle = `rgba(255, 170, 170, ${hexAlpha})`;
+  d.ctx.lineWidth = 1.9;
+  d.ctx.stroke();
+
+  d.ctx.beginPath();
+  d.ctx.arc(position.x, position.y, d.hexSize * (0.14 + d.progress * 0.2), 0, Math.PI * 2);
+  d.ctx.fillStyle = `rgba(255, 225, 225, ${fillAlpha})`;
+  d.ctx.fill();
+
+  for (let streakIndex = 0; streakIndex < 4; streakIndex += 1) {
+    const stagger = streakIndex * 0.05;
+    const localProgress = clamp((d.progress - stagger) / (1 - stagger || 1), 0, 1);
+    if (localProgress <= 0) {
+      continue;
+    }
+
+    const offset = (streakIndex - 1.5) * d.hexSize * 0.18;
+    d.ctx.beginPath();
+    d.ctx.moveTo(position.x + offset, position.y - d.hexSize * (1.05 - localProgress * 0.18));
+    d.ctx.lineTo(position.x + offset * 0.72, position.y - d.hexSize * (0.08 - localProgress * 0.08));
+    d.ctx.strokeStyle = `rgba(255, 178, 178, ${0.88 - localProgress * 0.56})`;
+    d.ctx.lineWidth = 1.6 + (1 - localProgress) * 1.2;
+    d.ctx.stroke();
+  }
+
+  for (let shardIndex = 0; shardIndex < 3; shardIndex += 1) {
+    const offset = (shardIndex - 1) * d.hexSize * 0.22;
+    d.ctx.beginPath();
+    d.ctx.moveTo(position.x + offset * 0.2, position.y - d.hexSize * 0.02);
+    d.ctx.lineTo(position.x + offset, position.y + d.hexSize * (0.34 + d.progress * 0.26));
+    d.ctx.strokeStyle = `rgba(255, 210, 210, ${0.64 - d.progress * 0.38})`;
+    d.ctx.lineWidth = 1.2 + (1 - d.progress) * 0.9;
+    d.ctx.stroke();
+  }
+
+  d.ctx.beginPath();
+  d.ctx.moveTo(position.x - d.hexSize * 0.18, position.y - d.hexSize * 0.18);
+  d.ctx.lineTo(position.x + d.hexSize * 0.18, position.y + d.hexSize * 0.18);
+  d.ctx.moveTo(position.x + d.hexSize * 0.18, position.y - d.hexSize * 0.18);
+  d.ctx.lineTo(position.x - d.hexSize * 0.18, position.y + d.hexSize * 0.18);
+  d.ctx.strokeStyle = `rgba(${animation.playerId === "player_1" ? "154, 232, 255" : "255, 208, 183"}, ${0.82 - d.progress * 0.52})`;
+  d.ctx.lineWidth = 1.9 - d.progress * 0.7;
+  d.ctx.stroke();
+}
+
 export function drawAnimations(context: CanvasRenderingContext2D, frame: GameFrame, originX: number, originY: number, hexSize: number): void {
   for (const animation of frame.transients.animations) {
     const d: AnimationDrawContext = {
@@ -335,6 +472,12 @@ export function drawAnimations(context: CanvasRenderingContext2D, frame: GameFra
         break;
       case "hex_shower":
         drawHexShowerAnimation(d, animation);
+        break;
+      case "board_blast":
+        drawBoardBlastAnimation(d, animation);
+        break;
+      case "death_burst":
+        drawDeathBurstAnimation(d, animation);
         break;
     }
   }

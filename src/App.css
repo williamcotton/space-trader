@@ -538,6 +538,42 @@ body {
   filter: brightness(1.08);
 }
 
+.top-bar-debug-resource {
+  border: 1px solid rgba(111, 138, 199, 0.42);
+  border-radius: 999px;
+  min-height: 19px;
+  padding: 2px 7px;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  background: rgba(32, 48, 92, 0.64);
+  color: #d8e7ff;
+}
+
+.top-bar-debug-resource:hover {
+  filter: brightness(1.08);
+}
+
+.top-bar-debug-kill {
+  border: 1px solid rgba(199, 109, 109, 0.48);
+  border-radius: 999px;
+  min-height: 19px;
+  padding: 2px 7px;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  background: rgba(92, 32, 44, 0.64);
+  color: #ffd4dc;
+}
+
+.top-bar-debug-kill:hover {
+  filter: brightness(1.08);
+}
+
 .top-bar-player-zones {
   color: #cfdbf6;
   font-size: 9px;
