@@ -11,6 +11,8 @@ import {
   canAttackEntityDirectly,
   isUnitBlockedFromAttackingBySummoningSickness,
   isUnitBlockedFromMovingBySummoningSickness,
+  RELAY_KEYWORD,
+  unitHasActiveKeyword,
 } from "../systems/keywords";
 import { getOpponentPlayer } from "../turn/stack";
 import { getCascadeAffectedHexes } from "../systems/cascade";
@@ -600,6 +602,7 @@ function scoreCascadeAttackBuffTarget(
     armorBonus: number;
     waves: number;
     roleFilter?: "combat" | "resource" | "utility";
+    grantedKeywords?: string[];
     reward?: {
       resource: ResourceType;
       amount: number;
@@ -614,7 +617,17 @@ function scoreCascadeAttackBuffTarget(
     .sort((a, b) => a.id.localeCompare(b.id));
 
   const score = scoreUnitBuffOpportunity(state, botPlayerId, affectedUnits, options);
-  return score === -Infinity ? score : score + affectedHexes.length;
+  let totalScore = score === -Infinity ? -Infinity : score + affectedHexes.length;
+
+  if (options.grantedKeywords?.includes(RELAY_KEYWORD)) {
+    const newlyRelayedUnits = affectedUnits.filter((unit) => !unitHasActiveKeyword(state, unit, RELAY_KEYWORD));
+    if (newlyRelayedUnits.length > 0) {
+      totalScore = totalScore === -Infinity ? 0 : totalScore;
+      totalScore += newlyRelayedUnits.length * 18;
+    }
+  }
+
+  return totalScore;
 }
 
 function scoreGlobalBuffSpell(
@@ -898,6 +911,7 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
           armorBonus: effectConfig.armorBonus,
           waves: effectConfig.waves,
           roleFilter: effectConfig.roleFilter,
+          grantedKeywords: effectConfig.grantedKeywords,
           reward: effectConfig.reward,
         });
       }

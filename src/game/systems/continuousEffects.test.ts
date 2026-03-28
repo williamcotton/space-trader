@@ -5,6 +5,7 @@ import {
   LAYER,
   createContinuousEffectId,
   getActiveEffectsForEntity,
+  getEffectiveKeywordsForUnit,
   getEffectiveStatValue,
   nextEffectTimestamp,
   purgeExpiredEffects,
@@ -93,6 +94,27 @@ describe("continuousEffects", () => {
         timestamp: 1,
       });
       expect(getEffectiveStatValue(state, unit, "armor")).toBe(unit.armor);
+    });
+  });
+
+  describe("getEffectiveKeywordsForUnit", () => {
+    it("includes keywords granted by continuous effects", () => {
+      const state = createState();
+      const unit = getUnit(state, "unit_player_1_scout");
+
+      state.continuousEffects.push({
+        id: "relay_grant",
+        sourceEntityId: null,
+        sourceCardId: "phase_coil",
+        controllerId: "player_1",
+        payload: { type: "keyword_grant", keyword: "relay" },
+        target: { type: "specific_entity", entityId: unit.id },
+        expiry: { type: "end_of_turn", turn: state.turn },
+        layer: LAYER.ABILITY,
+        timestamp: 1,
+      });
+
+      expect(getEffectiveKeywordsForUnit(state, unit)).toContain("relay");
     });
   });
 

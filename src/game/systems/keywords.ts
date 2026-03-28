@@ -1,6 +1,6 @@
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, UnitEntity } from "../model/state";
-import { unitHasKeyword } from "../model/state";
+import { getEffectiveKeywordsForUnit } from "./continuousEffects";
 
 export const STEALTH_KEYWORD = "stealth";
 export const SPROUT_KEYWORD = "sprout";
@@ -12,6 +12,17 @@ export function hasSproutKeyword(keywords?: readonly string[]): boolean {
 
 export function hasRelayKeyword(keywords?: readonly string[]): boolean {
   return Boolean(keywords?.includes(RELAY_KEYWORD));
+}
+
+export function unitHasActiveKeyword(
+  state: Readonly<GameState>,
+  unit: Readonly<UnitEntity>,
+  keyword: string,
+  options?: {
+    excludeEffectIdPrefix?: string;
+  }
+): boolean {
+  return getEffectiveKeywordsForUnit(state, unit as UnitEntity, options).includes(keyword);
 }
 
 export function isUnitBlockedFromMovingBySummoningSickness(
@@ -31,7 +42,7 @@ function isEnemyStealthedUnit(
   sourcePlayerId: PlayerId,
   target: EntityState
 ): target is UnitEntity {
-  return target.kind === "unit" && target.ownerId !== sourcePlayerId && unitHasKeyword(target, STEALTH_KEYWORD);
+  return target.kind === "unit" && target.ownerId !== sourcePlayerId && unitHasActiveKeyword(_state, target, STEALTH_KEYWORD);
 }
 
 export function getTargetingKeywordBlockReason(

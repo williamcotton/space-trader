@@ -43,6 +43,9 @@ function resolveAutoTarget(
 
       return enemyUnits[0]?.id ?? null;
     }
+
+    case "weakest_enemy_unit_in_range_2":
+      return null;
   }
 }
 

@@ -90,6 +90,9 @@ describe("starter decks", () => {
     expect(countCopies(fluxCards, "emergency_war_chest")).toBe(2);
     expect(countCopies(fluxCards, "meteor_chain")).toBe(4);
     expect(countCopies(fluxCards, "ion_surge_archive")).toBe(4);
+    expect(countCopies(fluxCards, "signal_fork")).toBe(2);
+    expect(countCopies(fluxCards, "phase_coil")).toBe(2);
+    expect(countCopies(fluxCards, "arc_repeater_card")).toBe(2);
     expect(countCopies(biomassCards, "overgrowth_wave")).toBe(4);
     expect(countCopies(biomassCards, "spore_harvest")).toBe(2);
     expect(countCopies(biomassCards, "orbital_purge")).toBe(2);

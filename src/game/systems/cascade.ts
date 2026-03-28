@@ -2,7 +2,7 @@ import { areSameHex, isWithinMapBounds } from "../model/hex";
 import { HEX_DIRECTIONS } from "../model/queries";
 import type { PlayerId } from "../model/ids";
 import type { GameState, HexCoord, UnitEntity } from "../model/state";
-import { hasRelayKeyword } from "./keywords";
+import { RELAY_KEYWORD, unitHasActiveKeyword } from "./keywords";
 
 function toHexKey(coord: HexCoord): string {
   return `${coord.q},${coord.r}`;
@@ -31,7 +31,10 @@ export function getCascadeAffectedHexes(
   state: Readonly<GameState>,
   controllerId: PlayerId,
   origin: HexCoord,
-  totalWaves: number
+  totalWaves: number,
+  options?: {
+    excludeKeywordEffectIdPrefix?: string;
+  }
 ): HexCoord[] {
   type CascadeBranch = {
     origin: HexCoord;
@@ -81,7 +84,12 @@ export function getCascadeAffectedHexes(
 
       const relayedUnits = getFriendlyUnitsOnHexes(state, controllerId, waveAffected);
       for (const unit of relayedUnits) {
-        if (!hasRelayKeyword(unit.keywords) || usedRelayUnits.has(unit.id)) {
+        if (
+          !unitHasActiveKeyword(state, unit, RELAY_KEYWORD, {
+            excludeEffectIdPrefix: options?.excludeKeywordEffectIdPrefix,
+          }) ||
+          usedRelayUnits.has(unit.id)
+        ) {
           continue;
         }
         usedRelayUnits.add(unit.id);

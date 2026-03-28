@@ -132,6 +132,110 @@ describe("triggerEngine", () => {
       expect(triggered).toHaveLength(0);
     });
 
+    it("fires on_cascaded for Arc Repeater and targets an enemy within range 2", () => {
+      const state = createState();
+      state.entities.unit_player_1_arc = {
+        id: "unit_player_1_arc",
+        kind: "unit",
+        name: "Arc Repeater",
+        ownerId: "player_1",
+        role: "utility",
+        hp: 3,
+        maxHp: 3,
+        attackDamage: 1,
+        siegeDamageBonus: 0,
+        armor: 0,
+        moveRange: 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 1, r: 0 },
+        keywords: ["relay"],
+        carries: null,
+        sourceCardId: "arc_repeater_card",
+        hasSummoningSickness: false,
+        movesRemaining: 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+
+      state.entities.unit_player_2_near = {
+        id: "unit_player_2_near",
+        kind: "unit",
+        name: "Nearby Target",
+        ownerId: "player_2",
+        role: "combat",
+        hp: 1,
+        maxHp: 4,
+        attackDamage: 2,
+        siegeDamageBonus: 0,
+        armor: 0,
+        moveRange: 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 2, r: 0 },
+        carries: null,
+        sourceCardId: null,
+        hasSummoningSickness: false,
+        movesRemaining: 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+      state.entities.unit_player_2_far = {
+        id: "unit_player_2_far",
+        kind: "unit",
+        name: "Far Target",
+        ownerId: "player_2",
+        role: "utility",
+        hp: 1,
+        maxHp: 4,
+        attackDamage: 1,
+        siegeDamageBonus: 0,
+        armor: 0,
+        moveRange: 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 5, r: 0 },
+        carries: null,
+        sourceCardId: null,
+        hasSummoningSickness: false,
+        movesRemaining: 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+
+      const cascadeEvent: GameEvent = {
+        type: "STACK_ITEM_RESOLVED",
+        itemId: "stack_signal",
+        label: "Signal Fork",
+        controllerId: "player_1",
+        ownerId: "player_1",
+        effectId: "cascade_unit_buff",
+        effectMagnitude: 1,
+        targetStackItemId: null,
+        targetEntityId: null,
+        targetHex: { q: 0, r: 0 },
+        objectKind: "spell",
+        counterable: true,
+        defaultCounterDestination: "discard",
+        sourceCardInstanceId: "signal_fork_1",
+        sourceCardId: "signal_fork",
+        sourceCardOwnerId: "player_1",
+        pendingUnitEntityId: null,
+      };
+
+      resetTriggerDepth();
+      incrementTriggerDepth();
+      const triggered = evaluateTriggersFromEvent(state, cascadeEvent);
+
+      expect(triggered).toHaveLength(1);
+      expect(triggered[0].label).toContain("Arc Repeater");
+      expect(triggered[0].label).toContain("Arc");
+      expect(triggered[0].targetEntityId).toBe("unit_player_2_near");
+    });
+
     it("does not fire for non-tactic events", () => {
       const state = createState();
       state.entities["unit_player_1_relay"] = {

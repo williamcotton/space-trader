@@ -1410,6 +1410,110 @@ describe("dispatchCommand", () => {
     expect(getEffectiveUnitAttackDamage(state, farUnit)).toBe(farUnit.attackDamage + 1);
   });
 
+  it("lets Phase Coil grant Relay for later cascades that turn", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "tactical";
+    state.stack = [];
+    state.players.player_2.resources.credits = 6;
+    state.players.player_2.resources.flux = 6;
+
+    const phaseCoilId = moveCardFromDeckToHand(state, "player_2", "phase_coil");
+    const ionShowerId = moveCardFromDeckToHand(state, "player_2", "ion_shower");
+
+    const scout = state.entities.unit_player_2_scout;
+    const harvester = state.entities.unit_player_2_harvester;
+    expect(scout?.kind).toBe("unit");
+    expect(harvester?.kind).toBe("unit");
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 2 units for Phase Coil test.");
+    }
+
+    scout.coord = { q: 0, r: 0 };
+    scout.hasSummoningSickness = false;
+    scout.attacksRemaining = 1;
+    harvester.coord = { q: 1, r: 0 };
+
+    const bridgeUnitId = "unit_player_2_phase_bridge";
+    state.entities[bridgeUnitId] = {
+      id: bridgeUnitId,
+      kind: "unit",
+      name: "Bridge Unit",
+      ownerId: "player_2",
+      role: "utility",
+      hp: 4,
+      maxHp: 4,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 2, r: 0 },
+      keywords: [],
+      carries: null,
+      sourceCardId: null,
+      hasSummoningSickness: false,
+      movesRemaining: 0,
+      attacksRemaining: 0,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const farUnitId = "unit_player_2_phase_far_target";
+    state.entities[farUnitId] = {
+      id: farUnitId,
+      kind: "unit",
+      name: "Far Target",
+      ownerId: "player_2",
+      role: "combat",
+      hp: 4,
+      maxHp: 4,
+      attackDamage: 2,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 3, r: 0 },
+      keywords: [],
+      carries: null,
+      sourceCardId: null,
+      hasSummoningSickness: false,
+      movesRemaining: 0,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const phaseCoilPlay = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId: phaseCoilId,
+      targetHex: { q: 0, r: 0 },
+    });
+    expect(phaseCoilPlay.ok).toBe(true);
+    resolveStackByPassing(state);
+
+    const ionShowerPlay = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId: ionShowerId,
+      targetHex: { q: 0, r: 0 },
+    });
+    expect(ionShowerPlay.ok).toBe(true);
+    resolveStackByPassing(state);
+
+    const farUnit = state.entities[farUnitId];
+    expect(farUnit?.kind).toBe("unit");
+    if (!farUnit || farUnit.kind !== "unit") {
+      throw new Error("Expected far target to remain on the battlefield.");
+    }
+
+    expect(getEffectiveUnitAttackDamage(state, farUnit)).toBe(farUnit.attackDamage + 1);
+  });
+
   it("Shrapnel Relay buffs only friendly combat units on affected hexes", () => {
     const state = setupState();
     state.activePlayerId = "player_1";

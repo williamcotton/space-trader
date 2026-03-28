@@ -106,6 +106,7 @@ export type CascadeUnitBuffPlayEffectConfig = {
   armorBonus: number;
   waves: number;
   roleFilter?: UnitRole;
+  grantedKeywords?: CardKeyword[];
   reward?: CascadeUnitBuffReward;
 };
 
@@ -178,7 +179,7 @@ export type CardPlayProfile =
       isValidHexTarget: HexTargetPredicate;
     });
 
-export type AutoTargetStrategy = "weakest_enemy_unit";
+export type AutoTargetStrategy = "weakest_enemy_unit" | "weakest_enemy_unit_in_range_2";
 
 export type UnitTrigger = {
   event: "on_owner_tactic_played";
@@ -299,6 +300,7 @@ function createCascadeUnitBuffEffectConfig(options: CascadeUnitBuffOptions): Cas
     armorBonus: options.armorBonus ?? 0,
     waves: options.waves,
     roleFilter: options.roleFilter,
+    grantedKeywords: options.grantedKeywords ? [...options.grantedKeywords] : undefined,
     reward: options.reward,
   };
 }
@@ -475,7 +477,11 @@ export function getCardPlayEffectMagnitude(card: CardDefinition | undefined): nu
     case "hex_area_damage":
       return effectConfig.amount;
     case "cascade_unit_buff":
-      return Math.max(Math.abs(effectConfig.attackBonus), Math.abs(effectConfig.armorBonus));
+      return Math.max(
+        Math.abs(effectConfig.attackBonus),
+        Math.abs(effectConfig.armorBonus),
+        effectConfig.grantedKeywords && effectConfig.grantedKeywords.length > 0 ? 1 : 0
+      );
   }
 
   return 0;
@@ -871,6 +877,55 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       },
     },
   },
+  signal_fork: {
+    id: "signal_fork",
+    name: "Signal Fork",
+    faction: "flux_collective",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 1, flux: 1 },
+    text: "Choose a hex near one of your units. Cascade 2. Friendly units on affected hexes get +1 ATK until end of turn. If 3 or more friendly units are affected, gain 1 flux.",
+    play: cascadeTacticPlay({
+      attackBonus: 1,
+      waves: 2,
+      reward: {
+        resource: "flux",
+        amount: 1,
+        minUnits: 3,
+      },
+      isValidHexTarget: isFriendlyCascadeHexTarget,
+    }),
+    animation: {
+      resolve: {
+        kind: "hex_shower",
+        label: "Signal Fork",
+        waves: 2,
+        accent: "flux",
+      },
+    },
+  },
+  phase_coil: {
+    id: "phase_coil",
+    name: "Phase Coil",
+    faction: "flux_collective",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 2, flux: 2 },
+    text: "Choose a hex near one of your units. Cascade 2. Friendly units on affected hexes gain Relay until end of turn.",
+    play: cascadeTacticPlay({
+      grantedKeywords: ["relay"],
+      waves: 2,
+      isValidHexTarget: isFriendlyCascadeHexTarget,
+    }),
+    animation: {
+      resolve: {
+        kind: "hex_shower",
+        label: "Phase Coil",
+        waves: 2,
+        accent: "flux",
+      },
+    },
+  },
   orbital_purge: {
     id: "orbital_purge",
     name: "Orbital Purge",
@@ -1137,6 +1192,34 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       effectId: "damage_enemy_unit_1_uncounterable",
       labelSuffix: "Pulse",
       autoTarget: "weakest_enemy_unit",
+    }],
+  },
+  arc_repeater_card: {
+    id: "arc_repeater_card",
+    name: "Arc Repeater",
+    faction: "flux_collective",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 2, flux: 1 },
+    text: "Relay (The first time this unit is cascaded each resolution, repeat that cascade from this hex.) Whenever this unit is cascaded, it deals 1 damage to an enemy unit within 2.",
+    play: unitPlay(),
+    onResolve: deployUnit("arc_repeater_card"),
+    unit: {
+      role: "utility",
+      hp: 3,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      keywords: ["relay"],
+    },
+    triggers: [{
+      condition: { type: "on_cascaded" },
+      effectId: "damage_enemy_unit_1_uncounterable",
+      labelSuffix: "Arc",
+      autoTarget: "weakest_enemy_unit_in_range_2",
     }],
   },
   forge_hauler_card: {

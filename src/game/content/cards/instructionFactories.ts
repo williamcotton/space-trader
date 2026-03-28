@@ -4,7 +4,7 @@ import type { UnitEntity } from "../../model/state";
 import { LAYER } from "../../systems/continuousEffects";
 import { getCascadeAffectedHexes } from "../../systems/cascade";
 import type { ResourceType, UnitRole } from "../../model/enums";
-import type { CardCost } from "./catalog";
+import type { CardCost, CardKeyword } from "./catalog";
 
 export type EffectRelation = "ally" | "enemy" | "any";
 
@@ -19,6 +19,7 @@ export type CascadeUnitBuffOptions = {
   armorBonus?: number;
   waves: number;
   roleFilter?: UnitRole;
+  grantedKeywords?: CardKeyword[];
   reward?: CascadeUnitBuffReward;
 };
 
@@ -106,6 +107,7 @@ function getAffectedFriendlyUnits(context: InstructionContext, waves: number, ro
 export function createCascadeUnitBuffInstructions(options: CascadeUnitBuffOptions) {
   const attackBonus = options.attackBonus ?? 0;
   const armorBonus = options.armorBonus ?? 0;
+  const grantedKeywords = options.grantedKeywords ?? [];
 
   return (context: InstructionContext): GameInstruction[] => {
     if (!context.targetHex) {
@@ -150,6 +152,20 @@ export function createCascadeUnitBuffInstructions(options: CascadeUnitBuffOption
           layer: LAYER.TEMPORARY,
         });
       }
+
+      for (const keyword of grantedKeywords) {
+        instructions.push({
+          type: "APPLY_CONTINUOUS_EFFECT",
+          effectId: `ce_${context.item.id}_${unit.id}_cascade_kw_${keyword}`,
+          sourceEntityId: null,
+          sourceCardId: context.item.sourceCardId,
+          controllerId: context.controllerId,
+          payload: { type: "keyword_grant", keyword },
+          target: { type: "specific_entity", entityId: unit.id },
+          expiry: { type: "end_of_turn", turn: context.state.turn },
+          layer: LAYER.ABILITY,
+        });
+      }
     }
 
     if (options.reward && friendlyUnits.length >= options.reward.minUnits) {
@@ -168,6 +184,9 @@ export function createCascadeUnitBuffInstructions(options: CascadeUnitBuffOption
     }
     if (armorBonus !== 0) {
       buffLabelParts.push(`${armorBonus > 0 ? "+" : ""}${armorBonus} ARM`);
+    }
+    for (const keyword of grantedKeywords) {
+      buffLabelParts.push(`gain ${keyword}`);
     }
 
     const rewardText = options.reward && friendlyUnits.length >= options.reward.minUnits

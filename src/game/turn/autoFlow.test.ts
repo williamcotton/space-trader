@@ -315,8 +315,9 @@ describe("getAutoFlowCommand", () => {
       pendingUnitEntityId: "unit_test",
     });
     state.zones.player_2.hand = [];
-    moveCardFromDeckToHand(state, "player_2", "failsafe_redirect");
+    moveCardFromDeckToHand(state, "player_2", "counter_pulse");
     state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 4;
 
     expect(getAutoFlowCommand(state)).toBeNull();
   });

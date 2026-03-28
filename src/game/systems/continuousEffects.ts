@@ -23,7 +23,12 @@ export type StatModifier = {
   amount: number;
 };
 
-export type ContinuousEffectPayload = StatModifier | ReplacementEffectPayload;
+export type KeywordGrant = {
+  type: "keyword_grant";
+  keyword: string;
+};
+
+export type ContinuousEffectPayload = StatModifier | KeywordGrant | ReplacementEffectPayload;
 
 // --- Expiry conditions (all serializable) ---
 
@@ -71,7 +76,7 @@ export function nextEffectTimestamp(state: GameState): number {
 // --- Selectors ---
 
 function doesEffectApplyToEntity(
-  state: GameState,
+  state: Readonly<GameState>,
   effect: ContinuousEffect,
   entityId: EntityId
 ): boolean {
@@ -107,7 +112,7 @@ function doesEffectApplyToEntity(
 }
 
 export function getActiveEffectsForEntity(
-  state: GameState,
+  state: Readonly<GameState>,
   entityId: EntityId
 ): ContinuousEffect[] {
   return state.continuousEffects.filter((effect) =>
@@ -115,8 +120,23 @@ export function getActiveEffectsForEntity(
   );
 }
 
+export function getEffectiveKeywordsForUnit(
+  state: Readonly<GameState>,
+  unit: UnitEntity,
+  options?: {
+    excludeEffectIdPrefix?: string;
+  }
+): string[] {
+  const baseKeywords = unit.keywords ?? [];
+  const grantedKeywords = getActiveEffectsForEntity(state, unit.id)
+    .filter((effect) => !options?.excludeEffectIdPrefix || !effect.id.startsWith(options.excludeEffectIdPrefix))
+    .flatMap((effect) => effect.payload.type === "keyword_grant" ? [effect.payload.keyword] : []);
+
+  return [...new Set([...baseKeywords, ...grantedKeywords])];
+}
+
 export function getEffectiveStatValue(
-  state: GameState,
+  state: Readonly<GameState>,
   unit: UnitEntity,
   stat: "attackDamage" | "armor"
 ): number {

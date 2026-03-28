@@ -94,7 +94,9 @@ function buildHexShowerAnimation(
     ageSeconds: 0,
     durationSeconds: 1.05,
     origin: event.targetHex,
-    hexes: getCascadeAffectedHexes(state, event.controllerId, event.targetHex, waves),
+    hexes: getCascadeAffectedHexes(state, event.controllerId, event.targetHex, waves, {
+      excludeKeywordEffectIdPrefix: `ce_${event.itemId}_`,
+    }),
     label,
     accent,
   };
