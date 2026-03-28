@@ -1,5 +1,5 @@
 import type { GameInstruction, InstructionContext } from "../actions/instructions";
-import { getCardDefinition } from "./cards/catalog";
+import { getCardCascadeUnitBuffConfig, getCardDefinition, getCardPlayEffectMagnitude } from "./cards/catalog";
 import { createCascadeUnitBuffInstructions } from "./cards/instructionFactories";
 import { LAYER } from "../systems/continuousEffects";
 import type { ResourceType, UnitRole } from "../model/enums";
@@ -213,48 +213,14 @@ function createModifyUnitUntilEndOfTurnInstructions(attackBonus: number, armorBo
   };
 }
 
-function createCascadeUnitBuffEffect(
-  id: string,
-  options: {
-    label: string;
-    attackBonus?: number;
-    armorBonus?: number;
-    waves: number;
-    roleFilter?: UnitRole;
-    reward?: {
-      resource: ResourceType;
-      amount: number;
-      minUnits: number;
-    };
+function createCardOwnedCascadeUnitBuffInstructions(context: InstructionContext): GameInstruction[] {
+  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
+  const effectConfig = getCardCascadeUnitBuffConfig(sourceCard);
+  if (!effectConfig) {
+    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing cascade config on source card.` }];
   }
-): StackEffectDefinition {
-  return {
-    id,
-    label: options.label,
-    object: {
-      kind: "spell",
-      counterable: true,
-      defaultCounterDestination: "discard",
-    },
-    targeting: {
-      type: "hex",
-    },
-    behavior: {
-      type: "cascade_unit_buff",
-      attackBonus: options.attackBonus ?? 0,
-      armorBonus: options.armorBonus ?? 0,
-      waves: options.waves,
-      roleFilter: options.roleFilter,
-      reward: options.reward,
-    },
-    createInstructions: createCascadeUnitBuffInstructions({
-      attackBonus: options.attackBonus,
-      armorBonus: options.armorBonus,
-      waves: options.waves,
-      roleFilter: options.roleFilter,
-      reward: options.reward,
-    }),
-  };
+
+  return createCascadeUnitBuffInstructions(effectConfig)(context);
 }
 
 function createCounterInstructions(destination: CounterDestination) {
@@ -434,38 +400,25 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
     },
     createInstructions: createModifyUnitUntilEndOfTurnInstructions(0, 2),
   },
-  cascade_attack_buff_1_waves_2: createCascadeUnitBuffEffect("cascade_attack_buff_1_waves_2", {
-    label: "Cascade Attack Buff",
-    attackBonus: 1,
-    waves: 2,
-  }),
-  cascade_combat_buff_atk_1_arm_1_waves_2: createCascadeUnitBuffEffect("cascade_combat_buff_atk_1_arm_1_waves_2", {
-    label: "Cascade Combat Formation",
-    attackBonus: 1,
-    armorBonus: 1,
-    roleFilter: "combat",
-    waves: 2,
-  }),
-  cascade_buff_arm_1_waves_2_gain_biomass_1_on_3: createCascadeUnitBuffEffect("cascade_buff_arm_1_waves_2_gain_biomass_1_on_3", {
-    label: "Cascade Spore Growth",
-    armorBonus: 1,
-    waves: 2,
-    reward: {
-      resource: "biomass",
-      amount: 1,
-      minUnits: 3,
+  cascade_unit_buff: {
+    id: "cascade_unit_buff",
+    label: "Cascade Unit Buff",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
     },
-  }),
-  cascade_buff_atk_1_waves_2_gain_credits_1_on_3: createCascadeUnitBuffEffect("cascade_buff_atk_1_waves_2_gain_credits_1_on_3", {
-    label: "Cascade Beacon Pulse",
-    attackBonus: 1,
-    waves: 2,
-    reward: {
-      resource: "credits",
-      amount: 1,
-      minUnits: 3,
+    targeting: {
+      type: "hex",
     },
-  }),
+    behavior: {
+      type: "cascade_unit_buff",
+      attackBonus: 0,
+      armorBonus: 0,
+      waves: 0,
+    },
+    createInstructions: createCardOwnedCascadeUnitBuffInstructions,
+  },
   damage_enemy_unit_1_uncounterable: {
     id: "damage_enemy_unit_1_uncounterable",
     label: "Deal 1 Unit Damage",
@@ -500,7 +453,7 @@ export function isCounterResponse(effectId: string): boolean {
   return effect?.behavior.type === "counter";
 }
 
-export function getStackEffectMagnitude(effectId: string): number {
+export function getStackEffectMagnitude(effectId: string, sourceCardId?: string | null): number {
   const effect = getStackEffectDefinition(effectId);
   if (!effect) return 0;
 
@@ -509,6 +462,9 @@ export function getStackEffectMagnitude(effectId: string): number {
     case "damage_entity":
       return effect.behavior.amount;
     case "cascade_unit_buff":
+      if (sourceCardId) {
+        return getCardPlayEffectMagnitude(getCardDefinition(sourceCardId));
+      }
       return Math.max(Math.abs(effect.behavior.attackBonus), Math.abs(effect.behavior.armorBonus));
     default:
       return 0;

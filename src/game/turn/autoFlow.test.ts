@@ -231,7 +231,7 @@ describe("getAutoFlowCommand", () => {
     state.phase = "discard";
     state.priorityPlayerId = "player_1";
     moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
     moveCardFromDeckToHand(state, "player_1", "slag_barrage");
     expect(state.zones.player_1.hand).toHaveLength(MAX_HAND_SIZE + 1);
 
@@ -243,7 +243,7 @@ describe("getAutoFlowCommand", () => {
     state.phase = "discard";
     state.priorityPlayerId = "player_1";
     moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
     expect(state.zones.player_1.hand).toHaveLength(MAX_HAND_SIZE);
 
     expect(getAutoFlowCommand(state)).toEqual({
@@ -305,7 +305,7 @@ describe("getAutoFlowCommand", () => {
       pendingUnitEntityId: "unit_test",
     });
     state.zones.player_2.hand = [];
-    moveCardFromDeckToHand(state, "player_2", "null_intercept");
+    moveCardFromDeckToHand(state, "player_2", "failsafe_redirect");
     state.players.player_2.resources.credits = 4;
 
     expect(getAutoFlowCommand(state)).toBeNull();

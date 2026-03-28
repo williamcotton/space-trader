@@ -6,7 +6,7 @@ import type { GameInstruction, InstructionContext } from "../../actions/instruct
 import { hexDistance, isWithinMapBounds } from "../../model/hex";
 import { LAYER } from "../../systems/continuousEffects";
 import type { CardTrigger } from "../../systems/triggerEngine";
-import { createCascadeAttackBuffInstructions, createCascadeUnitBuffInstructions } from "./instructionFactories";
+import type { CascadeUnitBuffOptions, CascadeUnitBuffReward } from "./instructionFactories";
 
 export type TargetPredicate = (
   state: Readonly<GameState>,
@@ -44,6 +44,18 @@ export type CardAnimationProfile = {
   resolve?: CardResolveAnimationProfile;
 };
 
+export type CascadeUnitBuffPlayEffectConfig = {
+  type: "cascade_unit_buff";
+  attackBonus: number;
+  armorBonus: number;
+  waves: number;
+  roleFilter?: UnitRole;
+  reward?: CascadeUnitBuffReward;
+};
+
+export type CardPlayEffectConfig =
+  | CascadeUnitBuffPlayEffectConfig;
+
 export type UnitAura = {
   type: "adjacent_ally_buff";
   targetRole?: UnitRole;
@@ -78,6 +90,7 @@ type CardBase = {
 
 type CardPlayBase = {
   stackEffectId: string;
+  effectConfig?: CardPlayEffectConfig;
   sourceDestinationOnResolve: CardSourceDestination;
   requiresOpenBaseAdjacentTile?: boolean;
   reserveEntityId?: boolean;
@@ -134,6 +147,7 @@ function tacticPlay(
     targetMode?: CardTargetMode;
     isValidTarget?: TargetPredicate;
     isValidHexTarget?: HexTargetPredicate;
+    effectConfig?: CardPlayEffectConfig;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
@@ -145,6 +159,7 @@ function tacticPlay(
     }
     return {
       stackEffectId,
+      effectConfig: options?.effectConfig,
       targetMode,
       sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
       isValidTarget: options.isValidTarget,
@@ -157,6 +172,7 @@ function tacticPlay(
     }
     return {
       stackEffectId,
+      effectConfig: options?.effectConfig,
       targetMode,
       sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
       isValidHexTarget: options.isValidHexTarget,
@@ -165,6 +181,7 @@ function tacticPlay(
 
   return {
     stackEffectId,
+    effectConfig: options?.effectConfig,
     targetMode,
     sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
   };
@@ -213,11 +230,76 @@ function deployUnit(cardId: string): (ctx: InstructionContext) => GameInstructio
   return (ctx) => [{ type: "DEPLOY_UNIT", cardId, controllerId: ctx.controllerId, entityId: ctx.item.pendingUnitEntityId ?? undefined }];
 }
 
+function createCascadeUnitBuffEffectConfig(options: CascadeUnitBuffOptions): CascadeUnitBuffPlayEffectConfig {
+  return {
+    type: "cascade_unit_buff",
+    attackBonus: options.attackBonus ?? 0,
+    armorBonus: options.armorBonus ?? 0,
+    waves: options.waves,
+    roleFilter: options.roleFilter,
+    reward: options.reward,
+  };
+}
+
+function cascadeTacticPlay(
+  options: CascadeUnitBuffOptions & {
+    isValidHexTarget: HexTargetPredicate;
+    sourceDestinationOnResolve?: CardSourceDestination;
+  }
+): CardPlayProfile {
+  return tacticPlay("cascade_unit_buff", {
+    targetMode: "hex",
+    isValidHexTarget: options.isValidHexTarget,
+    sourceDestinationOnResolve: options.sourceDestinationOnResolve,
+    effectConfig: createCascadeUnitBuffEffectConfig(options),
+  });
+}
+
+export function getCardPlayEffectConfig(card: CardDefinition | undefined): CardPlayEffectConfig | undefined {
+  return card?.play.effectConfig;
+}
+
+export function getCardCascadeUnitBuffConfig(card: CardDefinition | undefined): CascadeUnitBuffPlayEffectConfig | undefined {
+  const effectConfig = getCardPlayEffectConfig(card);
+  return effectConfig?.type === "cascade_unit_buff" ? effectConfig : undefined;
+}
+
+export function getCardPlayEffectMagnitude(card: CardDefinition | undefined): number {
+  const effectConfig = getCardPlayEffectConfig(card);
+  if (!effectConfig) {
+    return 0;
+  }
+
+  switch (effectConfig.type) {
+    case "cascade_unit_buff":
+      return Math.max(Math.abs(effectConfig.attackBonus), Math.abs(effectConfig.armorBonus));
+  }
+
+  return 0;
+}
+
 function hasFriendlyUnitNearHex(state: Readonly<GameState>, playerId: PlayerId, target: HexCoord): boolean {
   return Object.values(state.entities).some((entity) =>
     entity.kind === "unit" &&
     entity.ownerId === playerId &&
     hexDistance(entity.coord, target) <= 1
+  );
+}
+
+function isFriendlyCascadeHexTarget(state: Readonly<GameState>, target: HexCoord, playerId: PlayerId): boolean {
+  return isWithinMapBounds(target, state.map) && hasFriendlyUnitNearHex(state, playerId, target);
+}
+
+function hasFriendlyUnitNearEntity(state: Readonly<GameState>, playerId: PlayerId, target: EntityState): boolean {
+  if (target.kind === "base") {
+    return false;
+  }
+
+  return Object.values(state.entities).some((entity) =>
+    entity.kind === "unit" &&
+    entity.ownerId === playerId &&
+    entity.id !== target.id &&
+    hexDistance(entity.coord, target.coord) <= 1
   );
 }
 
@@ -240,9 +322,14 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "tactic",
     speed: "instant",
     cost: { credits: 1, alloy: 1 },
-    text: "Deal 2 damage to enemy base.",
-    play: tacticPlay("damage_enemy_base_2"),
-    onResolve: damageEnemyBase(2, "Slag Barrage"),
+    text: "Deal 2 damage to target damaged enemy unit or enemy base.",
+    play: tacticPlay("damage_enemy_entity_2", {
+      targetMode: "entity",
+      isValidTarget: (_state, target, pid) =>
+        target.ownerId !== pid &&
+        (target.kind === "base" || (target.kind === "unit" && target.hp < target.maxHp)),
+    }),
+    onResolve: damageTargetEntity(2, "Slag Barrage"),
   },
   spore_burst: {
     id: "spore_burst",
@@ -251,9 +338,15 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "tactic",
     speed: "instant",
     cost: { credits: 1, biomass: 1 },
-    text: "Deal 2 damage to enemy base.",
-    play: tacticPlay("damage_enemy_base_2"),
-    onResolve: damageEnemyBase(2, "Spore Burst"),
+    text: "Deal 2 damage to target enemy unit adjacent to one of your units.",
+    play: tacticPlay("damage_enemy_unit_2", {
+      targetMode: "entity",
+      isValidTarget: (state, target, pid) =>
+        target.kind === "unit" &&
+        target.ownerId !== pid &&
+        hasFriendlyUnitNearEntity(state, pid, target),
+    }),
+    onResolve: damageTargetEntity(2, "Spore Burst"),
   },
   counter_pulse: {
     id: "counter_pulse",
@@ -295,9 +388,21 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "tactic",
     speed: "instant",
     cost: { credits: 1, alloy: 1 },
-    text: "Counter target top stack item.",
-    play: tacticPlay("counter_top_item", { targetMode: "stack_item" }),
-    onResolve: counterStackItem("discard", "Patchwork Barrier"),
+    text: "Choose a hex near one of your units. Cascade 2. Friendly combat units on affected hexes get +1 ARM until end of turn.",
+    play: cascadeTacticPlay({
+      armorBonus: 1,
+      roleFilter: "combat",
+      waves: 2,
+      isValidHexTarget: isFriendlyCascadeHexTarget,
+    }),
+    animation: {
+      resolve: {
+        kind: "hex_shower",
+        label: "Patchwork Barrier",
+        waves: 2,
+        accent: "alloy",
+      },
+    },
   },
   brace_protocol: {
     id: "brace_protocol",
@@ -334,9 +439,12 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 2, alloy: 1 },
     text: "Choose a hex near one of your units. Cascade 2. Friendly combat units on affected hexes get +1 ATK and +1 ARM until end of turn.",
-    play: tacticPlay("cascade_combat_buff_atk_1_arm_1_waves_2", {
-      targetMode: "hex",
-      isValidHexTarget: (state, target, pid) => isWithinMapBounds(target, state.map) && hasFriendlyUnitNearHex(state, pid, target),
+    play: cascadeTacticPlay({
+      attackBonus: 1,
+      armorBonus: 1,
+      roleFilter: "combat",
+      waves: 2,
+      isValidHexTarget: isFriendlyCascadeHexTarget,
     }),
     animation: {
       resolve: {
@@ -346,12 +454,6 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
         accent: "alloy",
       },
     },
-    onResolve: createCascadeUnitBuffInstructions({
-      attackBonus: 1,
-      armorBonus: 1,
-      roleFilter: "combat",
-      waves: 2,
-    }),
   },
   rivet_volley: {
     id: "rivet_volley",
@@ -374,9 +476,25 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "tactic",
     speed: "instant",
     cost: { credits: 1, biomass: 1 },
-    text: "Counter target top stack item and return it to hand.",
-    play: tacticPlay("counter_to_hand", { targetMode: "stack_item" }),
-    onResolve: counterStackItem("hand", "Neural Echo"),
+    text: "Choose a hex near one of your units. Cascade 2. Friendly units on affected hexes get +1 ATK until end of turn. If 3 or more friendly units are affected, gain 1 biomass.",
+    play: cascadeTacticPlay({
+      attackBonus: 1,
+      waves: 2,
+      reward: {
+        resource: "biomass",
+        amount: 1,
+        minUnits: 3,
+      },
+      isValidHexTarget: isFriendlyCascadeHexTarget,
+    }),
+    animation: {
+      resolve: {
+        kind: "hex_shower",
+        label: "Neural Echo",
+        waves: 2,
+        accent: "biomass",
+      },
+    },
   },
   spore_bloom: {
     id: "spore_bloom",
@@ -386,9 +504,15 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 2, biomass: 1 },
     text: "Choose a hex near one of your units. Cascade 2. Friendly units on affected hexes get +1 ARM until end of turn. If 3 or more friendly units are affected, gain 1 biomass.",
-    play: tacticPlay("cascade_buff_arm_1_waves_2_gain_biomass_1_on_3", {
-      targetMode: "hex",
-      isValidHexTarget: (state, target, pid) => isWithinMapBounds(target, state.map) && hasFriendlyUnitNearHex(state, pid, target),
+    play: cascadeTacticPlay({
+      armorBonus: 1,
+      waves: 2,
+      reward: {
+        resource: "biomass",
+        amount: 1,
+        minUnits: 3,
+      },
+      isValidHexTarget: isFriendlyCascadeHexTarget,
     }),
     animation: {
       resolve: {
@@ -398,15 +522,6 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
         accent: "biomass",
       },
     },
-    onResolve: createCascadeUnitBuffInstructions({
-      armorBonus: 1,
-      waves: 2,
-      reward: {
-        resource: "biomass",
-        amount: 1,
-        minUnits: 3,
-      },
-    }),
   },
   emergency_thrust: {
     id: "emergency_thrust",
@@ -426,9 +541,11 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "tactic",
     speed: "instant",
     cost: { credits: 2 },
-    text: "Counter target top stack item.",
-    play: tacticPlay("counter_top_item", { targetMode: "stack_item" }),
-    onResolve: counterStackItem("discard", "Jammer Cloud"),
+    text: "Target allied unit gets +2 ARM until end of turn.",
+    play: tacticPlay("armor_ally_unit_2_eot", {
+      targetMode: "entity",
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId === pid,
+    }),
   },
   failsafe_redirect: {
     id: "failsafe_redirect",
@@ -447,10 +564,12 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     faction: "neutral",
     kind: "tactic",
     speed: "instant",
-    cost: { credits: 2 },
-    text: "Deal 2 damage to enemy base.",
-    play: tacticPlay("damage_enemy_base_2"),
-    onResolve: damageEnemyBase(2, "Scrap Burst"),
+    cost: { credits: 3 },
+    text: "Deal 2 damage to target enemy unit or base.",
+    play: tacticPlay("damage_enemy_entity_2", {
+      targetMode: "entity",
+      isValidTarget: (_state, target, pid) => target.ownerId !== pid,
+    }),
   },
   holdfast_protocol: {
     id: "holdfast_protocol",
@@ -458,10 +577,12 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     faction: "neutral",
     kind: "tactic",
     speed: "instant",
-    cost: { credits: 2 },
-    text: "Counter target top stack item.",
-    play: tacticPlay("counter_top_item", { targetMode: "stack_item" }),
-    onResolve: counterStackItem("discard", "Holdfast Protocol"),
+    cost: { credits: 3 },
+    text: "Destroy target damaged enemy unit.",
+    play: tacticPlay("destroy_damaged_enemy_unit", {
+      targetMode: "entity",
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId !== pid && target.hp < target.maxHp,
+    }),
   },
   chain_beacon: {
     id: "chain_beacon",
@@ -471,9 +592,15 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 3 },
     text: "Choose a hex near one of your units. Cascade 2. Friendly units on affected hexes get +1 ATK until end of turn. If 3 or more friendly units are affected, gain 1 credit.",
-    play: tacticPlay("cascade_buff_atk_1_waves_2_gain_credits_1_on_3", {
-      targetMode: "hex",
-      isValidHexTarget: (state, target, pid) => isWithinMapBounds(target, state.map) && hasFriendlyUnitNearHex(state, pid, target),
+    play: cascadeTacticPlay({
+      attackBonus: 1,
+      waves: 2,
+      reward: {
+        resource: "credits",
+        amount: 1,
+        minUnits: 3,
+      },
+      isValidHexTarget: isFriendlyCascadeHexTarget,
     }),
     animation: {
       resolve: {
@@ -483,15 +610,6 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
         accent: "neutral",
       },
     },
-    onResolve: createCascadeUnitBuffInstructions({
-      attackBonus: 1,
-      waves: 2,
-      reward: {
-        resource: "credits",
-        amount: 1,
-        minUnits: 3,
-      },
-    }),
   },
   arc_snap: {
     id: "arc_snap",
@@ -536,9 +654,10 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     speed: "instant",
     cost: { credits: 2, flux: 1 },
     text: "Choose a hex near one of your units. Cascade 2. Friendly units on affected hexes get +1 ATK until end of turn.",
-    play: tacticPlay("cascade_attack_buff_1_waves_2", {
-      targetMode: "hex",
-      isValidHexTarget: (state, target, pid) => isWithinMapBounds(target, state.map) && hasFriendlyUnitNearHex(state, pid, target),
+    play: cascadeTacticPlay({
+      attackBonus: 1,
+      waves: 2,
+      isValidHexTarget: isFriendlyCascadeHexTarget,
     }),
     animation: {
       resolve: {
@@ -548,7 +667,6 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
         accent: "flux",
       },
     },
-    onResolve: createCascadeAttackBuffInstructions(1, 2),
   },
   frontline_scout_card: {
     id: "frontline_scout_card",

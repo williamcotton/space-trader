@@ -97,7 +97,7 @@ describe("decideMvpBotCommand", () => {
     state.phase = "discard";
 
     moveCardFromDeckToHand(state, "player_2", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_2", "null_intercept");
+    moveCardFromDeckToHand(state, "player_2", "failsafe_redirect");
     moveCardFromDeckToHand(state, "player_2", "relay_savant_card");
 
     const command = decideMvpBotCommand(state, "player_2");
@@ -297,6 +297,7 @@ describe("decideMvpBotCommand", () => {
       type: "PLAY_CARD",
       playerId: "player_1",
       cardInstanceId,
+      targetEntityId: enemyBase.id,
     });
   });
 
@@ -314,9 +315,9 @@ describe("decideMvpBotCommand", () => {
     moveCardFromDeckToHand(state, "player_1", "brace_protocol");
     moveCardFromDeckToHand(state, "player_1", "brace_protocol");
     moveCardFromDeckToHand(state, "player_1", "brace_protocol");
-    moveCardFromDeckToHand(state, "player_1", "null_intercept");
-    moveCardFromDeckToHand(state, "player_1", "null_intercept");
-    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
+    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
+    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
     state.zones.player_1.deck = [];
 
     const enemyBase = state.entities.base_player_2;
@@ -329,6 +330,7 @@ describe("decideMvpBotCommand", () => {
       type: "PLAY_CARD",
       playerId: "player_1",
       cardInstanceId,
+      targetEntityId: enemyBase.id,
     });
   });
 

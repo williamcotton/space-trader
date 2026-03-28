@@ -115,7 +115,7 @@ export function migrateRuntimeState(state: GameState): void {
     }
     const definition = getStackEffectDefinition(stackItem.effectId);
     if (typeof stackItem.effectMagnitude !== "number") {
-      stackItem.effectMagnitude = getStackEffectMagnitude(stackItem.effectId);
+      stackItem.effectMagnitude = getStackEffectMagnitude(stackItem.effectId, stackItem.sourceCardId);
     }
     if (typeof stackItem.targetStackItemId === "undefined") {
       stackItem.targetStackItemId = null;

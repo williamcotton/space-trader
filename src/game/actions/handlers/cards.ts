@@ -245,7 +245,7 @@ export function handlePlayCard(
       cost: card.cost,
       stackItemId: createStackItemId(state.turn, state.log.length),
       effectId,
-      effectMagnitude: getStackEffectMagnitude(effectId),
+      effectMagnitude: getStackEffectMagnitude(effectId, handCard.cardId),
       targetStackItemId: command.targetStackItemId ?? null,
       targetEntityId: command.targetEntityId ?? null,
       targetHex: command.targetHex ?? null,

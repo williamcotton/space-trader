@@ -13,6 +13,7 @@ const ALLOY_STARTER_UNIQUE: string[] = [
   "frontline_scout_card",
   "alloy_guard_card",
   "forge_captain_card",
+  "patchwork_barrier",
   "brace_protocol",
   "shrapnel_relay",
   "rivet_volley",
@@ -21,13 +22,13 @@ const ALLOY_STARTER_UNIQUE: string[] = [
   "salvage_hauler_card",
   "bulwark_drone_card",
   "pathfinder_buggy_card",
-  "null_intercept",
   "chain_beacon",
   "failsafe_redirect",
   "slag_barrage",
 ];
 
 const FLUX_STARTER_UNIQUE: string[] = [
+  "orbital_ping",
   "flux_runner_card",
   "relay_savant_card",
   "arc_snap",
@@ -40,7 +41,6 @@ const FLUX_STARTER_UNIQUE: string[] = [
   "salvage_hauler_card",
   "bulwark_drone_card",
   "pathfinder_buggy_card",
-  "null_intercept",
   "chain_beacon",
   "failsafe_redirect",
 ];

@@ -1,5 +1,5 @@
 import type { GameCommand } from "../actions/commands";
-import { getCardDefinition, type CardDefinition } from "../content/cards/catalog";
+import { getCardCascadeUnitBuffConfig, getCardDefinition, type CardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import type { Faction, ResourceType } from "../model/enums";
@@ -375,7 +375,27 @@ function scoreDamageSpellTarget(
 
     const enemyUnits = getEnemyEntities(state, botPlayerId).filter((entity) => entity.kind === "unit");
     const boardPressureBonus = enemyUnits.length === 0 ? AI_WEIGHTS.damageBoardPressureBonus : 0;
-    return boardPressureBonus + (target.maxHp - target.hp) * AI_WEIGHTS.damageBaseHpDeltaMult + amount * AI_WEIGHTS.damageBaseAmountMult;
+    let score = boardPressureBonus + (target.maxHp - target.hp) * AI_WEIGHTS.damageBaseHpDeltaMult + amount * AI_WEIGHTS.damageBaseAmountMult;
+
+    const handSize = state.zones[botPlayerId].hand.length;
+    if (handSize >= MAX_HAND_SIZE) {
+      score += AI_WEIGHTS.basePingFullHandBonus;
+    } else if (handSize === MAX_HAND_SIZE - 1) {
+      score += AI_WEIGHTS.basePingNearCapBonus;
+    }
+
+    if (state.zones[botPlayerId].deck.length === 0) {
+      score += AI_WEIGHTS.basePingDeckEmptyBonus;
+    }
+
+    const totalResources = RESOURCE_ORDER.reduce(
+      (sum, resource) => sum + state.players[botPlayerId].resources[resource],
+      0
+    );
+    const floodBonus = Math.max(0, totalResources - AI_WEIGHTS.basePingFloodThreshold) * AI_WEIGHTS.basePingFloodBonusPerResource;
+    score += Math.min(AI_WEIGHTS.basePingFloodBonusCap, floodBonus);
+
+    return score;
   }
 
   const appliedDamage = Math.min(amount, target.hp);
@@ -405,30 +425,7 @@ function scoreBaseDamageSpell(
     return -Infinity;
   }
 
-  let score = scoreDamageSpellTarget(state, botPlayerId, enemyBase, amount, phase);
-  if (score === -Infinity) {
-    return score;
-  }
-
-  const handSize = state.zones[botPlayerId].hand.length;
-  if (handSize >= MAX_HAND_SIZE) {
-    score += AI_WEIGHTS.basePingFullHandBonus;
-  } else if (handSize === MAX_HAND_SIZE - 1) {
-    score += AI_WEIGHTS.basePingNearCapBonus;
-  }
-
-  if (state.zones[botPlayerId].deck.length === 0) {
-    score += AI_WEIGHTS.basePingDeckEmptyBonus;
-  }
-
-  const totalResources = RESOURCE_ORDER.reduce(
-    (sum, resource) => sum + state.players[botPlayerId].resources[resource],
-    0
-  );
-  const floodBonus = Math.max(0, totalResources - AI_WEIGHTS.basePingFloodThreshold) * AI_WEIGHTS.basePingFloodBonusPerResource;
-  score += Math.min(AI_WEIGHTS.basePingFloodBonusCap, floodBonus);
-
-  return score;
+  return scoreDamageSpellTarget(state, botPlayerId, enemyBase, amount, phase);
 }
 
 function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId, target: UnitEntity): number {
@@ -596,6 +593,9 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
     if (!effect) {
       continue;
     }
+    const cascadeConfig = effect.behavior.type === "cascade_unit_buff"
+      ? getCardCascadeUnitBuffConfig(card)
+      : undefined;
 
     const legalTargets = getLegalPlayCardTargetOptions(state, botPlayerId, cardInstance.instanceId, card);
     for (const targeting of legalTargets) {
@@ -622,12 +622,15 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
       } else if (effect.behavior.type === "damage_enemy_base" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
         score = scoreBaseDamageSpell(state, botPlayerId, effect.behavior.amount, state.phase);
       } else if (effect.behavior.type === "cascade_unit_buff" && targeting.targetHex) {
+        if (!cascadeConfig) {
+          continue;
+        }
         score = scoreCascadeAttackBuffTarget(state, botPlayerId, targeting.targetHex, {
-          attackBonus: effect.behavior.attackBonus,
-          armorBonus: effect.behavior.armorBonus,
-          waves: effect.behavior.waves,
-          roleFilter: effect.behavior.roleFilter,
-          reward: effect.behavior.reward,
+          attackBonus: cascadeConfig.attackBonus,
+          armorBonus: cascadeConfig.armorBonus,
+          waves: cascadeConfig.waves,
+          roleFilter: cascadeConfig.roleFilter,
+          reward: cascadeConfig.reward,
         });
       }
 

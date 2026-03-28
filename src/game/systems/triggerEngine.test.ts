@@ -381,6 +381,7 @@ describe("triggerEngine", () => {
         type: "PLAY_CARD",
         playerId: "player_1",
         cardInstanceId,
+        targetEntityId: "base_player_2",
       });
       expect(result.ok).toBe(true);
 

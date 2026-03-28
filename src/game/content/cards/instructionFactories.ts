@@ -5,16 +5,18 @@ import { LAYER } from "../../systems/continuousEffects";
 import { getCascadeAffectedHexes } from "../../systems/cascade";
 import type { ResourceType, UnitRole } from "../../model/enums";
 
-type CascadeUnitBuffOptions = {
+export type CascadeUnitBuffReward = {
+  resource: ResourceType;
+  amount: number;
+  minUnits: number;
+};
+
+export type CascadeUnitBuffOptions = {
   attackBonus?: number;
   armorBonus?: number;
   waves: number;
   roleFilter?: UnitRole;
-  reward?: {
-    resource: ResourceType;
-    amount: number;
-    minUnits: number;
-  };
+  reward?: CascadeUnitBuffReward;
 };
 
 function getAffectedFriendlyUnits(context: InstructionContext, waves: number, roleFilter?: UnitRole) {

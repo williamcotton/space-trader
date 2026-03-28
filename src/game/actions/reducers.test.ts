@@ -555,7 +555,7 @@ describe("dispatchCommand", () => {
     const state = setupState();
 
     moveCardFromDeckToHand(state, "player_2", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_2", "null_intercept");
+    moveCardFromDeckToHand(state, "player_2", "failsafe_redirect");
     expect(state.zones.player_2.hand).toHaveLength(7);
 
     advanceToPhase(state, "end");
@@ -577,7 +577,7 @@ describe("dispatchCommand", () => {
     const state = setupState();
 
     moveCardFromDeckToHand(state, "player_2", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_2", "null_intercept");
+    moveCardFromDeckToHand(state, "player_2", "failsafe_redirect");
     moveCardFromDeckToHand(state, "player_2", "relay_savant_card");
     expect(state.zones.player_2.hand).toHaveLength(8);
 
@@ -600,7 +600,7 @@ describe("dispatchCommand", () => {
     const state = setupState();
 
     moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
     moveCardFromDeckToHand(state, "player_1", "slag_barrage");
     expect(state.zones.player_1.hand).toHaveLength(8);
 
@@ -621,7 +621,7 @@ describe("dispatchCommand", () => {
     const state = setupState();
 
     const discardedId = moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
     moveCardFromDeckToHand(state, "player_1", "slag_barrage");
     expect(state.zones.player_1.hand).toHaveLength(8);
 
@@ -690,6 +690,7 @@ describe("dispatchCommand", () => {
       type: "PLAY_CARD",
       playerId: "player_1",
       cardInstanceId,
+      targetEntityId: targetBase.id,
     });
     expect(play.ok).toBe(true);
     expect(state.stack).toHaveLength(1);
@@ -710,6 +711,74 @@ describe("dispatchCommand", () => {
     expect(state.players.player_1.resources.alloy).toBe(3);
   });
 
+  it("lets Slag Barrage target a damaged enemy unit", () => {
+    const state = setupState();
+    const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "slag_barrage");
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.alloy = 4;
+
+    const target = state.entities.unit_player_2_scout;
+    expect(target?.kind).toBe("unit");
+    if (!target || target.kind !== "unit") {
+      throw new Error("Expected enemy unit.");
+    }
+    target.hp = target.maxHp - 1;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetEntityId: target.id,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    const updated = state.entities[target.id];
+    expect(updated?.kind).toBe("unit");
+    if (!updated || updated.kind !== "unit") {
+      throw new Error("Expected enemy unit after Slag Barrage resolves.");
+    }
+    expect(updated.hp).toBe(target.maxHp - 3);
+  });
+
+  it("requires Spore Burst targets to be adjacent to one of your units", () => {
+    const state = setupState();
+    const cardInstanceId = "player_1_spore_burst_test";
+    state.zones.player_1.hand.push({
+      instanceId: cardInstanceId,
+      cardId: "spore_burst",
+      ownerId: "player_1",
+    });
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.biomass = 4;
+
+    const target = state.entities.unit_player_2_scout;
+    const scout = state.entities.unit_player_1_scout;
+    expect(target?.kind).toBe("unit");
+    expect(scout?.kind).toBe("unit");
+    if (!target || target.kind !== "unit" || !scout || scout.kind !== "unit") {
+      throw new Error("Expected units for Spore Burst target test.");
+    }
+
+    const rejected = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetEntityId: target.id,
+    });
+    expect(expectRejected(rejected)).toContain("Target does not meet card requirements.");
+
+    scout.coord = { q: target.coord.q - 1, r: target.coord.r };
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetEntityId: target.id,
+    });
+    expect(play.ok).toBe(true);
+  });
+
   it("rejects phase changes while stack items are unresolved", () => {
     const state = setupState();
     const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "slag_barrage");
@@ -720,6 +789,7 @@ describe("dispatchCommand", () => {
       type: "PLAY_CARD",
       playerId: "player_1",
       cardInstanceId,
+      targetEntityId: "base_player_2",
     });
     expect(play.ok).toBe(true);
     expect(state.stack).toHaveLength(1);
@@ -758,6 +828,7 @@ describe("dispatchCommand", () => {
       type: "PLAY_CARD",
       playerId: "player_1",
       cardInstanceId,
+      targetEntityId: "base_player_2",
     });
     expect(play.ok).toBe(true);
     expect(state.stack).toHaveLength(1);
@@ -835,10 +906,11 @@ describe("dispatchCommand", () => {
       throw new Error("Expected frontline scout in opening hand.");
     }
 
-    const counterInstanceId = moveCardFromDeckToHand(state, "player_2", "null_intercept");
+    const counterInstanceId = moveCardFromDeckToHand(state, "player_2", "counter_pulse");
     state.players.player_1.resources.credits = 4;
     state.players.player_1.resources.alloy = 3;
     state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 2;
     dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // economy
     dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // main
 
@@ -1484,6 +1556,7 @@ describe("dispatchCommand", () => {
       type: "PLAY_CARD",
       playerId: "player_1",
       cardInstanceId,
+      targetEntityId: "base_player_2",
     });
 
     expect(expectRejected(result)).toContain("Insufficient resources");

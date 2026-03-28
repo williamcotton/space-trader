@@ -48,6 +48,14 @@ describe("starter decks", () => {
     }
   });
 
+  it("surfaces updated on-pie faction tactics in alloy and flux starters", () => {
+    const alloyCards = getStarterDeckCardIds("alloy_clan");
+    const fluxCards = getStarterDeckCardIds("flux_collective");
+
+    expect(alloyCards.filter((cardId) => cardId === "patchwork_barrier")).toHaveLength(4);
+    expect(fluxCards.filter((cardId) => cardId === "orbital_ping")).toHaveLength(4);
+  });
+
   it("does not include off-faction splash cards in starter decks", () => {
     for (const faction of ["alloy_clan", "flux_collective", "biomass_swarm"] as const) {
       const cards = getStarterDeckCardIds(faction);

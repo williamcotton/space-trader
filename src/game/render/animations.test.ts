@@ -116,7 +116,7 @@ describe("buildAnimationsFromEvents", () => {
           label: "Ion Shower",
           controllerId: "player_2",
           ownerId: "player_2",
-          effectId: "cascade_attack_buff_1_waves_2",
+          effectId: "cascade_unit_buff",
           effectMagnitude: 1,
           targetStackItemId: null,
           targetEntityId: null,

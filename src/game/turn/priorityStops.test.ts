@@ -54,7 +54,7 @@ describe("getPriorityStopWindow", () => {
     state.phase = "main";
     state.activePlayerId = "player_2";
     state.priorityPlayerId = "player_2";
-    setHand(state, "player_1", ["null_intercept"]);
+    setHand(state, "player_1", ["failsafe_redirect"]);
     state.players.player_1.resources.credits = 3;
     state.stack.push({
       id: "stack_3_9",

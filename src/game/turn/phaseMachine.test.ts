@@ -55,7 +55,7 @@ describe("phaseMachine", () => {
     const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
 
     moveCardFromDeckToHand(state, "player_1", "expedition_harvester_card");
-    moveCardFromDeckToHand(state, "player_1", "null_intercept");
+    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
     moveCardFromDeckToHand(state, "player_1", "slag_barrage");
 
     advancePhase(state); // economy

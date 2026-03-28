@@ -1,5 +1,5 @@
 import type { GameEvent } from "../actions/events";
-import { getCardDefinition } from "../content/cards/catalog";
+import { getCardCascadeUnitBuffConfig, getCardDefinition, type CardAnimationAccent } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, HexCoord } from "../model/state";
@@ -96,6 +96,20 @@ function buildHexShowerAnimation(
     label,
     accent,
   };
+}
+
+function getCardAnimationAccent(sourceCardId: string | null): CardAnimationAccent {
+  const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
+  switch (sourceCard?.faction) {
+    case "alloy_clan":
+      return "alloy";
+    case "flux_collective":
+      return "flux";
+    case "biomass_swarm":
+      return "biomass";
+    default:
+      return "neutral";
+  }
 }
 
 function buildStackResolutionAnimation(
@@ -239,7 +253,15 @@ function buildStackResolutionAnimation(
   }
 
   if (definition?.behavior.type === "cascade_unit_buff") {
-    return buildHexShowerAnimation(event, state, baseId, event.label, definition.behavior.waves, "neutral");
+    const cascadeConfig = getCardCascadeUnitBuffConfig(sourceCard);
+    return buildHexShowerAnimation(
+      event,
+      state,
+      baseId,
+      event.label,
+      cascadeConfig?.waves ?? definition.behavior.waves,
+      getCardAnimationAccent(event.sourceCardId)
+    );
   }
 
   if (definition?.behavior.type === "damage_enemy_base") {
