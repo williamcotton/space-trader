@@ -716,6 +716,7 @@ body {
 
 .hand-tray-cards {
   min-width: 0;
+  height: 240px;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 158px;
