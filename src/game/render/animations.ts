@@ -1,10 +1,11 @@
 import type { GameEvent } from "../actions/events";
-import { getCardCascadeUnitBuffConfig, getCardDefinition, type CardAnimationAccent } from "../content/cards/catalog";
+import { getCardCascadeUnitBuffConfig, getCardDefinition, getCardPlayEffectConfig, type CardAnimationAccent } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, HexCoord } from "../model/state";
 import type { CanvasAnimation } from "../types";
 import { getCascadeAffectedHexes } from "../systems/cascade";
+import { getMapAxialBounds, hexDistance, isWithinMapBounds } from "../model/hex";
 
 type EntitySnapshot = {
   kind: EntityState["kind"];
@@ -110,6 +111,20 @@ function getCardAnimationAccent(sourceCardId: string | null): CardAnimationAccen
     default:
       return "neutral";
   }
+}
+
+function getRadiusAffectedHexes(state: GameState, origin: HexCoord, radius: number): HexCoord[] {
+  const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
+  const hexes: HexCoord[] = [];
+  for (let q = qMin; q <= qMax; q += 1) {
+    for (let r = rMin; r <= rMax; r += 1) {
+      const coord = { q, r };
+      if (isWithinMapBounds(coord, state.map) && hexDistance(coord, origin) <= radius) {
+        hexes.push(coord);
+      }
+    }
+  }
+  return hexes;
 }
 
 function buildStackResolutionAnimation(
@@ -262,6 +277,25 @@ function buildStackResolutionAnimation(
       cascadeConfig?.waves ?? definition.behavior.waves,
       getCardAnimationAccent(event.sourceCardId)
     );
+  }
+
+  if (definition?.behavior.type === "hex_area_damage" && event.targetHex) {
+    const effectConfig = getCardPlayEffectConfig(sourceCard);
+    if (effectConfig?.type !== "hex_area_damage") {
+      return null;
+    }
+
+    return {
+      id: baseId,
+      kind: "hex_shower",
+      playerId: event.controllerId,
+      ageSeconds: 0,
+      durationSeconds: 1,
+      origin: event.targetHex,
+      hexes: getRadiusAffectedHexes(state, event.targetHex, effectConfig.radius),
+      label: event.label,
+      accent: getCardAnimationAccent(event.sourceCardId),
+    };
   }
 
   if (definition?.behavior.type === "damage_enemy_base") {

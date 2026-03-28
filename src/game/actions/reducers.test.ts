@@ -48,6 +48,17 @@ function moveCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: 
   return card.instanceId;
 }
 
+function addCardToHand(state: ReturnType<typeof setupState>, playerId: "player_1" | "player_2", cardId: string): string {
+  const instanceId = `${playerId}_${cardId}_test_${state.zones[playerId].hand.length}_${state.turn}`;
+  state.zones[playerId].hand.push({
+    instanceId,
+    cardId,
+    ownerId: playerId,
+  });
+  state.players[playerId].handSize = state.zones[playerId].hand.length;
+  return instanceId;
+}
+
 function resolveStackByPassing(state: ReturnType<typeof setupState>): void {
   let guard = 0;
   while (state.stack.length > 0 && guard < 12) {
@@ -1420,6 +1431,221 @@ describe("dispatchCommand", () => {
       throw new Error("Expected scout after Spore Bloom.");
     }
     expect(getEffectiveUnitArmor(state, buffedScout)).toBe(buffedScout.armor + 1);
+  });
+
+  it("Orbital Purge deals 4 damage to every unit", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 6;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "orbital_purge");
+    const playerOneScout = state.entities.unit_player_1_scout;
+    const playerTwoScout = state.entities.unit_player_2_scout;
+    if (!playerOneScout || playerOneScout.kind !== "unit" || !playerTwoScout || playerTwoScout.kind !== "unit") {
+      throw new Error("Expected both scouts for Orbital Purge.");
+    }
+    const p1ScoutHpBefore = playerOneScout.hp;
+    const p2ScoutHpBefore = playerTwoScout.hp;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    const afterP1Scout = state.entities[playerOneScout.id];
+    const afterP2Scout = state.entities[playerTwoScout.id];
+    expect(afterP1Scout?.kind).toBe("unit");
+    expect(afterP2Scout?.kind).toBe("unit");
+    if (!afterP1Scout || afterP1Scout.kind !== "unit" || !afterP2Scout || afterP2Scout.kind !== "unit") {
+      throw new Error("Expected scouts to survive Orbital Purge.");
+    }
+
+    expect(afterP1Scout.hp).toBe(p1ScoutHpBefore - 4);
+    expect(afterP2Scout.hp).toBe(p2ScoutHpBefore - 4);
+    const afterP1Harvester = state.entities.unit_player_1_harvester;
+    const afterP2Harvester = state.entities.unit_player_2_harvester;
+    expect(afterP1Harvester?.kind).toBe("unit");
+    expect(afterP2Harvester?.kind).toBe("unit");
+    if (!afterP1Harvester || afterP1Harvester.kind !== "unit" || !afterP2Harvester || afterP2Harvester.kind !== "unit") {
+      throw new Error("Expected harvesters to survive Orbital Purge at 1 HP.");
+    }
+    expect(afterP1Harvester.hp).toBe(1);
+    expect(afterP2Harvester.hp).toBe(1);
+  });
+
+  it("Scorched Protocol destroys all damaged units and leaves healthy ones alone", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.alloy = 2;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "scorched_protocol");
+    const playerOneScout = state.entities.unit_player_1_scout;
+    const playerTwoScout = state.entities.unit_player_2_scout;
+    const playerOneHarvester = state.entities.unit_player_1_harvester;
+    const playerTwoHarvester = state.entities.unit_player_2_harvester;
+    if (
+      !playerOneScout || playerOneScout.kind !== "unit" ||
+      !playerTwoScout || playerTwoScout.kind !== "unit" ||
+      !playerOneHarvester || playerOneHarvester.kind !== "unit" ||
+      !playerTwoHarvester || playerTwoHarvester.kind !== "unit"
+    ) {
+      throw new Error("Expected initial units for Scorched Protocol.");
+    }
+
+    playerOneScout.hp = playerOneScout.maxHp - 1;
+    playerTwoScout.hp = playerTwoScout.maxHp - 2;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    expect(state.entities[playerOneScout.id]).toBeUndefined();
+    expect(state.entities[playerTwoScout.id]).toBeUndefined();
+    expect(state.entities[playerOneHarvester.id]?.kind).toBe("unit");
+    expect(state.entities[playerTwoHarvester.id]?.kind).toBe("unit");
+  });
+
+  it("Meteor Chain damages units on the target hex and adjacent hexes", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "tactical";
+    state.stack = [];
+    state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 2;
+
+    const cardInstanceId = addCardToHand(state, "player_2", "meteor_chain");
+    const enemyScout = state.entities.unit_player_1_scout;
+    const enemyHarvester = state.entities.unit_player_1_harvester;
+    const friendlyScout = state.entities.unit_player_2_scout;
+    if (
+      !enemyScout || enemyScout.kind !== "unit" ||
+      !enemyHarvester || enemyHarvester.kind !== "unit" ||
+      !friendlyScout || friendlyScout.kind !== "unit"
+    ) {
+      throw new Error("Expected units for Meteor Chain.");
+    }
+
+    enemyScout.coord = { q: 0, r: 0 };
+    enemyHarvester.coord = { q: 1, r: 0 };
+    friendlyScout.coord = { q: 3, r: 0 };
+    const enemyScoutHpBefore = enemyScout.hp;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+      targetHex: { q: 0, r: 0 },
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    const updatedEnemyScout = state.entities[enemyScout.id];
+    const updatedFriendlyScout = state.entities[friendlyScout.id];
+    expect(updatedEnemyScout?.kind).toBe("unit");
+    expect(updatedFriendlyScout?.kind).toBe("unit");
+    if (!updatedEnemyScout || updatedEnemyScout.kind !== "unit" || !updatedFriendlyScout || updatedFriendlyScout.kind !== "unit") {
+      throw new Error("Expected surviving units after Meteor Chain.");
+    }
+
+    expect(updatedEnemyScout.hp).toBe(enemyScoutHpBefore - 4);
+    const updatedEnemyHarvester = state.entities[enemyHarvester.id];
+    expect(updatedEnemyHarvester?.kind).toBe("unit");
+    if (!updatedEnemyHarvester || updatedEnemyHarvester.kind !== "unit") {
+      throw new Error("Expected enemy harvester to survive Meteor Chain at 1 HP.");
+    }
+    expect(updatedEnemyHarvester.hp).toBe(1);
+    expect(updatedFriendlyScout.hp).toBe(friendlyScout.maxHp);
+  });
+
+  it("Overgrowth Wave buffs all friendly units until end of turn", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 3;
+    state.players.player_1.resources.biomass = 2;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "overgrowth_wave");
+    const scout = state.entities.unit_player_1_scout;
+    const harvester = state.entities.unit_player_1_harvester;
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit") {
+      throw new Error("Expected friendly units for Overgrowth Wave.");
+    }
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    expect(getEffectiveUnitAttackDamage(state, scout)).toBe(scout.attackDamage + 1);
+    expect(getEffectiveUnitArmor(state, scout)).toBe(scout.armor + 1);
+    expect(getEffectiveUnitAttackDamage(state, harvester)).toBe(harvester.attackDamage + 1);
+    expect(getEffectiveUnitArmor(state, harvester)).toBe(harvester.armor + 1);
+
+    advanceToPhase(state, "end");
+    const handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(handoff.ok).toBe(true);
+
+    const nextScout = state.entities[scout.id];
+    if (!nextScout || nextScout.kind !== "unit") {
+      throw new Error("Expected scout after Overgrowth Wave turn rollover.");
+    }
+    expect(getEffectiveUnitAttackDamage(state, nextScout)).toBe(nextScout.attackDamage);
+    expect(getEffectiveUnitArmor(state, nextScout)).toBe(nextScout.armor);
+  });
+
+  it("Ion Surge Archive draws cards and refunds flux", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_2.resources.credits = 3;
+    state.players.player_2.resources.flux = 2;
+
+    const cardInstanceId = addCardToHand(state, "player_2", "ion_surge_archive");
+    const handBefore = state.zones.player_2.hand.length;
+    const deckBefore = state.zones.player_2.deck.length;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    expect(state.zones.player_2.hand.length).toBe(handBefore + 1);
+    expect(state.zones.player_2.deck.length).toBe(deckBefore - 2);
+    expect(state.players.player_2.resources.flux).toBe(2);
+    expect(state.players.player_2.resources.credits).toBe(0);
   });
 
   it("applies Brace Protocol until the start of its controller's next turn", () => {

@@ -147,4 +147,49 @@ describe("buildAnimationsFromEvents", () => {
     }
     expect(animations[0].hexes.length).toBeGreaterThan(0);
   });
+
+  it("builds a hex-area animation for Meteor Chain from the card effect config", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const before = captureAnimationSnapshot(state);
+    const targetHex = { q: 0, r: 0 };
+
+    const animations = buildAnimationsFromEvents(
+      [
+        {
+          type: "STACK_ITEM_RESOLVED",
+          itemId: "stack_2_4",
+          label: "Meteor Chain",
+          controllerId: "player_2",
+          ownerId: "player_2",
+          effectId: "hex_area_damage",
+          effectMagnitude: 4,
+          targetStackItemId: null,
+          targetEntityId: null,
+          targetHex,
+          objectKind: "spell",
+          counterable: true,
+          defaultCounterDestination: "discard",
+          sourceCardInstanceId: "player_2_card_55",
+          sourceCardId: "meteor_chain",
+          sourceCardOwnerId: "player_2",
+          pendingUnitEntityId: null,
+        },
+      ],
+      before,
+      state
+    );
+
+    expect(animations).toHaveLength(1);
+    expect(animations[0]).toMatchObject({
+      kind: "hex_shower",
+      playerId: "player_2",
+      origin: targetHex,
+      label: "Meteor Chain",
+      accent: "flux",
+    });
+    if (animations[0]?.kind !== "hex_shower") {
+      throw new Error("Expected hex shower animation for Meteor Chain.");
+    }
+    expect(animations[0].hexes.some((hex) => hex.q === 1 && hex.r === 0)).toBe(true);
+  });
 });

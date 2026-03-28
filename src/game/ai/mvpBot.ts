@@ -1,5 +1,5 @@
 import type { GameCommand } from "../actions/commands";
-import { getCardCascadeUnitBuffConfig, getCardDefinition, type CardDefinition } from "../content/cards/catalog";
+import { getCardPlayEffectConfig, getCardDefinition, type CardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import type { Faction, ResourceType } from "../model/enums";
@@ -56,6 +56,19 @@ const AI_WEIGHTS = {
   bracePreventedDmgMult: 15,
   bracePreventKillBonus: 80,
   braceCombatBonus: 18,
+
+  // global / mass-effect scoring
+  friendlyUnitBasePenalty: 20,
+  friendlyCombatPenalty: 18,
+  friendlyDamagePenaltyMult: 12,
+  friendlyKillPenalty: 88,
+  sweepClusterBonus: 12,
+  drawCardValue: 30,
+  gainedResourceValue: 12,
+  burstLowHandBonus: 22,
+  burstVeryLowHandBonus: 34,
+  burstFullHandPenalty: 26,
+  destroyDamagedBase: 110,
 
   // chooseTacticCardCommand thresholds
   tacticMainThreshold: 90,
@@ -478,14 +491,23 @@ function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId, targe
   return AI_WEIGHTS.braceBase + preventedDamage * AI_WEIGHTS.bracePreventedDmgMult + (preventsKill ? AI_WEIGHTS.bracePreventKillBonus : 0) + (target.role === "combat" ? AI_WEIGHTS.braceCombatBonus : 0);
 }
 
-function scoreCascadeAttackBuffTarget(
+function scoreFriendlyUnitValue(unit: UnitEntity): number {
+  const roleBase = unit.role === "combat"
+    ? AI_WEIGHTS.threatCombatBase
+    : unit.role === "resource"
+      ? AI_WEIGHTS.threatResourceBase
+      : AI_WEIGHTS.threatUtilityBase;
+
+  return roleBase + unit.attackDamage * 3 + unit.armor * 3 + unit.attackRange * 2;
+}
+
+function scoreUnitBuffOpportunity(
   state: GameState,
   botPlayerId: PlayerId,
-  targetHex: HexCoord,
+  affectedUnits: UnitEntity[],
   options: {
     attackBonus: number;
     armorBonus: number;
-    waves: number;
     roleFilter?: "combat" | "resource" | "utility";
     reward?: {
       resource: ResourceType;
@@ -494,17 +516,11 @@ function scoreCascadeAttackBuffTarget(
     };
   }
 ): number {
-  const affectedHexes = getCascadeAffectedHexes(state, botPlayerId, targetHex, options.waves);
-  const affectedUnits = getPlayerUnits(state, botPlayerId)
-    .filter((unit) => affectedHexes.some((coord) => areSameHex(coord, unit.coord)))
-    .filter((unit) => !options.roleFilter || unit.role === options.roleFilter)
-    .sort((a, b) => a.id.localeCompare(b.id));
-
   if (affectedUnits.length === 0) {
     return -Infinity;
   }
 
-  let score = affectedHexes.length;
+  let score = affectedUnits.length * 4;
   let hasMeaningfulOpportunity = false;
 
   for (const unit of affectedUnits) {
@@ -575,6 +591,206 @@ function scoreCascadeAttackBuffTarget(
   return hasMeaningfulOpportunity ? score : -Infinity;
 }
 
+function scoreCascadeAttackBuffTarget(
+  state: GameState,
+  botPlayerId: PlayerId,
+  targetHex: HexCoord,
+  options: {
+    attackBonus: number;
+    armorBonus: number;
+    waves: number;
+    roleFilter?: "combat" | "resource" | "utility";
+    reward?: {
+      resource: ResourceType;
+      amount: number;
+      minUnits: number;
+    };
+  }
+): number {
+  const affectedHexes = getCascadeAffectedHexes(state, botPlayerId, targetHex, options.waves);
+  const affectedUnits = getPlayerUnits(state, botPlayerId)
+    .filter((unit) => affectedHexes.some((coord) => areSameHex(coord, unit.coord)))
+    .filter((unit) => !options.roleFilter || unit.role === options.roleFilter)
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  const score = scoreUnitBuffOpportunity(state, botPlayerId, affectedUnits, options);
+  return score === -Infinity ? score : score + affectedHexes.length;
+}
+
+function scoreGlobalBuffSpell(
+  state: GameState,
+  botPlayerId: PlayerId,
+  options: {
+    attackBonus: number;
+    armorBonus: number;
+    relation: "ally" | "enemy" | "any";
+    roleFilter?: "combat" | "resource" | "utility";
+  }
+): number {
+  const affectedUnits = Object.values(state.entities)
+    .filter((entity): entity is UnitEntity =>
+      entity.kind === "unit" &&
+      (options.relation === "any" ||
+        (options.relation === "ally" ? entity.ownerId === botPlayerId : entity.ownerId !== botPlayerId)) &&
+      (!options.roleFilter || entity.role === options.roleFilter)
+    )
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  if (options.relation !== "ally") {
+    return -Infinity;
+  }
+
+  return scoreUnitBuffOpportunity(state, botPlayerId, affectedUnits, {
+    attackBonus: options.attackBonus,
+    armorBonus: options.armorBonus,
+    roleFilter: options.roleFilter,
+  });
+}
+
+function scoreMassDamageSpell(
+  state: GameState,
+  botPlayerId: PlayerId,
+  options: {
+    amount: number;
+    relation: "ally" | "enemy" | "any";
+  }
+): number {
+  const targets = Object.values(state.entities)
+    .filter((entity): entity is UnitEntity =>
+      entity.kind === "unit" &&
+      (options.relation === "any" ||
+        (options.relation === "ally" ? entity.ownerId === botPlayerId : entity.ownerId !== botPlayerId))
+    );
+
+  let score = 0;
+  let enemyHits = 0;
+
+  for (const unit of targets) {
+    const appliedDamage = Math.min(options.amount, unit.hp);
+    const kill = options.amount >= unit.hp;
+    if (unit.ownerId === botPlayerId) {
+      score -= AI_WEIGHTS.friendlyUnitBasePenalty + scoreFriendlyUnitValue(unit) * 0.6;
+      score -= appliedDamage * AI_WEIGHTS.friendlyDamagePenaltyMult;
+      if (kill) {
+        score -= AI_WEIGHTS.friendlyKillPenalty + (unit.role === "combat" ? AI_WEIGHTS.friendlyCombatPenalty : 0);
+      }
+    } else {
+      enemyHits += 1;
+      score += scoreEnemyEntityThreat(state, botPlayerId, unit);
+      score += appliedDamage * AI_WEIGHTS.damageAppliedMult;
+      if (kill) {
+        score += AI_WEIGHTS.damageKillBonus;
+      }
+    }
+  }
+
+  if (enemyHits === 0) {
+    return -Infinity;
+  }
+
+  return score + enemyHits * AI_WEIGHTS.sweepClusterBonus;
+}
+
+function scoreDestroyDamagedUnitsSpell(
+  state: GameState,
+  botPlayerId: PlayerId,
+  relation: "ally" | "enemy" | "any"
+): number {
+  const targets = Object.values(state.entities)
+    .filter((entity): entity is UnitEntity =>
+      entity.kind === "unit" &&
+      entity.hp < entity.maxHp &&
+      (relation === "any" ||
+        (relation === "ally" ? entity.ownerId === botPlayerId : entity.ownerId !== botPlayerId))
+    );
+
+  let score = 0;
+  let enemyTargets = 0;
+
+  for (const unit of targets) {
+    if (unit.ownerId === botPlayerId) {
+      score -= AI_WEIGHTS.friendlyKillPenalty + scoreFriendlyUnitValue(unit);
+    } else {
+      enemyTargets += 1;
+      score += AI_WEIGHTS.destroyDamagedBase + scoreEnemyEntityThreat(state, botPlayerId, unit) + (unit.maxHp - unit.hp) * AI_WEIGHTS.destroyHpDeltaMult;
+    }
+  }
+
+  return enemyTargets > 0 ? score : -Infinity;
+}
+
+function scoreDrawAndGainResourcesSpell(
+  state: GameState,
+  botPlayerId: PlayerId,
+  options: {
+    drawCount: number;
+    resources: Partial<Record<ResourceType, number>>;
+  }
+): number {
+  let score = options.drawCount * AI_WEIGHTS.drawCardValue;
+  for (const resource of RESOURCE_ORDER) {
+    score += (options.resources[resource] ?? 0) * AI_WEIGHTS.gainedResourceValue;
+  }
+
+  const handSize = state.zones[botPlayerId].hand.length;
+  if (handSize <= 2) {
+    score += AI_WEIGHTS.burstVeryLowHandBonus;
+  } else if (handSize <= 4) {
+    score += AI_WEIGHTS.burstLowHandBonus;
+  } else if (handSize >= MAX_HAND_SIZE) {
+    score -= AI_WEIGHTS.burstFullHandPenalty;
+  }
+
+  return score;
+}
+
+function scoreHexAreaDamageSpell(
+  state: GameState,
+  botPlayerId: PlayerId,
+  targetHex: HexCoord,
+  options: {
+    amount: number;
+    radius: number;
+    relation: "ally" | "enemy" | "any";
+  }
+): number {
+  const targets = Object.values(state.entities)
+    .filter((entity): entity is UnitEntity =>
+      entity.kind === "unit" &&
+      hexDistance(entity.coord, targetHex) <= options.radius &&
+      (options.relation === "any" ||
+        (options.relation === "ally" ? entity.ownerId === botPlayerId : entity.ownerId !== botPlayerId))
+    );
+
+  let score = 0;
+  let enemyHits = 0;
+
+  for (const unit of targets) {
+    const appliedDamage = Math.min(options.amount, unit.hp);
+    const kill = options.amount >= unit.hp;
+    if (unit.ownerId === botPlayerId) {
+      score -= AI_WEIGHTS.friendlyUnitBasePenalty * 0.8;
+      score -= appliedDamage * AI_WEIGHTS.friendlyDamagePenaltyMult;
+      if (kill) {
+        score -= AI_WEIGHTS.friendlyKillPenalty;
+      }
+    } else {
+      enemyHits += 1;
+      score += scoreEnemyEntityThreat(state, botPlayerId, unit);
+      score += appliedDamage * AI_WEIGHTS.damageAppliedMult;
+      if (kill) {
+        score += AI_WEIGHTS.damageKillBonus;
+      }
+    }
+  }
+
+  if (enemyHits === 0) {
+    return -Infinity;
+  }
+
+  return score + enemyHits * AI_WEIGHTS.sweepClusterBonus;
+}
+
 function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
   if (state.phase !== "main" && state.phase !== "tactical") {
     return null;
@@ -593,9 +809,7 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
     if (!effect) {
       continue;
     }
-    const cascadeConfig = effect.behavior.type === "cascade_unit_buff"
-      ? getCardCascadeUnitBuffConfig(card)
-      : undefined;
+    const effectConfig = getCardPlayEffectConfig(card);
 
     const legalTargets = getLegalPlayCardTargetOptions(state, botPlayerId, cardInstance.instanceId, card);
     for (const targeting of legalTargets) {
@@ -619,18 +833,28 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
           continue;
         }
         score = scoreBraceProtocolTarget(state, botPlayerId, entity);
+      } else if (effect.behavior.type === "mass_damage" && effectConfig?.type === "mass_damage" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = scoreMassDamageSpell(state, botPlayerId, effectConfig);
+      } else if (effect.behavior.type === "global_unit_buff" && effectConfig?.type === "global_unit_buff" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = scoreGlobalBuffSpell(state, botPlayerId, effectConfig);
+      } else if (effect.behavior.type === "destroy_damaged_units" && effectConfig?.type === "destroy_damaged_units" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = scoreDestroyDamagedUnitsSpell(state, botPlayerId, effectConfig.relation);
+      } else if (effect.behavior.type === "draw_and_gain_resources" && effectConfig?.type === "draw_and_gain_resources" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = scoreDrawAndGainResourcesSpell(state, botPlayerId, effectConfig);
       } else if (effect.behavior.type === "damage_enemy_base" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
         score = scoreBaseDamageSpell(state, botPlayerId, effect.behavior.amount, state.phase);
+      } else if (effect.behavior.type === "hex_area_damage" && effectConfig?.type === "hex_area_damage" && targeting.targetHex) {
+        score = scoreHexAreaDamageSpell(state, botPlayerId, targeting.targetHex, effectConfig);
       } else if (effect.behavior.type === "cascade_unit_buff" && targeting.targetHex) {
-        if (!cascadeConfig) {
+        if (!effectConfig || effectConfig.type !== "cascade_unit_buff") {
           continue;
         }
         score = scoreCascadeAttackBuffTarget(state, botPlayerId, targeting.targetHex, {
-          attackBonus: cascadeConfig.attackBonus,
-          armorBonus: cascadeConfig.armorBonus,
-          waves: cascadeConfig.waves,
-          roleFilter: cascadeConfig.roleFilter,
-          reward: cascadeConfig.reward,
+          attackBonus: effectConfig.attackBonus,
+          armorBonus: effectConfig.armorBonus,
+          waves: effectConfig.waves,
+          roleFilter: effectConfig.roleFilter,
+          reward: effectConfig.reward,
         });
       }
 

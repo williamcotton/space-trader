@@ -6,7 +6,16 @@ import type { GameInstruction, InstructionContext } from "../../actions/instruct
 import { hexDistance, isWithinMapBounds } from "../../model/hex";
 import { LAYER } from "../../systems/continuousEffects";
 import type { CardTrigger } from "../../systems/triggerEngine";
-import type { CascadeUnitBuffOptions, CascadeUnitBuffReward } from "./instructionFactories";
+import type {
+  CascadeUnitBuffOptions,
+  CascadeUnitBuffReward,
+  DestroyDamagedUnitsOptions,
+  DrawAndGainResourcesOptions,
+  EffectRelation,
+  GlobalUnitBuffOptions,
+  HexAreaDamageOptions,
+  MassDamageOptions,
+} from "./instructionFactories";
 
 export type TargetPredicate = (
   state: Readonly<GameState>,
@@ -44,6 +53,38 @@ export type CardAnimationProfile = {
   resolve?: CardResolveAnimationProfile;
 };
 
+export type MassDamagePlayEffectConfig = {
+  type: "mass_damage";
+  amount: number;
+  relation: EffectRelation;
+};
+
+export type GlobalUnitBuffPlayEffectConfig = {
+  type: "global_unit_buff";
+  attackBonus: number;
+  armorBonus: number;
+  relation: EffectRelation;
+  roleFilter?: UnitRole;
+};
+
+export type DestroyDamagedUnitsPlayEffectConfig = {
+  type: "destroy_damaged_units";
+  relation: EffectRelation;
+};
+
+export type DrawAndGainResourcesPlayEffectConfig = {
+  type: "draw_and_gain_resources";
+  drawCount: number;
+  resources: CardCost;
+};
+
+export type HexAreaDamagePlayEffectConfig = {
+  type: "hex_area_damage";
+  amount: number;
+  radius: number;
+  relation: EffectRelation;
+};
+
 export type CascadeUnitBuffPlayEffectConfig = {
   type: "cascade_unit_buff";
   attackBonus: number;
@@ -54,6 +95,11 @@ export type CascadeUnitBuffPlayEffectConfig = {
 };
 
 export type CardPlayEffectConfig =
+  | MassDamagePlayEffectConfig
+  | GlobalUnitBuffPlayEffectConfig
+  | DestroyDamagedUnitsPlayEffectConfig
+  | DrawAndGainResourcesPlayEffectConfig
+  | HexAreaDamagePlayEffectConfig
   | CascadeUnitBuffPlayEffectConfig;
 
 export type UnitAura = {
@@ -241,6 +287,48 @@ function createCascadeUnitBuffEffectConfig(options: CascadeUnitBuffOptions): Cas
   };
 }
 
+function createMassDamageEffectConfig(options: MassDamageOptions): MassDamagePlayEffectConfig {
+  return {
+    type: "mass_damage",
+    amount: options.amount,
+    relation: options.relation,
+  };
+}
+
+function createGlobalUnitBuffEffectConfig(options: GlobalUnitBuffOptions): GlobalUnitBuffPlayEffectConfig {
+  return {
+    type: "global_unit_buff",
+    attackBonus: options.attackBonus ?? 0,
+    armorBonus: options.armorBonus ?? 0,
+    relation: options.relation,
+    roleFilter: options.roleFilter,
+  };
+}
+
+function createDestroyDamagedUnitsEffectConfig(options: DestroyDamagedUnitsOptions): DestroyDamagedUnitsPlayEffectConfig {
+  return {
+    type: "destroy_damaged_units",
+    relation: options.relation,
+  };
+}
+
+function createDrawAndGainResourcesEffectConfig(options: DrawAndGainResourcesOptions): DrawAndGainResourcesPlayEffectConfig {
+  return {
+    type: "draw_and_gain_resources",
+    drawCount: options.drawCount ?? 0,
+    resources: options.resources ?? {},
+  };
+}
+
+function createHexAreaDamageEffectConfig(options: HexAreaDamageOptions): HexAreaDamagePlayEffectConfig {
+  return {
+    type: "hex_area_damage",
+    amount: options.amount,
+    radius: options.radius,
+    relation: options.relation,
+  };
+}
+
 function cascadeTacticPlay(
   options: CascadeUnitBuffOptions & {
     isValidHexTarget: HexTargetPredicate;
@@ -252,6 +340,64 @@ function cascadeTacticPlay(
     isValidHexTarget: options.isValidHexTarget,
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createCascadeUnitBuffEffectConfig(options),
+  });
+}
+
+function massDamageTacticPlay(
+  options: MassDamageOptions & {
+    sourceDestinationOnResolve?: CardSourceDestination;
+  }
+): CardPlayProfile {
+  return tacticPlay("mass_damage", {
+    sourceDestinationOnResolve: options.sourceDestinationOnResolve,
+    effectConfig: createMassDamageEffectConfig(options),
+  });
+}
+
+function globalUnitBuffTacticPlay(
+  options: GlobalUnitBuffOptions & {
+    sourceDestinationOnResolve?: CardSourceDestination;
+  }
+): CardPlayProfile {
+  return tacticPlay("global_unit_buff", {
+    sourceDestinationOnResolve: options.sourceDestinationOnResolve,
+    effectConfig: createGlobalUnitBuffEffectConfig(options),
+  });
+}
+
+function destroyDamagedUnitsTacticPlay(
+  options: DestroyDamagedUnitsOptions & {
+    sourceDestinationOnResolve?: CardSourceDestination;
+  }
+): CardPlayProfile {
+  return tacticPlay("destroy_damaged_units", {
+    sourceDestinationOnResolve: options.sourceDestinationOnResolve,
+    effectConfig: createDestroyDamagedUnitsEffectConfig(options),
+  });
+}
+
+function drawAndGainResourcesTacticPlay(
+  options: DrawAndGainResourcesOptions & {
+    sourceDestinationOnResolve?: CardSourceDestination;
+  }
+): CardPlayProfile {
+  return tacticPlay("draw_and_gain_resources", {
+    sourceDestinationOnResolve: options.sourceDestinationOnResolve,
+    effectConfig: createDrawAndGainResourcesEffectConfig(options),
+  });
+}
+
+function hexAreaDamageTacticPlay(
+  options: HexAreaDamageOptions & {
+    isValidHexTarget: HexTargetPredicate;
+    sourceDestinationOnResolve?: CardSourceDestination;
+  }
+): CardPlayProfile {
+  return tacticPlay("hex_area_damage", {
+    targetMode: "hex",
+    isValidHexTarget: options.isValidHexTarget,
+    sourceDestinationOnResolve: options.sourceDestinationOnResolve,
+    effectConfig: createHexAreaDamageEffectConfig(options),
   });
 }
 
@@ -271,6 +417,19 @@ export function getCardPlayEffectMagnitude(card: CardDefinition | undefined): nu
   }
 
   switch (effectConfig.type) {
+    case "mass_damage":
+      return effectConfig.amount;
+    case "global_unit_buff":
+      return Math.max(Math.abs(effectConfig.attackBonus), Math.abs(effectConfig.armorBonus));
+    case "destroy_damaged_units":
+      return 0;
+    case "draw_and_gain_resources":
+      return Math.max(
+        effectConfig.drawCount,
+        ...(["credits", "alloy", "flux", "biomass"] as const).map((resource) => effectConfig.resources[resource] ?? 0)
+      );
+    case "hex_area_damage":
+      return effectConfig.amount;
     case "cascade_unit_buff":
       return Math.max(Math.abs(effectConfig.attackBonus), Math.abs(effectConfig.armorBonus));
   }
@@ -667,6 +826,73 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
         accent: "flux",
       },
     },
+  },
+  orbital_purge: {
+    id: "orbital_purge",
+    name: "Orbital Purge",
+    faction: "neutral",
+    kind: "tactic",
+    speed: "main",
+    cost: { credits: 6 },
+    text: "Deal 4 damage to every unit.",
+    play: massDamageTacticPlay({
+      amount: 4,
+      relation: "any",
+    }),
+  },
+  scorched_protocol: {
+    id: "scorched_protocol",
+    name: "Scorched Protocol",
+    faction: "alloy_clan",
+    kind: "tactic",
+    speed: "main",
+    cost: { credits: 4, alloy: 2 },
+    text: "Destroy all damaged units.",
+    play: destroyDamagedUnitsTacticPlay({
+      relation: "any",
+    }),
+  },
+  meteor_chain: {
+    id: "meteor_chain",
+    name: "Meteor Chain",
+    faction: "flux_collective",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 4, flux: 2 },
+    text: "Choose a hex. Deal 4 damage to each unit there and on adjacent hexes.",
+    play: hexAreaDamageTacticPlay({
+      amount: 4,
+      radius: 1,
+      relation: "any",
+      isValidHexTarget: (state, target) => isWithinMapBounds(target, state.map),
+    }),
+  },
+  ion_surge_archive: {
+    id: "ion_surge_archive",
+    name: "Ion Surge Archive",
+    faction: "flux_collective",
+    kind: "tactic",
+    speed: "main",
+    cost: { credits: 3, flux: 2 },
+    text: "Draw 2 cards. Gain 2 flux.",
+    play: drawAndGainResourcesTacticPlay({
+      drawCount: 2,
+      resources: { flux: 2 },
+    }),
+  },
+  overgrowth_wave: {
+    id: "overgrowth_wave",
+    name: "Overgrowth Wave",
+    faction: "biomass_swarm",
+    kind: "tactic",
+    speed: "main",
+    cost: { credits: 3, biomass: 2 },
+    text: "Friendly units get +1 ATK and +1 ARM until end of turn.",
+    play: globalUnitBuffTacticPlay({
+      attackBonus: 1,
+      armorBonus: 1,
+      relation: "ally",
+    }),
   },
   frontline_scout_card: {
     id: "frontline_scout_card",

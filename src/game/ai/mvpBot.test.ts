@@ -24,6 +24,16 @@ function moveCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: 
   return card.instanceId;
 }
 
+function addCardToHand(state: ReturnType<typeof setupState>, playerId: "player_1" | "player_2", cardId: string): string {
+  const instanceId = `${playerId}_${cardId}_bot_test_${state.zones[playerId].hand.length}_${state.turn}`;
+  state.zones[playerId].hand.push({
+    instanceId,
+    cardId,
+    ownerId: playerId,
+  });
+  return instanceId;
+}
+
 describe("decideMvpBotCommand", () => {
   it("returns null when bot does not currently have priority", () => {
     const state = setupState();
@@ -248,6 +258,98 @@ describe("decideMvpBotCommand", () => {
       throw new Error("Expected Ion Shower to choose a hex target.");
     }
     expect(hexDistance(command.targetHex, scout.coord)).toBeLessThanOrEqual(1);
+  });
+
+  it("casts Orbital Purge when it cleanly sweeps the enemy board", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_1.hand = [];
+    state.players.player_1.resources.credits = 6;
+
+    delete state.entities.unit_player_1_scout;
+    delete state.entities.unit_player_1_harvester;
+
+    const enemyScout = state.entities.unit_player_2_scout;
+    const enemyHarvester = state.entities.unit_player_2_harvester;
+    if (!enemyScout || enemyScout.kind !== "unit" || !enemyHarvester || enemyHarvester.kind !== "unit") {
+      throw new Error("Expected enemy units for Orbital Purge bot test.");
+    }
+    enemyScout.hp = 4;
+    enemyHarvester.hp = 2;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "orbital_purge");
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+  });
+
+  it("casts Meteor Chain at a hex that hits clustered enemy units", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "tactical";
+    state.stack = [];
+    state.zones.player_2.hand = [];
+    state.players.player_2.resources.credits = 4;
+    state.players.player_2.resources.flux = 2;
+
+    const enemyScout = state.entities.unit_player_1_scout;
+    const enemyHarvester = state.entities.unit_player_1_harvester;
+    const friendlyScout = state.entities.unit_player_2_scout;
+    if (
+      !enemyScout || enemyScout.kind !== "unit" ||
+      !enemyHarvester || enemyHarvester.kind !== "unit" ||
+      !friendlyScout || friendlyScout.kind !== "unit"
+    ) {
+      throw new Error("Expected units for Meteor Chain bot test.");
+    }
+
+    enemyScout.coord = { q: 0, r: 0 };
+    enemyScout.hp = 4;
+    enemyHarvester.coord = { q: 1, r: 0 };
+    enemyHarvester.hp = 2;
+    friendlyScout.coord = { q: 4, r: 0 };
+
+    const cardInstanceId = addCardToHand(state, "player_2", "meteor_chain");
+
+    const command = decideMvpBotCommand(state, "player_2");
+    expect(command?.type).toBe("PLAY_CARD");
+    if (!command || command.type !== "PLAY_CARD") {
+      throw new Error("Expected Meteor Chain play command.");
+    }
+
+    expect(command.cardInstanceId).toBe(cardInstanceId);
+    expect(command.targetHex).toEqual({ q: 0, r: 0 });
+  });
+
+  it("casts Ion Surge Archive when low on hand and resources", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_2.hand = [];
+    state.players.player_2.resources.credits = 3;
+    state.players.player_2.resources.flux = 2;
+
+    delete state.entities.unit_player_2_scout;
+    delete state.entities.unit_player_2_harvester;
+
+    const cardInstanceId = addCardToHand(state, "player_2", "ion_surge_archive");
+
+    const command = decideMvpBotCommand(state, "player_2");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId,
+    });
   });
 
   it("casts Rivet Volley at the enemy base when it is lethal", () => {

@@ -1,6 +1,13 @@
 import type { GameInstruction, InstructionContext } from "../actions/instructions";
-import { getCardCascadeUnitBuffConfig, getCardDefinition, getCardPlayEffectMagnitude } from "./cards/catalog";
-import { createCascadeUnitBuffInstructions } from "./cards/instructionFactories";
+import { getCardCascadeUnitBuffConfig, getCardDefinition, getCardPlayEffectConfig, getCardPlayEffectMagnitude } from "./cards/catalog";
+import {
+  createCascadeUnitBuffInstructions,
+  createDestroyDamagedUnitsInstructions,
+  createDrawAndGainResourcesInstructions,
+  createGlobalUnitBuffInstructions,
+  createHexAreaDamageInstructions,
+  createMassDamageInstructions,
+} from "./cards/instructionFactories";
 import { LAYER } from "../systems/continuousEffects";
 import type { ResourceType, UnitRole } from "../model/enums";
 
@@ -55,6 +62,21 @@ export type StackEffectBehavior =
       type: "modify_unit_until_end_of_turn";
       attackBonus: number;
       armorBonus: number;
+    }
+  | {
+      type: "mass_damage";
+    }
+  | {
+      type: "global_unit_buff";
+    }
+  | {
+      type: "destroy_damaged_units";
+    }
+  | {
+      type: "draw_and_gain_resources";
+    }
+  | {
+      type: "hex_area_damage";
     }
   | {
       type: "cascade_unit_buff";
@@ -221,6 +243,56 @@ function createCardOwnedCascadeUnitBuffInstructions(context: InstructionContext)
   }
 
   return createCascadeUnitBuffInstructions(effectConfig)(context);
+}
+
+function createCardOwnedMassDamageInstructions(context: InstructionContext): GameInstruction[] {
+  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
+  const effectConfig = getCardPlayEffectConfig(sourceCard);
+  if (!effectConfig || effectConfig.type !== "mass_damage") {
+    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing mass-damage config on source card.` }];
+  }
+
+  return createMassDamageInstructions(effectConfig)(context);
+}
+
+function createCardOwnedGlobalUnitBuffInstructions(context: InstructionContext): GameInstruction[] {
+  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
+  const effectConfig = getCardPlayEffectConfig(sourceCard);
+  if (!effectConfig || effectConfig.type !== "global_unit_buff") {
+    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing global-buff config on source card.` }];
+  }
+
+  return createGlobalUnitBuffInstructions(effectConfig)(context);
+}
+
+function createCardOwnedDestroyDamagedUnitsInstructions(context: InstructionContext): GameInstruction[] {
+  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
+  const effectConfig = getCardPlayEffectConfig(sourceCard);
+  if (!effectConfig || effectConfig.type !== "destroy_damaged_units") {
+    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing destroy-damaged config on source card.` }];
+  }
+
+  return createDestroyDamagedUnitsInstructions(effectConfig)(context);
+}
+
+function createCardOwnedDrawAndGainResourcesInstructions(context: InstructionContext): GameInstruction[] {
+  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
+  const effectConfig = getCardPlayEffectConfig(sourceCard);
+  if (!effectConfig || effectConfig.type !== "draw_and_gain_resources") {
+    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing draw-and-gain config on source card.` }];
+  }
+
+  return createDrawAndGainResourcesInstructions(effectConfig)(context);
+}
+
+function createCardOwnedHexAreaDamageInstructions(context: InstructionContext): GameInstruction[] {
+  const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
+  const effectConfig = getCardPlayEffectConfig(sourceCard);
+  if (!effectConfig || effectConfig.type !== "hex_area_damage") {
+    return [{ type: "LOG", text: `Resolved ${context.item.label}: missing area-damage config on source card.` }];
+  }
+
+  return createHexAreaDamageInstructions(effectConfig)(context);
 }
 
 function createCounterInstructions(destination: CounterDestination) {
@@ -400,6 +472,86 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
     },
     createInstructions: createModifyUnitUntilEndOfTurnInstructions(0, 2),
   },
+  mass_damage: {
+    id: "mass_damage",
+    label: "Mass Damage",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "mass_damage",
+    },
+    createInstructions: createCardOwnedMassDamageInstructions,
+  },
+  global_unit_buff: {
+    id: "global_unit_buff",
+    label: "Global Unit Buff",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "global_unit_buff",
+    },
+    createInstructions: createCardOwnedGlobalUnitBuffInstructions,
+  },
+  destroy_damaged_units: {
+    id: "destroy_damaged_units",
+    label: "Destroy Damaged Units",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "destroy_damaged_units",
+    },
+    createInstructions: createCardOwnedDestroyDamagedUnitsInstructions,
+  },
+  draw_and_gain_resources: {
+    id: "draw_and_gain_resources",
+    label: "Draw and Gain Resources",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "draw_and_gain_resources",
+    },
+    createInstructions: createCardOwnedDrawAndGainResourcesInstructions,
+  },
+  hex_area_damage: {
+    id: "hex_area_damage",
+    label: "Hex Area Damage",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "hex",
+    },
+    behavior: {
+      type: "hex_area_damage",
+    },
+    createInstructions: createCardOwnedHexAreaDamageInstructions,
+  },
   cascade_unit_buff: {
     id: "cascade_unit_buff",
     label: "Cascade Unit Buff",
@@ -461,6 +613,15 @@ export function getStackEffectMagnitude(effectId: string, sourceCardId?: string 
     case "damage_enemy_base":
     case "damage_entity":
       return effect.behavior.amount;
+    case "mass_damage":
+    case "global_unit_buff":
+    case "destroy_damaged_units":
+    case "draw_and_gain_resources":
+    case "hex_area_damage":
+      if (sourceCardId) {
+        return getCardPlayEffectMagnitude(getCardDefinition(sourceCardId));
+      }
+      return 0;
     case "cascade_unit_buff":
       if (sourceCardId) {
         return getCardPlayEffectMagnitude(getCardDefinition(sourceCardId));
