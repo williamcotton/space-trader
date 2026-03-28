@@ -60,6 +60,12 @@ describe("getBoardClickCommand", () => {
 });
 
 describe("GameRuntime", () => {
+  it("queues a match intro animation on initial load", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: FRONTIER_BELT_MAP }));
+
+    expect(runtime.getAnimations().some((animation) => animation.kind === "match_intro")).toBe(true);
+  });
+
   it("adds test resources to a chosen player", () => {
     const runtime = new GameRuntime(createInitialGameState({ map: FRONTIER_BELT_MAP }));
     const before = { ...runtime.state.players.player_1.resources };
@@ -82,5 +88,14 @@ describe("GameRuntime", () => {
 
     expect(runtime.state.entities.unit_player_1_harvester).toBeUndefined();
     expect(runtime.state.selectedEntityId).toBeNull();
+  });
+
+  it("declares a test winner and queues a victory animation", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: FRONTIER_BELT_MAP }));
+
+    runtime.debugWinTestGame("player_2");
+
+    expect(runtime.state.winner).toBe("player_2");
+    expect(runtime.getAnimations().some((animation) => animation.kind === "victory_fanfare" && animation.playerId === "player_2")).toBe(true);
   });
 });

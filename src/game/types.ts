@@ -112,6 +112,26 @@ export type CanvasAnimation =
       ageSeconds: number;
       durationSeconds: number;
       coord: HexCoord;
+    }
+  | {
+      id: string;
+      kind: "match_intro";
+      playerId: PlayerId;
+      ageSeconds: number;
+      durationSeconds: number;
+      center: HexCoord;
+      label: string;
+      subtitle: string;
+    }
+  | {
+      id: string;
+      kind: "victory_fanfare";
+      playerId: PlayerId;
+      ageSeconds: number;
+      durationSeconds: number;
+      center: HexCoord;
+      hexes: HexCoord[];
+      label: string;
     };
 
 export type FrameTransients = {

@@ -77,6 +77,17 @@ describe("buildAnimationsFromEvents", () => {
     expect(animations.some((animation) => animation.kind === "death_burst")).toBe(true);
   });
 
+  it("adds a victory fanfare when the game gains a winner", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const before = captureAnimationSnapshot(state);
+
+    state.winner = "player_1";
+
+    const animations = buildAnimationsFromEvents([], before, state);
+
+    expect(animations.some((animation) => animation.kind === "victory_fanfare" && animation.playerId === "player_1")).toBe(true);
+  });
+
   it("captures the countered stack object's visual when a unit spell is countered", () => {
     const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
     state.stack.push({

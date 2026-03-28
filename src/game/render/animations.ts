@@ -25,6 +25,7 @@ type StackItemSnapshot = {
 export type AnimationCapture = {
   entities: Record<string, EntitySnapshot>;
   stackItems: Record<string, StackItemSnapshot>;
+  winner: PlayerId | null;
 };
 
 export function captureAnimationSnapshot(state: GameState): AnimationCapture {
@@ -53,7 +54,7 @@ export function captureAnimationSnapshot(state: GameState): AnimationCapture {
     ])
   );
 
-  return { entities, stackItems };
+  return { entities, stackItems, winner: state.winner };
 }
 
 function getStackAnimationVisual(effectId: string, sourceCardId: string | null): "unit" | "counter" | "tactic" | "generic" {
@@ -185,6 +186,61 @@ function getAffectedUnitHexes(
     hexes.push(entity.coord);
   }
   return hexes;
+}
+
+function getUniqueHexes(coords: readonly HexCoord[]): HexCoord[] {
+  const seen = new Set<string>();
+  const unique: HexCoord[] = [];
+  for (const coord of coords) {
+    const key = `${coord.q},${coord.r}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(coord);
+  }
+  return unique;
+}
+
+function getVictoryHexes(state: GameState, winner: PlayerId): HexCoord[] {
+  const winnerBaseId = state.players[winner].baseEntityId;
+  const winnerBase = state.entities[winnerBaseId];
+  const center = winnerBase && winnerBase.kind === "base" ? winnerBase.coord : getMapCenterHex(state);
+  const highlighted = [
+    ...getRadiusAffectedHexes(state, center, 3),
+    ...Object.values(state.entities)
+      .filter((entity) => entity.kind === "unit")
+      .map((entity) => entity.coord),
+  ];
+  return getUniqueHexes(highlighted);
+}
+
+export function buildMatchIntroAnimation(state: GameState): CanvasAnimation {
+  return {
+    id: `MATCH_INTRO_${state.matchId}`,
+    kind: "match_intro",
+    playerId: state.activePlayerId,
+    ageSeconds: 0,
+    durationSeconds: 1.8,
+    center: getMapCenterHex(state),
+    label: state.map.name,
+    subtitle: "Engage",
+  };
+}
+
+export function buildVictoryAnimation(state: GameState, winner: PlayerId): CanvasAnimation {
+  const winnerBaseId = state.players[winner].baseEntityId;
+  const winnerBase = state.entities[winnerBaseId];
+  return {
+    id: `VICTORY_${state.matchId}_${state.turn}_${winner}`,
+    kind: "victory_fanfare",
+    playerId: winner,
+    ageSeconds: 0,
+    durationSeconds: 2.2,
+    center: winnerBase && winnerBase.kind === "base" ? winnerBase.coord : getMapCenterHex(state),
+    hexes: getVictoryHexes(state, winner),
+    label: winner === "player_1" ? "Player 1 Wins" : "Player 2 Wins",
+  };
 }
 
 function getDestroyedUnitHexes(
@@ -551,6 +607,10 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
       durationSeconds: 0.72,
       coord: entity.coord,
     });
+  }
+
+  if (!before.winner && state.winner) {
+    animations.push(buildVictoryAnimation(state, state.winner));
   }
 
   return animations;

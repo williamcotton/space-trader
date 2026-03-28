@@ -8,7 +8,7 @@ import { findEntityAtHex } from "./model/queries";
 import { createInitialGameState } from "./model/state";
 import type { PlayerId } from "./model/ids";
 import { migrateRuntimeState } from "./model/migrations";
-import { captureAnimationSnapshot, buildAnimationsFromEvents, stepAnimations } from "./render/animations";
+import { buildMatchIntroAnimation, buildVictoryAnimation, captureAnimationSnapshot, buildAnimationsFromEvents, stepAnimations } from "./render/animations";
 import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
 import { canAttackEntityDirectly } from "./systems/keywords";
@@ -144,6 +144,7 @@ export class GameRuntime {
     this.state = state;
     migrateRuntimeState(this.state);
     this.rehydrateHotState();
+    this.pushAnimations([buildMatchIntroAnimation(this.state)]);
   }
 
   setViewport(width: number, height: number): void {
@@ -208,14 +209,26 @@ export class GameRuntime {
     }
   }
 
+  private pushAnimations(animations: CanvasAnimation[]): void {
+    if (animations.length === 0) {
+      return;
+    }
+
+    this.animations.push(...animations);
+    if (this.animations.length > 32) {
+      this.animations = this.animations.slice(-32);
+    }
+  }
+
+  getAnimations(): CanvasAnimation[] {
+    return [...this.animations];
+  }
+
   dispatch(command: GameCommand): DispatchResult {
     const before = captureAnimationSnapshot(this.state);
     const result = dispatchCommand(this.state, command);
     if (result.ok && result.events.length > 0) {
-      this.animations.push(...buildAnimationsFromEvents(result.events, before, this.state));
-      if (this.animations.length > 32) {
-        this.animations = this.animations.slice(-32);
-      }
+      this.pushAnimations(buildAnimationsFromEvents(result.events, before, this.state));
     }
     this.notifyListeners();
     return result;
@@ -579,9 +592,24 @@ export class GameRuntime {
       text: `${playerId} debug-killed ${target.id}.`,
     });
 
-    this.animations.push(...buildAnimationsFromEvents([], before, this.state));
-    if (this.animations.length > 32) {
-      this.animations = this.animations.slice(-32);
+    this.pushAnimations(buildAnimationsFromEvents([], before, this.state));
+    this.notifyListeners();
+  }
+
+  debugWinTestGame(playerId: PlayerId): void {
+    const before = captureAnimationSnapshot(this.state);
+    const replayVictoryOnly = this.state.winner === playerId;
+
+    this.state.winner = playerId;
+    this.state.log.push({
+      turn: this.state.turn,
+      text: `${playerId} claimed victory for testing.`,
+    });
+
+    if (replayVictoryOnly) {
+      this.pushAnimations([buildVictoryAnimation(this.state, playerId)]);
+    } else {
+      this.pushAnimations(buildAnimationsFromEvents([], before, this.state));
     }
     this.notifyListeners();
   }

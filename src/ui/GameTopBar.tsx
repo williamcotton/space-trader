@@ -111,6 +111,15 @@ export function GameTopBar() {
                 >
                   Kill
                 </button>
+                <button
+                  type="button"
+                  className="top-bar-debug-win"
+                  onClick={() => runtime.debugWinTestGame(player.id)}
+                  title="Declare this player the winner for testing"
+                  aria-label={`Declare ${getPlayerLabel(player.id)} the winner for testing`}
+                >
+                  Win
+                </button>
                 <span className="top-bar-player-zones">
                   H{player.hand} D{player.deck}
                 </span>

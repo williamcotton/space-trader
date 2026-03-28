@@ -434,6 +434,126 @@ function drawDeathBurstAnimation(d: AnimationDrawContext, animation: Extract<Can
   d.ctx.stroke();
 }
 
+function drawMatchIntroAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "match_intro" }>): void {
+  const center = toPixel(animation.center, d.originX, d.originY, d.hexSize);
+  const ringAlpha = 0.42 - d.progress * 0.18;
+  const streakAlpha = 0.72 - d.progress * 0.42;
+
+  for (let ringIndex = 0; ringIndex < 4; ringIndex += 1) {
+    const ringProgress = clamp((d.progress - ringIndex * 0.08) / (1 - ringIndex * 0.08 || 1), 0, 1);
+    if (ringProgress <= 0) {
+      continue;
+    }
+
+    d.ctx.beginPath();
+    drawHexOutline(d.ctx, center.x, center.y, d.hexSize * (0.9 + ringIndex * 0.28 + ringProgress * 1.18));
+    d.ctx.strokeStyle = ringIndex % 2 === 0
+      ? `rgba(108, 224, 255, ${ringAlpha - ringProgress * 0.12})`
+      : `rgba(255, 176, 124, ${ringAlpha - ringProgress * 0.12})`;
+    d.ctx.lineWidth = 2.8 - ringProgress * 1.1;
+    d.ctx.stroke();
+  }
+
+  for (let beamIndex = 0; beamIndex < 7; beamIndex += 1) {
+    const offset = (beamIndex - 3) * d.hexSize * 0.48;
+    d.ctx.beginPath();
+    d.ctx.moveTo(center.x + offset, center.y - d.hexSize * (4.2 - d.progress * 0.32));
+    d.ctx.lineTo(center.x + offset * 0.72, center.y - d.hexSize * (0.36 - d.progress * 0.08));
+    d.ctx.strokeStyle = beamIndex % 2 === 0
+      ? `rgba(103, 219, 255, ${streakAlpha})`
+      : `rgba(255, 162, 112, ${streakAlpha * 0.86})`;
+    d.ctx.lineWidth = 1.8 + (1 - d.progress) * 1.8;
+    d.ctx.stroke();
+  }
+
+  d.ctx.beginPath();
+  d.ctx.arc(center.x, center.y, d.hexSize * (0.22 + d.progress * 0.48), 0, Math.PI * 2);
+  d.ctx.fillStyle = `rgba(236, 245, 255, ${0.2 - d.progress * 0.08})`;
+  d.ctx.fill();
+
+  d.ctx.fillStyle = `rgba(239, 246, 255, ${0.94 - d.progress * 0.46})`;
+  d.ctx.font = `${clamp(d.hexSize * 0.52, 16, 26)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+  d.ctx.textAlign = "center";
+  d.ctx.textBaseline = "bottom";
+  d.ctx.fillText(animation.label, center.x, center.y - d.hexSize * (1.42 + d.progress * 0.08));
+
+  d.ctx.fillStyle = `rgba(182, 205, 255, ${0.82 - d.progress * 0.42})`;
+  d.ctx.font = `${clamp(d.hexSize * 0.24, 9, 12)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+  d.ctx.textBaseline = "top";
+  d.ctx.fillText(animation.subtitle.toUpperCase(), center.x, center.y + d.hexSize * (0.94 - d.progress * 0.08));
+}
+
+function drawVictoryFanfareAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "victory_fanfare" }>): void {
+  const center = toPixel(animation.center, d.originX, d.originY, d.hexSize);
+  const palette =
+    animation.playerId === "player_1"
+      ? { stroke: "108, 224, 255", fill: "210, 246, 255", glow: "155, 233, 255" }
+      : { stroke: "255, 171, 120", fill: "255, 224, 201", glow: "255, 205, 174" };
+
+  for (let ringIndex = 0; ringIndex < 3; ringIndex += 1) {
+    const ringProgress = clamp((d.progress - ringIndex * 0.1) / (1 - ringIndex * 0.1 || 1), 0, 1);
+    if (ringProgress <= 0) {
+      continue;
+    }
+
+    d.ctx.beginPath();
+    drawHexOutline(d.ctx, center.x, center.y, d.hexSize * (0.84 + ringIndex * 0.26 + ringProgress * 0.86));
+    d.ctx.strokeStyle = `rgba(${palette.stroke}, ${0.48 - ringProgress * 0.18})`;
+    d.ctx.lineWidth = 3 - ringProgress * 1.1;
+    d.ctx.stroke();
+  }
+
+  for (const [index, hex] of animation.hexes.entries()) {
+    const position = toPixel(hex, d.originX, d.originY, d.hexSize);
+    const stagger = (index % 8) * 0.03;
+    const localProgress = clamp((d.progress - stagger) / (1 - stagger || 1), 0, 1);
+    if (localProgress <= 0) {
+      continue;
+    }
+
+    d.ctx.beginPath();
+    drawHexOutline(d.ctx, position.x, position.y, d.hexSize * (0.38 + localProgress * 0.1));
+    d.ctx.strokeStyle = `rgba(${palette.stroke}, ${0.72 - localProgress * 0.36})`;
+    d.ctx.lineWidth = 1.6;
+    d.ctx.stroke();
+
+    for (let streakIndex = 0; streakIndex < 3; streakIndex += 1) {
+      const laneOffset = (streakIndex - 1) * d.hexSize * 0.2;
+      d.ctx.beginPath();
+      d.ctx.moveTo(position.x + laneOffset, position.y - d.hexSize * (1.22 - localProgress * 0.18));
+      d.ctx.lineTo(position.x + laneOffset * 0.68, position.y - d.hexSize * (0.12 - localProgress * 0.08));
+      d.ctx.strokeStyle = `rgba(${palette.stroke}, ${0.84 - localProgress * 0.5})`;
+      d.ctx.lineWidth = 1.5 + (1 - localProgress) * 1.1;
+      d.ctx.stroke();
+    }
+  }
+
+  for (let shardIndex = 0; shardIndex < 6; shardIndex += 1) {
+    const angle = (-Math.PI / 2.8) + shardIndex * 0.34;
+    const startX = center.x + Math.cos(angle) * d.hexSize * 0.24;
+    const startY = center.y + Math.sin(angle) * d.hexSize * 0.18;
+    const endX = center.x + Math.cos(angle) * d.hexSize * (1.2 + d.progress * 1.1);
+    const endY = center.y + Math.sin(angle) * d.hexSize * (0.78 + d.progress * 0.52);
+    d.ctx.beginPath();
+    d.ctx.moveTo(startX, startY);
+    d.ctx.lineTo(endX, endY);
+    d.ctx.strokeStyle = `rgba(${palette.glow}, ${0.6 - d.progress * 0.28})`;
+    d.ctx.lineWidth = 1.8 + (1 - d.progress) * 1.2;
+    d.ctx.stroke();
+  }
+
+  d.ctx.beginPath();
+  d.ctx.arc(center.x, center.y, d.hexSize * (0.24 + d.progress * 0.44), 0, Math.PI * 2);
+  d.ctx.fillStyle = `rgba(${palette.fill}, ${0.24 - d.progress * 0.08})`;
+  d.ctx.fill();
+
+  d.ctx.fillStyle = `rgba(${palette.fill}, ${0.96 - d.progress * 0.42})`;
+  d.ctx.font = `${clamp(d.hexSize * 0.56, 17, 28)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+  d.ctx.textAlign = "center";
+  d.ctx.textBaseline = "bottom";
+  d.ctx.fillText(animation.label, center.x, center.y - d.hexSize * (1.62 + d.progress * 0.12));
+}
+
 export function drawAnimations(context: CanvasRenderingContext2D, frame: GameFrame, originX: number, originY: number, hexSize: number): void {
   for (const animation of frame.transients.animations) {
     const d: AnimationDrawContext = {
@@ -478,6 +598,12 @@ export function drawAnimations(context: CanvasRenderingContext2D, frame: GameFra
         break;
       case "death_burst":
         drawDeathBurstAnimation(d, animation);
+        break;
+      case "match_intro":
+        drawMatchIntroAnimation(d, animation);
+        break;
+      case "victory_fanfare":
+        drawVictoryFanfareAnimation(d, animation);
         break;
     }
   }
