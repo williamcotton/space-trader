@@ -49,9 +49,19 @@ describe("starter decks", () => {
     const fluxCards = getStarterDeckCardIds("flux_collective");
     const biomassCards = getStarterDeckCardIds("biomass_swarm");
 
-    expect(countResourceUnitCopies(alloyCards)).toBeGreaterThanOrEqual(8);
-    expect(countResourceUnitCopies(fluxCards)).toBeGreaterThanOrEqual(8);
-    expect(countResourceUnitCopies(biomassCards)).toBeGreaterThanOrEqual(10);
+    expect(countResourceUnitCopies(alloyCards)).toBeGreaterThanOrEqual(12);
+    expect(countResourceUnitCopies(fluxCards)).toBeGreaterThanOrEqual(12);
+    expect(countResourceUnitCopies(biomassCards)).toBeGreaterThanOrEqual(16);
+  });
+
+  it("includes the new faction-specific one-cost resource units", () => {
+    const alloyCards = getStarterDeckCardIds("alloy_clan");
+    const fluxCards = getStarterDeckCardIds("flux_collective");
+    const biomassCards = getStarterDeckCardIds("biomass_swarm");
+
+    expect(countCopies(alloyCards, "forge_hauler_card")).toBe(4);
+    expect(countCopies(fluxCards, "ion_skimmer_card")).toBe(4);
+    expect(countCopies(biomassCards, "spore_tender_card")).toBe(4);
   });
 
   it("includes the new cascade cards in the intended starters", () => {

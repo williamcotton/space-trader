@@ -428,9 +428,9 @@ describe("decideMvpBotCommand", () => {
     moveCardFromDeckToHand(state, "player_1", "brace_protocol");
     moveCardFromDeckToHand(state, "player_1", "brace_protocol");
     moveCardFromDeckToHand(state, "player_1", "brace_protocol");
-    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
-    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
-    moveCardFromDeckToHand(state, "player_1", "failsafe_redirect");
+    moveCardFromDeckToHand(state, "player_1", "patchwork_barrier");
+    moveCardFromDeckToHand(state, "player_1", "patchwork_barrier");
+    moveCardFromDeckToHand(state, "player_1", "patchwork_barrier");
     state.zones.player_1.deck = [];
 
     const enemyBase = state.entities.base_player_2;
