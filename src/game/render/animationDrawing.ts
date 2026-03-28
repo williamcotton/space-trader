@@ -12,6 +12,12 @@ export type AnimationDrawContext = {
   progress: number;
 };
 
+type AnimationLayer = "base" | "foreground";
+
+function isForegroundAnimation(animation: CanvasAnimation): boolean {
+  return animation.kind === "match_intro" || animation.kind === "victory_fanfare";
+}
+
 function drawMoveAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "move" }>): void {
   const from = toPixel(animation.from, d.originX, d.originY, d.hexSize);
   const to = toPixel(animation.to, d.originX, d.originY, d.hexSize);
@@ -499,10 +505,16 @@ function drawMatchIntroAnimation(d: AnimationDrawContext, animation: Extract<Can
 
 function drawVictoryFanfareAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "victory_fanfare" }>): void {
   const center = toPixel(animation.center, d.originX, d.originY, d.hexSize);
+  const textCenter = toPixel(animation.textCenter, d.originX, d.originY, d.hexSize);
   const palette =
     animation.playerId === "player_1"
       ? { stroke: "108, 224, 255", fill: "210, 246, 255", glow: "155, 233, 255" }
       : { stroke: "255, 171, 120", fill: "255, 224, 201", glow: "255, 205, 174" };
+  const fadeIn = clamp(d.progress / 0.12, 0, 1);
+  const shrinkProgress = clamp(d.progress, 0, 1);
+  const titleAlpha = fadeIn * (1 - shrinkProgress * 0.82) * 0.98;
+  const titleScale = 4.8 - shrinkProgress * 4.1;
+  const titleY = textCenter.y - d.hexSize * 0.26;
 
   for (let ringIndex = 0; ringIndex < 3; ringIndex += 1) {
     const ringProgress = clamp((d.progress - ringIndex * 0.1) / (1 - ringIndex * 0.1 || 1), 0, 1);
@@ -561,15 +573,34 @@ function drawVictoryFanfareAnimation(d: AnimationDrawContext, animation: Extract
   d.ctx.fillStyle = `rgba(${palette.fill}, ${0.24 - d.progress * 0.08})`;
   d.ctx.fill();
 
-  d.ctx.fillStyle = `rgba(${palette.fill}, ${0.96 - d.progress * 0.42})`;
-  d.ctx.font = `${clamp(d.hexSize * 0.56, 17, 28)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+  d.ctx.save();
+  d.ctx.translate(textCenter.x, titleY);
+  d.ctx.scale(titleScale, titleScale * 0.94);
   d.ctx.textAlign = "center";
-  d.ctx.textBaseline = "bottom";
-  d.ctx.fillText(animation.label, center.x, center.y - d.hexSize * (1.62 + d.progress * 0.12));
+  d.ctx.textBaseline = "middle";
+  d.ctx.strokeStyle = `rgba(${palette.stroke}, ${titleAlpha * 0.36})`;
+  d.ctx.lineWidth = 2 / titleScale;
+  d.ctx.font = `${clamp(d.hexSize * 0.62, 18, 30)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+  d.ctx.strokeText(animation.label, 0, 0);
+  d.ctx.fillStyle = `rgba(${palette.fill}, ${titleAlpha})`;
+  d.ctx.fillText(animation.label, 0, 0);
+  d.ctx.restore();
 }
 
-export function drawAnimations(context: CanvasRenderingContext2D, frame: GameFrame, originX: number, originY: number, hexSize: number): void {
+export function drawAnimations(
+  context: CanvasRenderingContext2D,
+  frame: GameFrame,
+  originX: number,
+  originY: number,
+  hexSize: number,
+  layer: AnimationLayer = "base"
+): void {
   for (const animation of frame.transients.animations) {
+    const isForeground = isForegroundAnimation(animation);
+    if ((layer === "foreground") !== isForeground) {
+      continue;
+    }
+
     const d: AnimationDrawContext = {
       ctx: context,
       frame,

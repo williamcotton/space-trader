@@ -130,6 +130,7 @@ export type CanvasAnimation =
       ageSeconds: number;
       durationSeconds: number;
       center: HexCoord;
+      textCenter: HexCoord;
       hexes: HexCoord[];
       label: string;
     };

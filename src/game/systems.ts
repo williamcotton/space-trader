@@ -32,7 +32,7 @@ export function renderGame(state: GameState, frame: GameFrame): void {
   if (state.stack.length > 0 || stackActivityLevel > 0) {
     drawStackAnchor(context, frame, state.stack.length, stackActivityLevel);
   }
-  drawAnimations(context, frame, originX, originY, hexSize);
+  drawAnimations(context, frame, originX, originY, hexSize, "base");
 
   for (const entity of Object.values(state.entities)) {
     drawBase(entity, context, originX, originY, hexSize);
@@ -42,5 +42,6 @@ export function renderGame(state: GameState, frame: GameFrame): void {
     drawUnit(state, entity, context, originX, originY, hexSize, frame.transients.timeSeconds);
   }
 
+  drawAnimations(context, frame, originX, originY, hexSize, "foreground");
   drawMapFrame(context, frame);
 }

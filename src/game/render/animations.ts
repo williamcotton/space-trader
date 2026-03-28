@@ -231,15 +231,17 @@ export function buildMatchIntroAnimation(state: GameState): CanvasAnimation {
 export function buildVictoryAnimation(state: GameState, winner: PlayerId): CanvasAnimation {
   const winnerBaseId = state.players[winner].baseEntityId;
   const winnerBase = state.entities[winnerBaseId];
+  const effectCenter = winnerBase && winnerBase.kind === "base" ? winnerBase.coord : getMapCenterHex(state);
   return {
     id: `VICTORY_${state.matchId}_${state.turn}_${winner}`,
     kind: "victory_fanfare",
     playerId: winner,
     ageSeconds: 0,
     durationSeconds: 2.2,
-    center: winnerBase && winnerBase.kind === "base" ? winnerBase.coord : getMapCenterHex(state),
+    center: effectCenter,
+    textCenter: getMapCenterHex(state),
     hexes: getVictoryHexes(state, winner),
-    label: winner === "player_1" ? "Player 1 Wins" : "Player 2 Wins",
+    label: winner === "player_1" ? "Player 1 Wins!" : "Player 2 Wins!",
   };
 }
 
