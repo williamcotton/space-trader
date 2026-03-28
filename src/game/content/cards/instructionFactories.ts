@@ -104,6 +104,26 @@ function getAffectedFriendlyUnits(context: InstructionContext, waves: number, ro
   return { affectedHexes, friendlyUnits };
 }
 
+function createBloomInstruction(
+  context: InstructionContext,
+  units: readonly UnitEntity[],
+  options?: {
+    excludeEffectIdPrefix?: string;
+  }
+): GameInstruction | null {
+  if (units.length === 0) {
+    return null;
+  }
+
+  return {
+    type: "TRIGGER_BLOOM",
+    unitIds: units.map((unit) => unit.id),
+    sourceLabel: context.item.label,
+    sourceItemId: context.item.id,
+    excludeEffectIdPrefix: options?.excludeEffectIdPrefix,
+  };
+}
+
 export function createCascadeUnitBuffInstructions(options: CascadeUnitBuffOptions) {
   const attackBonus = options.attackBonus ?? 0;
   const armorBonus = options.armorBonus ?? 0;
@@ -176,6 +196,13 @@ export function createCascadeUnitBuffInstructions(options: CascadeUnitBuffOption
           [options.reward.resource]: options.reward.amount,
         },
       });
+    }
+
+    const bloomInstruction = createBloomInstruction(context, friendlyUnits, {
+      excludeEffectIdPrefix: `ce_${context.item.id}_`,
+    });
+    if (bloomInstruction) {
+      instructions.push(bloomInstruction);
     }
 
     const buffLabelParts: string[] = [];
@@ -270,6 +297,13 @@ export function createGlobalUnitBuffInstructions(options: GlobalUnitBuffOptions)
           layer: LAYER.TEMPORARY,
         });
       }
+    }
+
+    const bloomInstruction = createBloomInstruction(context, targets, {
+      excludeEffectIdPrefix: `ce_${context.item.id}_`,
+    });
+    if (bloomInstruction) {
+      instructions.push(bloomInstruction);
     }
 
     const buffParts: string[] = [];

@@ -159,6 +159,29 @@ export function getPlayerTheme(playerId: PlayerId): PlayerTheme {
   return activePlayerThemes[playerId];
 }
 
+function hexToRgb(hex: string): string {
+  const h = hex.replace("#", "");
+  return `${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}`;
+}
+
+export type PlayerAnimationPalette = {
+  stroke: string;
+  fill: string;
+  glow: string;
+};
+
+export function getPlayerAnimationPalette(playerId: PlayerId): PlayerAnimationPalette {
+  const theme = activePlayerThemes[playerId];
+  const primaryRgb = hexToRgb(theme.primary);
+  const lineRgb = hexToRgb(theme.line);
+  const secondaryRgb = hexToRgb(theme.secondary);
+  return {
+    stroke: primaryRgb,
+    fill: lineRgb,
+    glow: secondaryRgb,
+  };
+}
+
 export function getPlayerLabel(playerId: PlayerId): string {
   return playerId === "player_1" ? "Player 1" : "Player 2";
 }

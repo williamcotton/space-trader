@@ -13,7 +13,10 @@ import { createStackItemId, getOpponentPlayer } from "../turn/stack";
 
 export type TriggerCondition =
   | { type: "on_owner_tactic_played" }
+  | { type: "on_owner_surged_tactic_played" }
   | { type: "on_cascaded" }
+  | { type: "on_self_bloomed" }
+  | { type: "on_owner_unit_bloomed" }
   | { type: "on_enter_battlefield" }
   | { type: "on_death"; whose: "self" | "any_friendly" | "any_enemy" | "any" }
   | { type: "on_damage_dealt"; whose: "self" | "any_friendly" }
@@ -139,6 +142,12 @@ function doesEventMatchCondition(
       }
       return getCardDefinition(event.cardId)?.kind === "tactic";
 
+    case "on_owner_surged_tactic_played":
+      if (event.type !== "CARD_PLAYED_TO_STACK" || event.playerId !== unit.ownerId || !event.surgeActive) {
+        return false;
+      }
+      return getCardDefinition(event.cardId)?.kind === "tactic";
+
     case "on_cascaded": {
       if (event.type !== "STACK_ITEM_RESOLVED" || event.controllerId !== unit.ownerId || !event.targetHex || !event.sourceCardId) {
         return false;
@@ -155,6 +164,19 @@ function doesEventMatchCondition(
       });
       return affectedHexes.some((coord) => coord.q === unit.coord.q && coord.r === unit.coord.r);
     }
+
+    case "on_self_bloomed":
+      return event.type === "STACK_ITEM_RESOLVED" &&
+        state.lastBloomSourceItemId === event.itemId &&
+        state.lastBloomedUnitIds.includes(unit.id);
+
+    case "on_owner_unit_bloomed":
+      return event.type === "STACK_ITEM_RESOLVED" &&
+        state.lastBloomSourceItemId === event.itemId &&
+        state.lastBloomedUnitIds.some((unitId) => {
+          const bloomedUnit = state.entities[unitId];
+          return bloomedUnit?.kind === "unit" && bloomedUnit.ownerId === unit.ownerId;
+        });
 
     case "on_enter_battlefield":
       return event.type === "CARD_PLAYED_TO_BATTLEFIELD";

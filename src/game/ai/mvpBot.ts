@@ -8,6 +8,7 @@ import { MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord, type Un
 import { resolveCombatAttack } from "../systems/combat";
 import { canAffordCardCost, getEnemyEntities, getFirstOpenBaseAdjacentTile, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../model/queries";
 import {
+  BLOOM_KEYWORD,
   canAttackEntityDirectly,
   isUnitBlockedFromAttackingBySummoningSickness,
   isUnitBlockedFromMovingBySummoningSickness,
@@ -524,6 +525,15 @@ function scoreUnitBuffOpportunity(
 
   let score = affectedUnits.length * 4;
   let hasMeaningfulOpportunity = false;
+
+  const freshBloomUnits = affectedUnits.filter((unit) =>
+    !state.bloomedUnitIdsThisTurn.includes(unit.id) &&
+    unitHasActiveKeyword(state, unit, BLOOM_KEYWORD)
+  );
+  if (freshBloomUnits.length > 0) {
+    hasMeaningfulOpportunity = true;
+    score += freshBloomUnits.length * AI_WEIGHTS.gainedResourceValue;
+  }
 
   for (const unit of affectedUnits) {
     score += unit.role === "combat" ? 14 : unit.role === "utility" ? 8 : 5;

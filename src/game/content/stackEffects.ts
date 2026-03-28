@@ -77,6 +77,14 @@ export type StackEffectBehavior =
       type: "draw_and_gain_resources";
     }
   | {
+      type: "draw_cards";
+      count: number;
+    }
+  | {
+      type: "gain_resources";
+      resources: Partial<Record<ResourceType, number>>;
+    }
+  | {
       type: "resources_by_unit_count";
     }
   | {
@@ -298,6 +306,37 @@ function createCardOwnedDestroyDamagedUnitsInstructions(context: InstructionCont
 
 function createCardOwnedDrawAndGainResourcesInstructions(context: InstructionContext): GameInstruction[] {
   return createCardOwnedConfiguredInstructions(context, "draw_and_gain_resources", "missing draw-and-gain config on source card.");
+}
+
+function createDrawCardsInstructions(count: number) {
+  return (context: InstructionContext): GameInstruction[] => [
+    {
+      type: "DRAW_CARDS",
+      playerId: context.controllerId,
+      count,
+    },
+    {
+      type: "LOG",
+      text: `Resolved ${context.item.label}: drew ${count} card${count === 1 ? "" : "s"}.`,
+    },
+  ];
+}
+
+function createGainResourcesInstructions(resources: Partial<Record<ResourceType, number>>) {
+  return (context: InstructionContext): GameInstruction[] => [
+    {
+      type: "GAIN_RESOURCES",
+      playerId: context.controllerId,
+      resources,
+    },
+    {
+      type: "LOG",
+      text: `Resolved ${context.item.label}: gained ${Object.entries(resources)
+        .filter((entry) => (entry[1] ?? 0) > 0)
+        .map(([resource, amount]) => `${amount} ${resource}`)
+        .join(" and ")}.`,
+    },
+  ];
 }
 
 function createCardOwnedResourcesByUnitCountInstructions(context: InstructionContext): GameInstruction[] {
@@ -549,6 +588,40 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
     },
     createInstructions: createCardOwnedDrawAndGainResourcesInstructions,
   },
+  draw_card_1_uncounterable: {
+    id: "draw_card_1_uncounterable",
+    label: "Draw 1 Card",
+    object: {
+      kind: "ability",
+      counterable: false,
+      defaultCounterDestination: "none",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "draw_cards",
+      count: 1,
+    },
+    createInstructions: createDrawCardsInstructions(1),
+  },
+  gain_credit_1_uncounterable: {
+    id: "gain_credit_1_uncounterable",
+    label: "Gain 1 Credit",
+    object: {
+      kind: "ability",
+      counterable: false,
+      defaultCounterDestination: "none",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "gain_resources",
+      resources: { credits: 1 },
+    },
+    createInstructions: createGainResourcesInstructions({ credits: 1 }),
+  },
   resources_by_unit_count: {
     id: "resources_by_unit_count",
     label: "Resources By Unit Count",
@@ -619,6 +692,23 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
     },
     createInstructions: createDamageEntityInstructions(1),
   },
+  damage_enemy_base_1_uncounterable: {
+    id: "damage_enemy_base_1_uncounterable",
+    label: "Deal 1 Base Damage",
+    object: {
+      kind: "ability",
+      counterable: false,
+      defaultCounterDestination: "none",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "damage_enemy_base",
+      amount: 1,
+    },
+    createInstructions: createDamageEnemyBaseInstructions(1),
+  },
 };
 
 export function getStackEffectDefinition(effectId: string): StackEffectDefinition | undefined {
@@ -657,6 +747,14 @@ export function getStackEffectMagnitude(effectId: string, sourceCardId?: string 
         return getCardPlayEffectMagnitude(getCardDefinition(sourceCardId), surgeActive);
       }
       return Math.max(Math.abs(effect.behavior.attackBonus), Math.abs(effect.behavior.armorBonus));
+    case "draw_cards":
+      return effect.behavior.count;
+    case "gain_resources": {
+      const resources = effect.behavior.resources;
+      return Math.max(
+        ...(["credits", "alloy", "flux", "biomass"] as const).map((resource) => resources[resource] ?? 0)
+      );
+    }
     default:
       return 0;
   }

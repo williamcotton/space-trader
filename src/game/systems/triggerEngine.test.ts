@@ -81,6 +81,62 @@ describe("triggerEngine", () => {
       expect(triggered[0].targetEntityId).toBeTruthy();
     });
 
+    it("fires on_owner_surged_tactic_played for Surge Archivist", () => {
+      const state = createState();
+      state.entities.unit_player_1_archivist = {
+        id: "unit_player_1_archivist",
+        kind: "unit",
+        name: "Surge Archivist",
+        ownerId: "player_1",
+        role: "utility",
+        hp: 2,
+        maxHp: 2,
+        attackDamage: 1,
+        siegeDamageBonus: 0,
+        armor: 0,
+        moveRange: 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 0, r: 0 },
+        carries: null,
+        sourceCardId: "surge_archivist_card",
+        hasSummoningSickness: false,
+        movesRemaining: 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+
+      const surgedTacticEvent: CardPlayedToStackEvent = {
+        type: "CARD_PLAYED_TO_STACK",
+        playerId: "player_1",
+        cardInstanceId: "test_card",
+        cardId: "ion_surge_archive",
+        cardName: "Ion Surge Archive",
+        cost: { credits: 3, flux: 2 },
+        stackItemId: "stack_1",
+        effectId: "draw_and_gain_resources",
+        effectMagnitude: 5,
+        surgeActive: true,
+        targetStackItemId: null,
+        targetEntityId: null,
+        objectKind: "spell",
+        counterable: true,
+        defaultCounterDestination: "discard",
+        nextPriorityPlayerId: "player_2",
+        pendingUnitEntityId: null,
+      };
+
+      resetTriggerDepth();
+      incrementTriggerDepth();
+      const triggered = evaluateTriggersFromEvent(state, surgedTacticEvent);
+
+      expect(triggered).toHaveLength(1);
+      expect(triggered[0]?.effectId).toBe("draw_card_1_uncounterable");
+      expect(triggered[0]?.targetEntityId).toBeNull();
+      expect(triggered[0]?.counterable).toBe(false);
+    });
+
     it("does not fire when owner is not the tactic player", () => {
       const state = createState();
       state.entities["unit_player_1_relay"] = {
@@ -130,6 +186,195 @@ describe("triggerEngine", () => {
       incrementTriggerDepth();
       const triggered = evaluateTriggersFromEvent(state, enemyTacticEvent);
       expect(triggered).toHaveLength(0);
+    });
+
+    it("does not fire surge payoffs for non-surged tactics", () => {
+      const state = createState();
+      state.entities.unit_player_1_archivist = {
+        id: "unit_player_1_archivist",
+        kind: "unit",
+        name: "Surge Archivist",
+        ownerId: "player_1",
+        role: "utility",
+        hp: 2,
+        maxHp: 2,
+        attackDamage: 1,
+        siegeDamageBonus: 0,
+        armor: 0,
+        moveRange: 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 0, r: 0 },
+        carries: null,
+        sourceCardId: "surge_archivist_card",
+        hasSummoningSickness: false,
+        movesRemaining: 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+
+      const regularTacticEvent: CardPlayedToStackEvent = {
+        type: "CARD_PLAYED_TO_STACK",
+        playerId: "player_1",
+        cardInstanceId: "test_card",
+        cardId: "static_insight",
+        cardName: "Static Insight",
+        cost: { flux: 1 },
+        stackItemId: "stack_1",
+        effectId: "draw_and_gain_resources",
+        effectMagnitude: 1,
+        surgeActive: false,
+        targetStackItemId: null,
+        targetEntityId: null,
+        objectKind: "spell",
+        counterable: true,
+        defaultCounterDestination: "discard",
+        nextPriorityPlayerId: "player_2",
+        pendingUnitEntityId: null,
+      };
+
+      resetTriggerDepth();
+      incrementTriggerDepth();
+      const triggered = evaluateTriggersFromEvent(state, regularTacticEvent);
+      expect(triggered).toHaveLength(0);
+    });
+
+    it("fires on_self_bloomed for Bloom Archivist", () => {
+      const state = createState();
+      state.entities.unit_player_1_bloom_archivist = {
+        id: "unit_player_1_bloom_archivist",
+        kind: "unit",
+        name: "Bloom Archivist",
+        ownerId: "player_1",
+        role: "utility",
+        hp: 3,
+        maxHp: 3,
+        attackDamage: 1,
+        siegeDamageBonus: 0,
+        armor: 0,
+        moveRange: 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 0, r: 0 },
+        keywords: ["bloom"],
+        carries: null,
+        sourceCardId: "bloom_archivist_card",
+        hasSummoningSickness: false,
+        movesRemaining: 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+      state.lastBloomSourceItemId = "stack_bloom_1";
+      state.lastBloomedUnitIds = ["unit_player_1_bloom_archivist"];
+
+      const bloomEvent: GameEvent = {
+        type: "STACK_ITEM_RESOLVED",
+        itemId: "stack_bloom_1",
+        label: "Overgrowth Wave",
+        controllerId: "player_1",
+        ownerId: "player_1",
+        effectId: "global_unit_buff",
+        effectMagnitude: 1,
+        targetStackItemId: null,
+        targetEntityId: null,
+        targetHex: null,
+        objectKind: "spell",
+        counterable: true,
+        defaultCounterDestination: "discard",
+        sourceCardInstanceId: null,
+        sourceCardId: "overgrowth_wave",
+        sourceCardOwnerId: "player_1",
+        pendingUnitEntityId: null,
+      };
+
+      resetTriggerDepth();
+      incrementTriggerDepth();
+      const triggered = evaluateTriggersFromEvent(state, bloomEvent);
+
+      expect(triggered).toHaveLength(1);
+      expect(triggered[0]?.effectId).toBe("draw_card_1_uncounterable");
+    });
+
+    it("fires on_owner_unit_bloomed for Compost Broker", () => {
+      const state = createState();
+      state.entities.unit_player_1_compost_broker = {
+        id: "unit_player_1_compost_broker",
+        kind: "unit",
+        name: "Compost Broker",
+        ownerId: "player_1",
+        role: "utility",
+        hp: 4,
+        maxHp: 4,
+        attackDamage: 1,
+        siegeDamageBonus: 0,
+        armor: 0,
+        moveRange: 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 0, r: 0 },
+        carries: null,
+        sourceCardId: "compost_broker_card",
+        hasSummoningSickness: false,
+        movesRemaining: 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+      state.entities.unit_player_1_bloom_target = {
+        id: "unit_player_1_bloom_target",
+        kind: "unit",
+        name: "Support Drone",
+        ownerId: "player_1",
+        role: "combat",
+        hp: 6,
+        maxHp: 6,
+        attackDamage: 2,
+        siegeDamageBonus: 1,
+        armor: 0,
+        moveRange: 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 1, r: 0 },
+        keywords: ["sprout", "bloom"],
+        carries: null,
+        sourceCardId: "support_drone_card",
+        hasSummoningSickness: false,
+        movesRemaining: 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+      state.lastBloomSourceItemId = "stack_bloom_2";
+      state.lastBloomedUnitIds = ["unit_player_1_bloom_target"];
+
+      const bloomEvent: GameEvent = {
+        type: "STACK_ITEM_RESOLVED",
+        itemId: "stack_bloom_2",
+        label: "Spore Bloom",
+        controllerId: "player_1",
+        ownerId: "player_1",
+        effectId: "cascade_unit_buff",
+        effectMagnitude: 1,
+        targetStackItemId: null,
+        targetEntityId: null,
+        targetHex: { q: 1, r: 0 },
+        objectKind: "spell",
+        counterable: true,
+        defaultCounterDestination: "discard",
+        sourceCardInstanceId: null,
+        sourceCardId: "spore_bloom",
+        sourceCardOwnerId: "player_1",
+        pendingUnitEntityId: null,
+      };
+
+      resetTriggerDepth();
+      incrementTriggerDepth();
+      const triggered = evaluateTriggersFromEvent(state, bloomEvent);
+
+      expect(triggered).toHaveLength(1);
+      expect(triggered[0]?.effectId).toBe("gain_credit_1_uncounterable");
     });
 
     it("fires on_cascaded for Arc Repeater and targets an enemy within range 2", () => {

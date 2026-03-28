@@ -5,6 +5,8 @@ import { getEffectiveKeywordsForUnit } from "./continuousEffects";
 export const STEALTH_KEYWORD = "stealth";
 export const SPROUT_KEYWORD = "sprout";
 export const RELAY_KEYWORD = "relay";
+export const BLOOM_KEYWORD = "bloom";
+export const UNCOUNTERABLE_KEYWORD = "uncounterable";
 
 export function hasSproutKeyword(keywords?: readonly string[]): boolean {
   return Boolean(keywords?.includes(SPROUT_KEYWORD));
@@ -12,6 +14,10 @@ export function hasSproutKeyword(keywords?: readonly string[]): boolean {
 
 export function hasRelayKeyword(keywords?: readonly string[]): boolean {
   return Boolean(keywords?.includes(RELAY_KEYWORD));
+}
+
+export function hasBloomKeyword(keywords?: readonly string[]): boolean {
+  return Boolean(keywords?.includes(BLOOM_KEYWORD));
 }
 
 export function unitHasActiveKeyword(

@@ -149,6 +149,9 @@ export type GameState = {
   winner: PlayerId | null;
   lastRejectedReason: string | null;
   tacticsCastThisTurn: Record<PlayerId, number>;
+  bloomedUnitIdsThisTurn: EntityId[];
+  lastBloomSourceItemId: string | null;
+  lastBloomedUnitIds: EntityId[];
   tacticalHarvestEligibleUnitIds: EntityId[];
   tacticalHarvestedUnitIds: EntityId[];
 };
@@ -417,7 +420,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   } satisfies Record<PlayerId, PlayerZones>;
 
   return {
-    stateVersion: 16,
+    stateVersion: 21,
     matchId: options.matchId ?? "match_frontier_belt",
     turn: 1,
     phase: "start",
@@ -465,6 +468,9 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       player_1: 0,
       player_2: 0,
     },
+    bloomedUnitIdsThisTurn: [],
+    lastBloomSourceItemId: null,
+    lastBloomedUnitIds: [],
     tacticalHarvestEligibleUnitIds: [],
     tacticalHarvestedUnitIds: [],
   };

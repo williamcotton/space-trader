@@ -454,6 +454,59 @@ describe("decideMvpBotCommand", () => {
     });
   });
 
+  it("casts Overgrowth Wave when multiple Bloom units turn it into a biomass burst", () => {
+    const state = createInitialGameState({
+      map: FRONTIER_BELT_MAP,
+      factions: {
+        player_1: "biomass_swarm",
+        player_2: "flux_collective",
+      },
+    });
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_1.hand = [];
+    state.players.player_1.resources.credits = 3;
+    state.players.player_1.resources.biomass = 2;
+
+    for (let index = 0; index < 4; index += 1) {
+      state.entities[`bot_test_bloom_${index}`] = {
+        id: `bot_test_bloom_${index}`,
+        kind: "unit",
+        name: index % 2 === 0 ? "Spore Tender" : "Support Drone",
+        ownerId: "player_1",
+        role: index % 2 === 0 ? "resource" : "combat",
+        hp: index % 2 === 0 ? 4 : 6,
+        maxHp: index % 2 === 0 ? 4 : 6,
+        attackDamage: index % 2 === 0 ? 1 : 2,
+        siegeDamageBonus: index % 2 === 0 ? 0 : 1,
+        armor: 0,
+        moveRange: index % 2 === 0 ? 4 : 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: -4 + index, r: 1 },
+        keywords: ["sprout", "bloom"],
+        carries: null,
+        sourceCardId: index % 2 === 0 ? "spore_tender_card" : "support_drone_card",
+        hasSummoningSickness: false,
+        movesRemaining: index % 2 === 0 ? 4 : 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+    }
+
+    const cardInstanceId = addCardToHand(state, "player_1", "overgrowth_wave");
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+  });
+
   it("casts Rivet Volley at the enemy base when it is lethal", () => {
     const state = setupState();
     state.activePlayerId = "player_1";

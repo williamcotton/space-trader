@@ -44,6 +44,9 @@ describe("migrateRuntimeState", () => {
 
     // Simulate older serialized state.
     Reflect.deleteProperty(state as typeof state & { tacticsCastThisTurn?: unknown }, "tacticsCastThisTurn");
+    Reflect.deleteProperty(state as typeof state & { bloomedUnitIdsThisTurn?: unknown }, "bloomedUnitIdsThisTurn");
+    Reflect.deleteProperty(state as typeof state & { lastBloomSourceItemId?: unknown }, "lastBloomSourceItemId");
+    Reflect.deleteProperty(state as typeof state & { lastBloomedUnitIds?: unknown }, "lastBloomedUnitIds");
     Reflect.deleteProperty(state.stack[0] as typeof state.stack[number] & { surgeActive?: unknown }, "surgeActive");
 
     migrateRuntimeState(state);
@@ -52,6 +55,9 @@ describe("migrateRuntimeState", () => {
       player_1: 0,
       player_2: 0,
     });
+    expect(state.bloomedUnitIdsThisTurn).toEqual([]);
+    expect(state.lastBloomSourceItemId).toBeNull();
+    expect(state.lastBloomedUnitIds).toEqual([]);
     expect(state.stack[0]?.surgeActive).toBe(false);
   });
 });

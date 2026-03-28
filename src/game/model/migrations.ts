@@ -4,7 +4,7 @@ import { ensureEntityPresentation } from "../presentation";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createDefaultGameRules, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
 
-export const CURRENT_STATE_VERSION = 20;
+export const CURRENT_STATE_VERSION = 21;
 
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
@@ -121,6 +121,18 @@ export function migrateRuntimeState(state: GameState): void {
     if (typeof state.tacticsCastThisTurn.player_2 !== "number") {
       state.tacticsCastThisTurn.player_2 = 0;
     }
+  }
+
+  if (!Array.isArray(state.bloomedUnitIdsThisTurn)) {
+    state.bloomedUnitIdsThisTurn = [];
+  }
+
+  if (typeof state.lastBloomSourceItemId === "undefined") {
+    state.lastBloomSourceItemId = null;
+  }
+
+  if (!Array.isArray(state.lastBloomedUnitIds)) {
+    state.lastBloomedUnitIds = [];
   }
 
   for (const stackItem of state.stack) {
@@ -255,7 +267,7 @@ export function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v20 (surge tracking).",
+      text: "State migrated to v21 (surge and bloom tracking).",
     });
   }
 }

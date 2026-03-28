@@ -183,7 +183,7 @@ export type CardPlayProfile =
 export type AutoTargetStrategy = "weakest_enemy_unit" | "weakest_enemy_unit_in_range_2";
 
 export type UnitTrigger = {
-  event: "on_owner_tactic_played";
+  event: "on_owner_tactic_played" | "on_owner_surged_tactic_played";
   effectId: string;
   labelSuffix: string;
   autoTarget: AutoTargetStrategy;
@@ -659,17 +659,26 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     }),
     onResolve: (ctx) => {
       if (!ctx.targetEntityId) return [{ type: "LOG", text: "Brace Protocol: no target." }];
-      return [{
-        type: "APPLY_CONTINUOUS_EFFECT",
-        effectId: `ce_brace_${ctx.item.id}`,
-        sourceEntityId: null,
-        sourceCardId: "brace_protocol",
-        controllerId: ctx.controllerId,
-        payload: { type: "stat_modifier", stat: "armor", amount: 2 },
-        target: { type: "specific_entity", entityId: ctx.targetEntityId },
-        expiry: { type: "start_of_turn", turn: getStartOfControllersNextTurn(ctx.state, ctx.controllerId) },
-        layer: LAYER.TEMPORARY,
-      }];
+      return [
+        {
+          type: "APPLY_CONTINUOUS_EFFECT",
+          effectId: `ce_brace_${ctx.item.id}`,
+          sourceEntityId: null,
+          sourceCardId: "brace_protocol",
+          controllerId: ctx.controllerId,
+          payload: { type: "stat_modifier", stat: "armor", amount: 2 },
+          target: { type: "specific_entity", entityId: ctx.targetEntityId },
+          expiry: { type: "start_of_turn", turn: getStartOfControllersNextTurn(ctx.state, ctx.controllerId) },
+          layer: LAYER.TEMPORARY,
+        },
+        {
+          type: "TRIGGER_BLOOM",
+          unitIds: [ctx.targetEntityId],
+          sourceLabel: "Brace Protocol",
+          sourceItemId: ctx.item.id,
+          excludeEffectIdPrefix: `ce_brace_${ctx.item.id}`,
+        },
+      ];
     },
   },
   shrapnel_relay: {
@@ -1326,6 +1335,111 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       autoTarget: "weakest_enemy_unit_in_range_2",
     }],
   },
+  surge_archivist_card: {
+    id: "surge_archivist_card",
+    name: "Surge Archivist",
+    faction: "flux_collective",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 1, flux: 1 },
+    text: "Whenever you cast a surged tactic, draw a card.",
+    play: unitPlay(),
+    onResolve: deployUnit("surge_archivist_card"),
+    unit: {
+      role: "utility",
+      hp: 2,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+    },
+    triggers: [{
+      condition: { type: "on_owner_surged_tactic_played" },
+      effectId: "draw_card_1_uncounterable",
+      labelSuffix: "Archive",
+    }],
+  },
+  overcharge_savant_card: {
+    id: "overcharge_savant_card",
+    name: "Overcharge Savant",
+    faction: "flux_collective",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 2, flux: 1 },
+    text: "Whenever you cast a surged tactic, Overcharge Savant deals 1 damage to the enemy base.",
+    play: unitPlay(),
+    onResolve: deployUnit("overcharge_savant_card"),
+    unit: {
+      role: "utility",
+      hp: 3,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+    },
+    triggers: [{
+      condition: { type: "on_owner_surged_tactic_played" },
+      effectId: "damage_enemy_base_1_uncounterable",
+      labelSuffix: "Overcharge",
+    }],
+  },
+  bloom_archivist_card: {
+    id: "bloom_archivist_card",
+    name: "Bloom Archivist",
+    faction: "biomass_swarm",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 1, biomass: 1 },
+    text: "Bloom (The first time this unit is buffed each turn, gain 1 biomass.) Whenever Bloom Archivist blooms, draw a card.",
+    play: unitPlay(),
+    onResolve: deployUnit("bloom_archivist_card"),
+    unit: {
+      role: "utility",
+      hp: 3,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      keywords: ["bloom"],
+    },
+    triggers: [{
+      condition: { type: "on_self_bloomed" },
+      effectId: "draw_card_1_uncounterable",
+      labelSuffix: "Archive",
+    }],
+  },
+  compost_broker_card: {
+    id: "compost_broker_card",
+    name: "Compost Broker",
+    faction: "biomass_swarm",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 1, biomass: 1 },
+    text: "Whenever one or more of your units bloom, gain 1 credit.",
+    play: unitPlay(),
+    onResolve: deployUnit("compost_broker_card"),
+    unit: {
+      role: "utility",
+      hp: 4,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+    },
+    triggers: [{
+      condition: { type: "on_owner_unit_bloomed" },
+      effectId: "gain_credit_1_uncounterable",
+      labelSuffix: "Dividend",
+    }],
+  },
   forge_hauler_card: {
     id: "forge_hauler_card",
     name: "Forge Hauler",
@@ -1375,7 +1489,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "unit",
     speed: "main",
     cost: { biomass: 1 },
-    text: "Sprout (can move and attack the turn it enters). Deploy a resource unit near your base.",
+    text: "Sprout (can move and attack the turn it enters). Bloom (The first time this unit is buffed each turn, gain 1 biomass.) Deploy a resource unit near your base.",
     play: unitPlay(),
     onResolve: deployUnit("spore_tender_card"),
     unit: {
@@ -1387,7 +1501,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       moveRange: 4,
       attackRange: 1,
       attackActionsPerTurn: 1,
-      keywords: ["sprout"],
+      keywords: ["sprout", "bloom"],
     },
   },
   swarm_harvester_card: {
@@ -1419,7 +1533,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "unit",
     speed: "main",
     cost: { credits: 2, biomass: 1 },
-    text: "Sprout (can move and attack the turn it enters). Deploy a biomass skirmisher near your base.",
+    text: "Sprout (can move and attack the turn it enters). Bloom (The first time this unit is buffed each turn, gain 1 biomass.) Deploy a biomass skirmisher near your base.",
     play: unitPlay(),
     onResolve: deployUnit("support_drone_card"),
     unit: {
@@ -1431,7 +1545,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       moveRange: 2,
       attackRange: 1,
       attackActionsPerTurn: 1,
-      keywords: ["sprout"],
+      keywords: ["sprout", "bloom"],
     },
   },
   escort_drone_card: {

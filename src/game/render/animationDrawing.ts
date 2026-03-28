@@ -1,5 +1,5 @@
 import type { CanvasAnimation, GameFrame } from "../types";
-import { getPlayerTheme, getResourceTheme } from "../presentation";
+import { getPlayerAnimationPalette, getPlayerTheme, getResourceTheme } from "../presentation";
 import { toPixel, clamp, drawHexOutline, drawResourceGlyph, truncateLabel } from "./primitives";
 import { getStackAnchor, drawStackGlyph } from "./overlays";
 
@@ -27,7 +27,7 @@ function drawMoveAnimation(d: AnimationDrawContext, animation: Extract<CanvasAni
   d.ctx.beginPath();
   d.ctx.moveTo(from.x, from.y);
   d.ctx.lineTo(currentX, currentY);
-  d.ctx.strokeStyle = `rgba(${animation.playerId === "player_1" ? "99, 213, 255" : "255, 153, 105"}, ${0.55 - d.progress * 0.35})`;
+  d.ctx.strokeStyle = `rgba(${getPlayerAnimationPalette(animation.playerId).stroke}, ${0.55 - d.progress * 0.35})`;
   d.ctx.lineWidth = 4;
   d.ctx.stroke();
 
@@ -43,7 +43,7 @@ function drawAttackAnimation(d: AnimationDrawContext, animation: Extract<CanvasA
   d.ctx.beginPath();
   d.ctx.moveTo(from.x, from.y);
   d.ctx.lineTo(to.x, to.y);
-  d.ctx.strokeStyle = `rgba(${animation.playerId === "player_1" ? "105, 229, 255" : "255, 163, 110"}, ${0.9 - d.progress * 0.55})`;
+  d.ctx.strokeStyle = `rgba(${getPlayerAnimationPalette(animation.playerId).stroke}, ${0.9 - d.progress * 0.55})`;
   d.ctx.lineWidth = 3 + (1 - d.progress) * 3;
   d.ctx.stroke();
 
@@ -90,7 +90,7 @@ function drawDeployAnimation(d: AnimationDrawContext, animation: Extract<CanvasA
   d.ctx.beginPath();
   d.ctx.moveTo(position.x, position.y - d.hexSize * 1.3);
   d.ctx.lineTo(position.x, position.y - d.hexSize * 0.18);
-  d.ctx.strokeStyle = `rgba(${animation.playerId === "player_1" ? "99, 213, 255" : "255, 153, 105"}, ${0.56 - d.progress * 0.32})`;
+  d.ctx.strokeStyle = `rgba(${getPlayerAnimationPalette(animation.playerId).stroke}, ${0.56 - d.progress * 0.32})`;
   d.ctx.lineWidth = 3.2;
   d.ctx.stroke();
 }
@@ -122,7 +122,7 @@ function drawStackCastAnimation(d: AnimationDrawContext, animation: Extract<Canv
   d.ctx.beginPath();
   d.ctx.moveTo(from.x, from.y);
   d.ctx.quadraticCurveTo(controlX, controlY, anchor.x, anchor.y);
-  d.ctx.strokeStyle = animation.playerId === "player_1" ? `rgba(99, 213, 255, ${beamAlpha})` : `rgba(255, 153, 105, ${beamAlpha})`;
+  d.ctx.strokeStyle = `rgba(${getPlayerAnimationPalette(animation.playerId).stroke}, ${beamAlpha})`;
   d.ctx.lineWidth = 2.4 + (1 - d.progress) * 1.4;
   d.ctx.stroke();
 
@@ -147,7 +147,7 @@ function drawStackCounterAnimation(d: AnimationDrawContext, animation: Extract<C
   d.ctx.beginPath();
   d.ctx.moveTo(from.x, from.y);
   d.ctx.quadraticCurveTo(controlX, controlY, anchor.x, anchor.y);
-  d.ctx.strokeStyle = animation.playerId === "player_1" ? `rgba(99, 213, 255, ${beamAlpha})` : `rgba(255, 153, 105, ${beamAlpha})`;
+  d.ctx.strokeStyle = `rgba(${getPlayerAnimationPalette(animation.playerId).stroke}, ${beamAlpha})`;
   d.ctx.lineWidth = 2.8 + (1 - d.progress) * 1.6;
   d.ctx.stroke();
 
@@ -180,7 +180,7 @@ function drawSpellResolveAnimation(d: AnimationDrawContext, animation: Extract<C
   d.ctx.beginPath();
   d.ctx.moveTo(anchor.x, anchor.y);
   d.ctx.quadraticCurveTo(controlX, controlY, target.x, target.y);
-  d.ctx.strokeStyle = animation.playerId === "player_1" ? `rgba(99, 213, 255, ${beamAlpha})` : `rgba(255, 153, 105, ${beamAlpha})`;
+  d.ctx.strokeStyle = `rgba(${getPlayerAnimationPalette(animation.playerId).stroke}, ${beamAlpha})`;
   d.ctx.lineWidth = 2.4 + (1 - d.progress) * 1.8;
   d.ctx.stroke();
 
@@ -435,13 +435,15 @@ function drawDeathBurstAnimation(d: AnimationDrawContext, animation: Extract<Can
   d.ctx.lineTo(position.x + d.hexSize * 0.18, position.y + d.hexSize * 0.18);
   d.ctx.moveTo(position.x + d.hexSize * 0.18, position.y - d.hexSize * 0.18);
   d.ctx.lineTo(position.x - d.hexSize * 0.18, position.y + d.hexSize * 0.18);
-  d.ctx.strokeStyle = `rgba(${animation.playerId === "player_1" ? "154, 232, 255" : "255, 208, 183"}, ${0.82 - d.progress * 0.52})`;
+  d.ctx.strokeStyle = `rgba(${getPlayerAnimationPalette(animation.playerId).fill}, ${0.82 - d.progress * 0.52})`;
   d.ctx.lineWidth = 1.9 - d.progress * 0.7;
   d.ctx.stroke();
 }
 
 function drawMatchIntroAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "match_intro" }>): void {
   const center = toPixel(animation.center, d.originX, d.originY, d.hexSize);
+  const p1Palette = getPlayerAnimationPalette("player_1");
+  const p2Palette = getPlayerAnimationPalette("player_2");
   const ringAlpha = 0.42 - d.progress * 0.18;
   const streakAlpha = 0.72 - d.progress * 0.42;
   const fadeIn = clamp(d.progress / 0.14, 0, 1);
@@ -460,8 +462,8 @@ function drawMatchIntroAnimation(d: AnimationDrawContext, animation: Extract<Can
     d.ctx.beginPath();
     drawHexOutline(d.ctx, center.x, center.y, d.hexSize * (0.9 + ringIndex * 0.28 + ringProgress * 1.18));
     d.ctx.strokeStyle = ringIndex % 2 === 0
-      ? `rgba(108, 224, 255, ${ringAlpha - ringProgress * 0.12})`
-      : `rgba(255, 176, 124, ${ringAlpha - ringProgress * 0.12})`;
+      ? `rgba(${p1Palette.stroke}, ${ringAlpha - ringProgress * 0.12})`
+      : `rgba(${p2Palette.stroke}, ${ringAlpha - ringProgress * 0.12})`;
     d.ctx.lineWidth = 2.8 - ringProgress * 1.1;
     d.ctx.stroke();
   }
@@ -472,8 +474,8 @@ function drawMatchIntroAnimation(d: AnimationDrawContext, animation: Extract<Can
     d.ctx.moveTo(center.x + offset, center.y - d.hexSize * (4.2 - d.progress * 0.32));
     d.ctx.lineTo(center.x + offset * 0.72, center.y - d.hexSize * (0.36 - d.progress * 0.08));
     d.ctx.strokeStyle = beamIndex % 2 === 0
-      ? `rgba(103, 219, 255, ${streakAlpha})`
-      : `rgba(255, 162, 112, ${streakAlpha * 0.86})`;
+      ? `rgba(${p1Palette.stroke}, ${streakAlpha})`
+      : `rgba(${p2Palette.stroke}, ${streakAlpha * 0.86})`;
     d.ctx.lineWidth = 1.8 + (1 - d.progress) * 1.8;
     d.ctx.stroke();
   }
@@ -488,7 +490,7 @@ function drawMatchIntroAnimation(d: AnimationDrawContext, animation: Extract<Can
   d.ctx.scale(titleScale, titleScale * 0.94);
   d.ctx.textAlign = "center";
   d.ctx.textBaseline = "middle";
-  d.ctx.strokeStyle = `rgba(112, 223, 255, ${titleAlpha * 0.34})`;
+  d.ctx.strokeStyle = `rgba(${p1Palette.stroke}, ${titleAlpha * 0.34})`;
   d.ctx.lineWidth = 1.8 / titleScale;
   d.ctx.font = `${clamp(d.hexSize * 0.58, 18, 30)}px "Avenir Next", "Trebuchet MS", sans-serif`;
   d.ctx.strokeText(animation.label, 0, 0);
@@ -506,10 +508,7 @@ function drawMatchIntroAnimation(d: AnimationDrawContext, animation: Extract<Can
 function drawVictoryFanfareAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "victory_fanfare" }>): void {
   const center = toPixel(animation.center, d.originX, d.originY, d.hexSize);
   const textCenter = toPixel(animation.textCenter, d.originX, d.originY, d.hexSize);
-  const palette =
-    animation.playerId === "player_1"
-      ? { stroke: "108, 224, 255", fill: "210, 246, 255", glow: "155, 233, 255" }
-      : { stroke: "255, 171, 120", fill: "255, 224, 201", glow: "255, 205, 174" };
+  const palette = getPlayerAnimationPalette(animation.playerId);
   const fadeIn = clamp(d.progress / 0.12, 0, 1);
   const shrinkProgress = clamp(d.progress, 0, 1);
   const titleAlpha = fadeIn * (1 - shrinkProgress * 0.82) * 0.98;

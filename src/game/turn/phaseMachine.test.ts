@@ -92,4 +92,21 @@ describe("phaseMachine", () => {
     expect(updated.attacksRemaining).toBe(updated.attackActionsPerTurn);
     expect(updated.hasSummoningSickness).toBe(false);
   });
+
+  it("clears bloom tracking on turn handoff", () => {
+    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    state.bloomedUnitIdsThisTurn = ["unit_player_1_test_bloom"];
+    state.lastBloomSourceItemId = "stack_test_bloom";
+    state.lastBloomedUnitIds = ["unit_player_1_test_bloom"];
+
+    advancePhase(state); // economy
+    advancePhase(state); // main
+    advancePhase(state); // tactical
+    advancePhase(state); // end
+    advancePhase(state); // start, next turn
+
+    expect(state.bloomedUnitIdsThisTurn).toEqual([]);
+    expect(state.lastBloomSourceItemId).toBeNull();
+    expect(state.lastBloomedUnitIds).toEqual([]);
+  });
 });

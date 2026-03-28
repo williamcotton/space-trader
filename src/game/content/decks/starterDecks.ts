@@ -45,7 +45,8 @@ const ALLOY_STARTER_ENTRIES: readonly DeckEntry[] = [
 
 const FLUX_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["expedition_harvester_card", 4],
-  ["orbital_ping", 2],
+  ["surge_archivist_card", 2],
+  ["overcharge_savant_card", 2],
   ["arc_snap", 4],
   ["counter_pulse", 2],
   ["emergency_war_chest", 2],
@@ -62,7 +63,6 @@ const FLUX_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["overload_finish", 4],
   ["arc_repeater_card", 2],
   ["relay_savant_card", 4],
-  ["chain_beacon", 2],
   ["ion_surge_archive", 4],
   ["meteor_chain", 2],
 ];
@@ -71,9 +71,11 @@ const BIOMASS_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["expedition_harvester_card", 4],
   ["neural_echo", 4],
   ["spore_burst", 4],
-  ["emergency_thrust", 4],
-  ["escort_drone_card", 4],
+  ["emergency_thrust", 2],
+  ["escort_drone_card", 2],
   ["spore_tender_card", 4],
+  ["bloom_archivist_card", 2],
+  ["compost_broker_card", 2],
   ["pathfinder_buggy_card", 4],
   ["salvage_hauler_card", 4],
   ["spore_bloom", 4],

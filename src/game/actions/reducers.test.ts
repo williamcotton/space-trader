@@ -1819,6 +1819,298 @@ describe("dispatchCommand", () => {
     expect(getEffectiveUnitArmor(state, nextScout)).toBe(nextScout.armor);
   });
 
+  it("Bloom generates biomass the first time bloom units are buffed each turn", () => {
+    const state = createInitialGameState({
+      map: FRONTIER_BELT_MAP,
+      factions: {
+        player_1: "biomass_swarm",
+        player_2: "flux_collective",
+      },
+    });
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 3;
+    state.players.player_1.resources.biomass = 2;
+
+    const tenderId = "unit_player_1_bloom_tender_test";
+    state.entities[tenderId] = {
+      id: tenderId,
+      kind: "unit",
+      name: "Spore Tender",
+      ownerId: "player_1",
+      role: "resource",
+      hp: 4,
+      maxHp: 4,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 4,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: -2, r: 1 },
+      keywords: ["sprout", "bloom"],
+      carries: null,
+      sourceCardId: "spore_tender_card",
+      hasSummoningSickness: false,
+      movesRemaining: 4,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const supportId = "unit_player_1_bloom_support_test";
+    state.entities[supportId] = {
+      id: supportId,
+      kind: "unit",
+      name: "Support Drone",
+      ownerId: "player_1",
+      role: "combat",
+      hp: 6,
+      maxHp: 6,
+      attackDamage: 2,
+      siegeDamageBonus: 1,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: -1, r: 1 },
+      keywords: ["sprout", "bloom"],
+      carries: null,
+      sourceCardId: "support_drone_card",
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const cardInstanceId = addCardToHand(state, "player_1", "overgrowth_wave");
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    expect(state.players.player_1.resources.credits).toBe(0);
+    expect(state.players.player_1.resources.biomass).toBe(2);
+    expect(state.bloomedUnitIdsThisTurn).toEqual(expect.arrayContaining([tenderId, supportId]));
+  });
+
+  it("Bloom only pays out once per unit each turn", () => {
+    const state = createInitialGameState({
+      map: FRONTIER_BELT_MAP,
+      factions: {
+        player_1: "biomass_swarm",
+        player_2: "flux_collective",
+      },
+    });
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 5;
+    state.players.player_1.resources.biomass = 3;
+
+    const supportId = "unit_player_1_bloom_repeat_test";
+    state.entities[supportId] = {
+      id: supportId,
+      kind: "unit",
+      name: "Support Drone",
+      ownerId: "player_1",
+      role: "combat",
+      hp: 6,
+      maxHp: 6,
+      attackDamage: 2,
+      siegeDamageBonus: 1,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 0, r: 0 },
+      keywords: ["sprout", "bloom"],
+      carries: null,
+      sourceCardId: "support_drone_card",
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const overgrowthId = addCardToHand(state, "player_1", "overgrowth_wave");
+    const sporeBloomId = addCardToHand(state, "player_1", "spore_bloom");
+
+    const firstPlay = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId: overgrowthId,
+    });
+    expect(firstPlay.ok).toBe(true);
+    resolveStackByPassing(state);
+
+    expect(state.players.player_1.resources.biomass).toBe(2);
+
+    const secondPlay = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId: sporeBloomId,
+      targetHex: { q: 0, r: 0 },
+    });
+    expect(secondPlay.ok).toBe(true);
+    resolveStackByPassing(state);
+
+    expect(state.players.player_1.resources.credits).toBe(0);
+    expect(state.players.player_1.resources.biomass).toBe(1);
+    expect(state.bloomedUnitIdsThisTurn.filter((unitId) => unitId === supportId)).toHaveLength(1);
+  });
+
+  it("Bloom Archivist draws when it blooms", () => {
+    const state = createInitialGameState({
+      map: FRONTIER_BELT_MAP,
+      factions: {
+        player_1: "biomass_swarm",
+        player_2: "flux_collective",
+      },
+    });
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 3;
+    state.players.player_1.resources.biomass = 2;
+
+    const archivistId = "unit_player_1_bloom_archivist_test";
+    state.entities[archivistId] = {
+      id: archivistId,
+      kind: "unit",
+      name: "Bloom Archivist",
+      ownerId: "player_1",
+      role: "utility",
+      hp: 3,
+      maxHp: 3,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: -1, r: 1 },
+      keywords: ["bloom"],
+      carries: null,
+      sourceCardId: "bloom_archivist_card",
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const cardInstanceId = addCardToHand(state, "player_1", "overgrowth_wave");
+    const handBefore = state.zones.player_1.hand.length;
+    const deckBefore = state.zones.player_1.deck.length;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    expect(state.players.player_1.resources.biomass).toBe(1);
+    expect(state.zones.player_1.hand.length).toBe(handBefore);
+    expect(state.zones.player_1.deck.length).toBe(deckBefore - 1);
+  });
+
+  it("Compost Broker gains a credit when a friendly unit blooms", () => {
+    const state = createInitialGameState({
+      map: FRONTIER_BELT_MAP,
+      factions: {
+        player_1: "biomass_swarm",
+        player_2: "flux_collective",
+      },
+    });
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 3;
+    state.players.player_1.resources.biomass = 2;
+
+    const brokerId = "unit_player_1_compost_broker_test";
+    state.entities[brokerId] = {
+      id: brokerId,
+      kind: "unit",
+      name: "Compost Broker",
+      ownerId: "player_1",
+      role: "utility",
+      hp: 4,
+      maxHp: 4,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: -2, r: 1 },
+      keywords: [],
+      carries: null,
+      sourceCardId: "compost_broker_card",
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const supportId = "unit_player_1_compost_bloom_target";
+    state.entities[supportId] = {
+      id: supportId,
+      kind: "unit",
+      name: "Support Drone",
+      ownerId: "player_1",
+      role: "combat",
+      hp: 6,
+      maxHp: 6,
+      attackDamage: 2,
+      siegeDamageBonus: 1,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: -1, r: 1 },
+      keywords: ["sprout", "bloom"],
+      carries: null,
+      sourceCardId: "support_drone_card",
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    const cardInstanceId = addCardToHand(state, "player_1", "overgrowth_wave");
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    expect(state.players.player_1.resources.credits).toBe(1);
+    expect(state.players.player_1.resources.biomass).toBe(1);
+  });
+
   it("War Protocol buffs only friendly combat units until end of turn", () => {
     const state = setupState();
     state.activePlayerId = "player_1";
@@ -2010,6 +2302,74 @@ describe("dispatchCommand", () => {
 
     expect(resolvedCenterEnemy.hp).toBe(centerEnemy.maxHp - 2);
     expect(resolvedAdjacentEnemy.hp).toBe(adjacentEnemy.maxHp - 1);
+  });
+
+  it("Surge Archivist draws when its controller casts a surged tactic", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_2.hand = [];
+    state.players.player_2.resources.credits = 3;
+    state.players.player_2.resources.flux = 3;
+
+    state.entities.unit_player_2_archivist = {
+      id: "unit_player_2_archivist",
+      kind: "unit",
+      name: "Surge Archivist",
+      ownerId: "player_2",
+      role: "utility",
+      hp: 2,
+      maxHp: 2,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 3, r: -1 },
+      carries: null,
+      sourceCardId: "surge_archivist_card",
+      hasSummoningSickness: false,
+      movesRemaining: 2,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    addCardToHand(state, "player_2", "static_insight");
+    addCardToHand(state, "player_2", "ion_surge_archive");
+
+    const staticInsightId = state.zones.player_2.hand.find((card) => card.cardId === "static_insight")?.instanceId;
+    const archiveId = state.zones.player_2.hand.find((card) => card.cardId === "ion_surge_archive")?.instanceId;
+    expect(staticInsightId).toBeTruthy();
+    expect(archiveId).toBeTruthy();
+    if (!staticInsightId || !archiveId) {
+      throw new Error("Expected surge setup cards in hand.");
+    }
+
+    const firstPlay = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId: staticInsightId,
+    });
+    expect(firstPlay.ok).toBe(true);
+    resolveStackByPassing(state);
+
+    const secondPlay = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId: archiveId,
+    });
+    expect(secondPlay.ok).toBe(true);
+    const triggerStackItem = state.stack.find((item) => item.label.includes("Surge Archivist"));
+    expect(triggerStackItem?.effectId).toBe("draw_card_1_uncounterable");
+
+    resolveStackByPassing(state);
+
+    expect(state.zones.player_2.hand).toHaveLength(4);
+    expect(state.players.player_2.resources.flux).toBe(3);
   });
 
   it("Spore Harvest pays out based on the number of friendly units", () => {
@@ -2701,6 +3061,45 @@ describe("dispatchCommand", () => {
       targetStackItemId: topId,
     });
     expect(expectRejected(uncounterable)).toContain("uncounterable");
+  });
+
+  it("treats uncounterable as a card keyword for played cards", () => {
+    const staticInsight = CARD_DEFINITIONS.static_insight;
+    const originalKeywords = staticInsight.keywords;
+    staticInsight.keywords = [...(originalKeywords ?? []), "uncounterable"];
+
+    try {
+      const state = setupState();
+      state.activePlayerId = "player_2";
+      state.priorityPlayerId = "player_2";
+      state.phase = "main";
+      state.stack = [];
+      state.zones.player_2.hand = [];
+      state.zones.player_1.hand = [];
+      state.players.player_2.resources.flux = 1;
+      state.players.player_1.resources.credits = 2;
+
+      const tacticId = addCardToHand(state, "player_2", "static_insight");
+      const counterId = addCardToHand(state, "player_1", "null_intercept");
+
+      const play = dispatchCommand(state, {
+        type: "PLAY_CARD",
+        playerId: "player_2",
+        cardInstanceId: tacticId,
+      });
+      expect(play.ok).toBe(true);
+      expect(state.stack[0]?.counterable).toBe(false);
+
+      const counter = dispatchCommand(state, {
+        type: "PLAY_CARD",
+        playerId: "player_1",
+        cardInstanceId: counterId,
+        targetStackItemId: state.stack[0]?.id,
+      });
+      expect(expectRejected(counter)).toContain("uncounterable");
+    } finally {
+      staticInsight.keywords = originalKeywords;
+    }
   });
 
   it("stack damage can set winner and lock further commands", () => {

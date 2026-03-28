@@ -14,7 +14,7 @@ import { removeStackItemById } from "../turn/stack";
 import type { GameInstruction } from "./instructions";
 import { drawCardForPlayer } from "./handlers/cards";
 import { applyReplacementEffects } from "../systems/replacementEngine";
-import { hasSproutKeyword } from "../systems/keywords";
+import { BLOOM_KEYWORD, hasSproutKeyword, unitHasActiveKeyword } from "../systems/keywords";
 
 // --- Internal helpers (extracted from handlers/cards.ts) ---
 
@@ -177,6 +177,48 @@ function handleDeployUnit(state: GameState, instr: Extract<GameInstruction, { ty
   deployUnitInternal(state, instr.cardId, instr.controllerId, instr.entityId, instr.spawnCoord);
 }
 
+function handleTriggerBloom(
+  state: GameState,
+  instr: Extract<GameInstruction, { type: "TRIGGER_BLOOM" }>
+): void {
+  if (state.lastBloomSourceItemId !== instr.sourceItemId) {
+    state.lastBloomSourceItemId = instr.sourceItemId;
+    state.lastBloomedUnitIds = [];
+  }
+
+  const unitIds = [...new Set(instr.unitIds)].sort((a, b) => a.localeCompare(b));
+  let bloomsTriggered = 0;
+
+  for (const unitId of unitIds) {
+    const entity = state.entities[unitId];
+    if (!entity || entity.kind !== "unit") {
+      continue;
+    }
+
+    if (state.bloomedUnitIdsThisTurn.includes(unitId)) {
+      continue;
+    }
+
+    if (!unitHasActiveKeyword(state, entity, BLOOM_KEYWORD, {
+      excludeEffectIdPrefix: instr.excludeEffectIdPrefix,
+    })) {
+      continue;
+    }
+
+    state.bloomedUnitIdsThisTurn.push(unitId);
+    state.lastBloomedUnitIds.push(unitId);
+    state.players[entity.ownerId].resources.biomass += 1;
+    bloomsTriggered += 1;
+  }
+
+  if (bloomsTriggered > 0) {
+    state.log.push({
+      turn: state.turn,
+      text: `${instr.sourceLabel}: Bloom triggered on ${bloomsTriggered} unit${bloomsTriggered === 1 ? "" : "s"} and generated ${bloomsTriggered} biomass.`,
+    });
+  }
+}
+
 function handleApplyContinuousEffect(
   state: GameState,
   instr: Extract<GameInstruction, { type: "APPLY_CONTINUOUS_EFFECT" }>
@@ -245,6 +287,9 @@ function executeSingleInstruction(state: GameState, instr: GameInstruction): voi
       break;
     case "DEPLOY_UNIT":
       handleDeployUnit(state, instr);
+      break;
+    case "TRIGGER_BLOOM":
+      handleTriggerBloom(state, instr);
       break;
     case "APPLY_CONTINUOUS_EFFECT":
       handleApplyContinuousEffect(state, instr);
