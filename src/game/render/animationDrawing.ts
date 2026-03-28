@@ -438,6 +438,12 @@ function drawMatchIntroAnimation(d: AnimationDrawContext, animation: Extract<Can
   const center = toPixel(animation.center, d.originX, d.originY, d.hexSize);
   const ringAlpha = 0.42 - d.progress * 0.18;
   const streakAlpha = 0.72 - d.progress * 0.42;
+  const fadeIn = clamp(d.progress / 0.14, 0, 1);
+  const shrinkProgress = clamp(d.progress, 0, 1);
+  const titleAlpha = fadeIn * (1 - shrinkProgress * 0.86) * 0.96;
+  const titleScale = 6.4 - shrinkProgress * 5.85;
+  const titleY = center.y - d.hexSize * 0.24;
+  const subtitleAlpha = Math.min(clamp((d.progress - 0.08) / 0.16, 0, 1), 1 - shrinkProgress * 0.82) * 0.74;
 
   for (let ringIndex = 0; ringIndex < 4; ringIndex += 1) {
     const ringProgress = clamp((d.progress - ringIndex * 0.08) / (1 - ringIndex * 0.08 || 1), 0, 1);
@@ -471,16 +477,24 @@ function drawMatchIntroAnimation(d: AnimationDrawContext, animation: Extract<Can
   d.ctx.fillStyle = `rgba(236, 245, 255, ${0.2 - d.progress * 0.08})`;
   d.ctx.fill();
 
-  d.ctx.fillStyle = `rgba(239, 246, 255, ${0.94 - d.progress * 0.46})`;
-  d.ctx.font = `${clamp(d.hexSize * 0.52, 16, 26)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+  d.ctx.save();
+  d.ctx.translate(center.x, titleY);
+  d.ctx.scale(titleScale, titleScale * 0.94);
   d.ctx.textAlign = "center";
-  d.ctx.textBaseline = "bottom";
-  d.ctx.fillText(animation.label, center.x, center.y - d.hexSize * (1.42 + d.progress * 0.08));
+  d.ctx.textBaseline = "middle";
+  d.ctx.strokeStyle = `rgba(112, 223, 255, ${titleAlpha * 0.34})`;
+  d.ctx.lineWidth = 1.8 / titleScale;
+  d.ctx.font = `${clamp(d.hexSize * 0.58, 18, 30)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+  d.ctx.strokeText(animation.label, 0, 0);
+  d.ctx.fillStyle = `rgba(239, 246, 255, ${titleAlpha})`;
+  d.ctx.fillText(animation.label, 0, 0);
+  d.ctx.restore();
 
-  d.ctx.fillStyle = `rgba(182, 205, 255, ${0.82 - d.progress * 0.42})`;
+  d.ctx.fillStyle = `rgba(182, 205, 255, ${subtitleAlpha})`;
   d.ctx.font = `${clamp(d.hexSize * 0.24, 9, 12)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+  d.ctx.textAlign = "center";
   d.ctx.textBaseline = "top";
-  d.ctx.fillText(animation.subtitle.toUpperCase(), center.x, center.y + d.hexSize * (0.94 - d.progress * 0.08));
+  d.ctx.fillText(animation.subtitle.toUpperCase(), center.x, center.y + d.hexSize * (0.98 - d.progress * 0.06));
 }
 
 function drawVictoryFanfareAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "victory_fanfare" }>): void {
