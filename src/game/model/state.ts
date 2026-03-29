@@ -1,5 +1,6 @@
 import type { Faction, GamePhase, ResourceType, UnitRole } from "./enums";
 import { PLAYER_ONE, PLAYER_TWO, type EntityId, type NodeId, type PlayerId } from "./ids";
+import "../content/sets/base";
 import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
 import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
 import type { ContinuousEffect } from "../systems/continuousEffects";

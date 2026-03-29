@@ -15,6 +15,7 @@ import { getPlayEffectResolver, registerPlayEffectResolver } from "../registries
 import { getStackEffectMagnitudeCalculator, registerStackEffectMagnitudeCalculator } from "../registries/stackEffectMagnitudes";
 import { LAYER } from "../systems/continuousEffects";
 import type { ResourceType, UnitRole } from "../model/enums";
+import { getRegisteredStackEffectDefinition, registerStackEffectDefinitions } from "./registry";
 
 export type CounterDestination = "discard" | "hand" | "exile" | "none";
 export type StackObjectKind = "spell" | "ability";
@@ -379,7 +380,7 @@ function createCounterInstructions(destination: CounterDestination) {
   };
 }
 
-const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
+export const BASE_STACK_EFFECTS: Record<string, StackEffectDefinition> = {
   noop_log: {
     id: "noop_log",
     label: "No-op Log",
@@ -760,12 +761,16 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
   },
 };
 
+export const STACK_EFFECTS = BASE_STACK_EFFECTS;
+
+registerStackEffectDefinitions("base", BASE_STACK_EFFECTS);
+
 export function getStackEffectDefinition(effectId: string): StackEffectDefinition | undefined {
-  return STACK_EFFECTS[effectId];
+  return getRegisteredStackEffectDefinition(effectId);
 }
 
 export function isKnownStackEffect(effectId: string): boolean {
-  return typeof STACK_EFFECTS[effectId] !== "undefined";
+  return typeof getStackEffectDefinition(effectId) !== "undefined";
 }
 
 export function isCounterResponse(effectId: string): boolean {

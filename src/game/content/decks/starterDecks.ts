@@ -1,5 +1,6 @@
 import type { Faction } from "../../model/enums";
 import { getCardDefinition } from "../cards/catalog";
+import { getRegisteredStarterDeck, registerStarterDeckRecipes } from "../registry";
 
 type DeckEntry = readonly [cardId: string, copies: number];
 
@@ -89,14 +90,18 @@ const BIOMASS_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["orbital_purge", 2],
 ];
 
-const STARTER_DECKS: Record<Faction, string[]> = {
+export const BASE_STARTER_DECKS: Record<Faction, string[]> = {
   alloy_clan: defineStarterDeck(ALLOY_STARTER_ENTRIES),
   flux_collective: defineStarterDeck(FLUX_STARTER_ENTRIES),
   biomass_swarm: defineStarterDeck(BIOMASS_STARTER_ENTRIES),
 };
 
+export const STARTER_DECKS = BASE_STARTER_DECKS;
+
+registerStarterDeckRecipes("base", BASE_STARTER_DECKS);
+
 export function getStarterDeckCardIds(faction: Faction): string[] {
-  return [...STARTER_DECKS[faction]];
+  return getRegisteredStarterDeck(faction);
 }
 
 export function validateDeckCardIds(cardIds: string[]): string[] {

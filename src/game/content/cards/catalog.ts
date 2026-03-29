@@ -7,6 +7,7 @@ import { hexDistance, isWithinMapBounds } from "../../model/hex";
 import { LAYER } from "../../systems/continuousEffects";
 import type { CardTrigger } from "../../systems/triggerEngine";
 import { getPlayEffectMagnitudeCalculator, registerPlayEffectMagnitudeCalculator } from "../../registries/playEffects";
+import { getRegisteredCardDefinition, registerCardDefinitions } from "../registry";
 import type {
   CascadeUnitBuffOptions,
   CascadeUnitBuffReward,
@@ -624,7 +625,7 @@ function hasFriendlyUnitNearEntity(state: Readonly<GameState>, playerId: PlayerI
   );
 }
 
-export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
+export const BASE_CARD_DEFINITIONS: Record<string, CardDefinition> = {
   orbital_ping: {
     id: "orbital_ping",
     name: "Orbital Ping",
@@ -1858,8 +1859,12 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
   },
 };
 
+export const CARD_DEFINITIONS = BASE_CARD_DEFINITIONS;
+
+registerCardDefinitions("base", BASE_CARD_DEFINITIONS);
+
 export function getCardDefinition(cardId: string): CardDefinition | undefined {
-  return CARD_DEFINITIONS[cardId];
+  return getRegisteredCardDefinition(cardId);
 }
 
 function cloneKeywords(keywords?: readonly CardKeyword[]): CardKeyword[] {
