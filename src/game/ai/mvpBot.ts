@@ -884,7 +884,7 @@ registerSpellScoringResolver("damage_entity", ({ state, botPlayerId, targeting, 
   if (!entity) {
     return -Infinity;
   }
-  return scoreDamageSpellTarget(state, botPlayerId, entity, effect.amount, state.phase);
+  return scoreDamageSpellTarget(state, botPlayerId, entity, Number(effect.amount ?? 0), state.phase);
 });
 
 registerSpellScoringResolver("destroy_entity", ({ state, botPlayerId, targeting }) => {
@@ -995,7 +995,7 @@ registerSpellScoringResolver("damage_enemy_base", ({ state, botPlayerId, targeti
   if (targeting.targetEntityId || targeting.targetHex || targeting.targetStackItemId) {
     return -Infinity;
   }
-  return scoreBaseDamageSpell(state, botPlayerId, effect.amount, state.phase);
+  return scoreBaseDamageSpell(state, botPlayerId, Number(effect.amount ?? 0), state.phase);
 });
 
 registerSpellScoringResolver("hex_area_damage", ({ state, botPlayerId, targeting, effectConfigs }) => {

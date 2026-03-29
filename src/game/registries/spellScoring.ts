@@ -4,25 +4,23 @@ import type { PlayerId } from "../model/ids";
 import type { GameState } from "../model/state";
 import type { PlayCardTargetOption } from "../rules/cardPlayOptions";
 
-export type SpellScoringContext<K extends StackEffectBehavior["type"] = StackEffectBehavior["type"]> = {
+export type SpellScoringContext = {
   state: GameState;
   botPlayerId: PlayerId;
   targeting: PlayCardTargetOption;
-  effect: Extract<StackEffectBehavior, { type: K }>;
+  effect: StackEffectBehavior;
   effectConfigs: CardPlayEffectConfig[];
 };
 
-export type SpellScoringResolver<K extends StackEffectBehavior["type"] = StackEffectBehavior["type"]> = (
-  context: SpellScoringContext<K>
-) => number;
+export type SpellScoringResolver = (context: SpellScoringContext) => number;
 
 const spellScoringResolvers = new Map<StackEffectBehavior["type"], SpellScoringResolver>();
 
-export function registerSpellScoringResolver<K extends StackEffectBehavior["type"]>(
-  type: K,
-  resolver: SpellScoringResolver<K>
+export function registerSpellScoringResolver(
+  type: StackEffectBehavior["type"],
+  resolver: SpellScoringResolver
 ): void {
-  spellScoringResolvers.set(type, resolver as unknown as SpellScoringResolver);
+  spellScoringResolvers.set(type, resolver);
 }
 
 export function getSpellScoringResolver(

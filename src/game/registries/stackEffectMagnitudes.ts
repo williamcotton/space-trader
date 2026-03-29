@@ -1,7 +1,7 @@
 import type { StackEffectBehavior } from "../content/stackEffects";
 
-export type StackEffectMagnitudeCalculator<K extends StackEffectBehavior["type"] = StackEffectBehavior["type"]> = (
-  behavior: Extract<StackEffectBehavior, { type: K }>,
+export type StackEffectMagnitudeCalculator = (
+  behavior: StackEffectBehavior,
   options: {
     sourceCardId?: string | null;
     activeModifierIds?: string[];
@@ -10,11 +10,11 @@ export type StackEffectMagnitudeCalculator<K extends StackEffectBehavior["type"]
 
 const stackEffectMagnitudeCalculators = new Map<StackEffectBehavior["type"], StackEffectMagnitudeCalculator>();
 
-export function registerStackEffectMagnitudeCalculator<K extends StackEffectBehavior["type"]>(
-  type: K,
-  calculator: StackEffectMagnitudeCalculator<K>
+export function registerStackEffectMagnitudeCalculator(
+  type: StackEffectBehavior["type"],
+  calculator: StackEffectMagnitudeCalculator
 ): void {
-  stackEffectMagnitudeCalculators.set(type, calculator as unknown as StackEffectMagnitudeCalculator);
+  stackEffectMagnitudeCalculators.set(type, calculator);
 }
 
 export function getStackEffectMagnitudeCalculator(

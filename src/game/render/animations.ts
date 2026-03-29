@@ -356,7 +356,7 @@ registerStackResolveAnimationBuilder("damage_entity", ({ event, before, state, b
     durationSeconds: 0.78,
     coord: target.coord,
     visual: target.kind === "base" ? "base_damage" : "damage",
-    amount: behavior.amount,
+    amount: Number(behavior.amount ?? 0),
     label: event.label,
   };
 });
@@ -394,11 +394,13 @@ registerStackResolveAnimationBuilder("modify_unit_until_end_of_turn", ({ event, 
   }
 
   const buffLabelParts: string[] = [];
-  if (behavior.attackBonus !== 0) {
-    buffLabelParts.push(`${behavior.attackBonus > 0 ? "+" : ""}${behavior.attackBonus} ATK`);
+  const attackBonus = Number(behavior.attackBonus ?? 0);
+  const armorBonus = Number(behavior.armorBonus ?? 0);
+  if (attackBonus !== 0) {
+    buffLabelParts.push(`${attackBonus > 0 ? "+" : ""}${attackBonus} ATK`);
   }
-  if (behavior.armorBonus !== 0) {
-    buffLabelParts.push(`${behavior.armorBonus > 0 ? "+" : ""}${behavior.armorBonus} ARM`);
+  if (armorBonus !== 0) {
+    buffLabelParts.push(`${armorBonus > 0 ? "+" : ""}${armorBonus} ARM`);
   }
 
   return {
@@ -419,7 +421,7 @@ registerStackResolveAnimationBuilder("cascade_unit_buff", ({ event, state, baseI
     state,
     baseId,
     event.label,
-    Number(getCardPlayEffectConfigsByType(sourceCard, "cascade_unit_buff")[0]?.waves ?? behavior.waves),
+    Number(getCardPlayEffectConfigsByType(sourceCard, "cascade_unit_buff")[0]?.waves ?? behavior.waves ?? 0),
     getCardAnimationAccent(event.sourceCardId)
   )
 );
@@ -466,7 +468,7 @@ registerStackResolveAnimationBuilder("damage_enemy_base", ({ event, state, baseI
     ageSeconds: 0,
     durationSeconds: 0.7,
     coord: targetBase.coord,
-    damage: behavior.amount,
+    damage: Number(behavior.amount ?? 0),
   };
 });
 

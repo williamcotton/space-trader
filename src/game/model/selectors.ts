@@ -61,11 +61,12 @@ export function getStackItemDetail(item: StackItem, state: GameState): string {
   }
   const effect = getStackEffectDefinition(item.effectId);
   if (effect?.behavior.type === "counter") {
-    const baseText = effect.behavior.destination === "hand" ? "Counter target spell and return it to hand." : "Counter target spell.";
+    const destination = effect.behavior.destination === "hand" ? "hand" : "discard";
+    const baseText = destination === "hand" ? "Counter target spell and return it to hand." : "Counter target spell.";
     return targetStackItem ? `${baseText} Target: ${targetStackItem.label}.` : baseText;
   }
   if (effect?.behavior.type === "damage_enemy_base") {
-    return `Deal ${effect.behavior.amount} damage to the enemy base.`;
+    return `Deal ${Number(effect.behavior.amount ?? 0)} damage to the enemy base.`;
   }
   if (targetEntity) {
     return `${effect?.label ?? item.effectId} targeting ${getEntityDisplayName(targetEntity, { players: state.players })}.`;

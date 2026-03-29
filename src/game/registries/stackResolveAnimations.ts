@@ -5,26 +5,24 @@ import type { GameState } from "../model/state";
 import type { CanvasAnimation } from "../types";
 import type { AnimationCapture } from "../render/animations";
 
-export type StackResolveAnimationBuilderContext<K extends StackEffectBehavior["type"] = StackEffectBehavior["type"]> = {
+export type StackResolveAnimationBuilderContext = {
   event: StackItemResolvedEvent;
   before: AnimationCapture;
   state: GameState;
   baseId: string;
   sourceCard?: CardDefinition;
-  behavior: Extract<StackEffectBehavior, { type: K }>;
+  behavior: StackEffectBehavior;
 };
 
-export type StackResolveAnimationBuilder<K extends StackEffectBehavior["type"] = StackEffectBehavior["type"]> = (
-  context: StackResolveAnimationBuilderContext<K>
-) => CanvasAnimation | null;
+export type StackResolveAnimationBuilder = (context: StackResolveAnimationBuilderContext) => CanvasAnimation | null;
 
 const stackResolveAnimationBuilders = new Map<StackEffectBehavior["type"], StackResolveAnimationBuilder>();
 
-export function registerStackResolveAnimationBuilder<K extends StackEffectBehavior["type"]>(
-  type: K,
-  builder: StackResolveAnimationBuilder<K>
+export function registerStackResolveAnimationBuilder(
+  type: StackEffectBehavior["type"],
+  builder: StackResolveAnimationBuilder
 ): void {
-  stackResolveAnimationBuilders.set(type, builder as unknown as StackResolveAnimationBuilder);
+  stackResolveAnimationBuilders.set(type, builder);
 }
 
 export function getStackResolveAnimationBuilder(

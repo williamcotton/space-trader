@@ -711,8 +711,8 @@ export const BASE_STACK_EFFECTS: Record<string, StackEffectDefinition> = {
 
 export const STACK_EFFECTS = BASE_STACK_EFFECTS;
 
-registerStackEffectMagnitudeCalculator("damage_enemy_base", (behavior) => behavior.amount);
-registerStackEffectMagnitudeCalculator("damage_entity", (behavior) => behavior.amount);
+registerStackEffectMagnitudeCalculator("damage_enemy_base", (behavior) => Number(behavior.amount ?? 0));
+registerStackEffectMagnitudeCalculator("damage_entity", (behavior) => Number(behavior.amount ?? 0));
 registerStackEffectMagnitudeCalculator("mass_damage", (_behavior, options) =>
   options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
 );
@@ -740,11 +740,16 @@ registerStackEffectMagnitudeCalculator("hex_area_damage", (_behavior, options) =
 registerStackEffectMagnitudeCalculator("cascade_unit_buff", (behavior, options) =>
   options.sourceCardId
     ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? [])
-    : Math.max(Math.abs(behavior.attackBonus), Math.abs(behavior.armorBonus))
+    : Math.max(Math.abs(Number(behavior.attackBonus ?? 0)), Math.abs(Number(behavior.armorBonus ?? 0)))
 );
-registerStackEffectMagnitudeCalculator("draw_cards", (behavior) => behavior.count);
+registerStackEffectMagnitudeCalculator("draw_cards", (behavior) => Number(behavior.count ?? 0));
 registerStackEffectMagnitudeCalculator("gain_resources", (behavior) =>
-  Math.max(...getRegisteredResourceIds().map((resource) => behavior.resources[resource] ?? 0), 0)
+  Math.max(
+    ...getRegisteredResourceIds().map((resource) =>
+      Number((behavior.resources as Record<string, number> | undefined)?.[resource] ?? 0)
+    ),
+    0
+  )
 );
 registerStackEffectMagnitudeCalculator("noop_log", () => 0);
 registerStackEffectMagnitudeCalculator("deploy_unit", () => 0);
