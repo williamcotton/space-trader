@@ -1,6 +1,6 @@
 # Space Trader - Game Design (Living Draft)
 
-Last updated: March 28, 2026
+Last updated: March 29, 2026
 
 ## Purpose
 This is the working game design document for Space Trader.
@@ -291,6 +291,7 @@ What is already live:
 - a real `Surge` shell
 - a real `Bloom` shell
 - Alloy `Salvage` and `Bastion` packages
+- faction-specific payoff units and payoff tactics
 
 What still needs work:
 - tighter faction balance
@@ -298,6 +299,7 @@ What still needs work:
 - more combo payoffs beyond the first live packages
 - a cleaner Biomass regrowth / death-value package
 - one louder Alloy signature payoff card
+- a top-end Flux `Relay` / `Resonance` payoff
 
 ## New Content Direction: Make the Game More Exciting
 The next wave of design should focus on:
@@ -454,8 +456,8 @@ What Biomass should gain next:
 - There should be tension between spending on economy, support pieces, and combat finishers
 - Support/synergy cards should not erase the importance of the map economy
 
-## MVP Scope (Updated)
-The MVP should now be understood as:
+## Current Prototype Scope
+The live prototype should now be understood as:
 - one map: `Frontier Belt`
 - 1v1 skirmish
 - premade decks only
@@ -464,6 +466,7 @@ The MVP should now be understood as:
 - tactical movement/combat working
 - simple bot opponent working
 - enough card variety to make matches tactically interesting
+- enough faction identity to support real monofaction play patterns
 
 Minimum interesting content target:
 - each active faction should have:
@@ -471,9 +474,11 @@ Minimum interesting content target:
   - at least 1 resource unit type
   - at least 1 support/synergy unit
   - at least 1 direct-damage tactic for units
-  - at least 1 counterspell or stack interaction card
+  - at least 1 meaningful interaction card
+    - stack interaction, tempo interaction, or a board-facing answer
   - at least 1 combat trick or temporary buff
-  - at least 1 small combo line worth building toward
+  - at least 1 named or clearly readable synergy engine
+  - at least 1 payoff turn or haymaker worth building toward
 
 ## Presentation Goals
 The game should visually celebrate interactions.
