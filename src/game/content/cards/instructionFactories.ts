@@ -5,7 +5,7 @@ import { LAYER } from "../../systems/continuousEffects";
 import { getCascadeAffectedHexes } from "../../systems/cascade";
 import type { ResourceType, UnitRole } from "../../model/enums";
 import type { CardCost, CardKeyword } from "./catalog";
-import { getBloomedUnitIdsThisTurn, getSalvageTriggersThisTurn } from "../../mechanics";
+import { getMechanicApi, type BloomMechanicApi, type SalvageMechanicApi } from "../../registries/mechanicApis";
 
 export type EffectRelation = "ally" | "enemy" | "any";
 
@@ -70,6 +70,22 @@ export type HexAreaDamageOptions = {
   radius: number;
   relation: EffectRelation;
 };
+
+function requireBloomApi(): BloomMechanicApi {
+  const api = getMechanicApi<BloomMechanicApi>("bloom");
+  if (!api) {
+    throw new Error("Missing registered bloom mechanic API.");
+  }
+  return api;
+}
+
+function requireSalvageApi(): SalvageMechanicApi {
+  const api = getMechanicApi<SalvageMechanicApi>("salvage");
+  if (!api) {
+    throw new Error("Missing registered salvage mechanic API.");
+  }
+  return api;
+}
 
 function matchesRelation(context: InstructionContext, unit: UnitEntity, relation: EffectRelation): boolean {
   switch (relation) {
@@ -431,7 +447,7 @@ export function createResourcesByUnitCountInstructions(options: ResourcesByUnitC
 
 export function createResourcesByBloomCountInstructions(options: ResourcesByBloomCountOptions) {
   return (context: InstructionContext): GameInstruction[] => {
-    const matchingUnits = getBloomedUnitIdsThisTurn(context.state)
+    const matchingUnits = requireBloomApi().getBloomedUnitIdsThisTurn(context.state)
       .map((unitId) => context.state.entities[unitId])
       .filter((entity): entity is UnitEntity => entity?.kind === "unit" && entity.ownerId === context.controllerId);
     const thresholdsMet = Math.floor(matchingUnits.length / options.threshold);
@@ -468,7 +484,7 @@ export function createResourcesByBloomCountInstructions(options: ResourcesByBloo
 
 export function createResourcesBySalvageCountInstructions(options: ResourcesBySalvageCountOptions) {
   return (context: InstructionContext): GameInstruction[] => {
-    const salvageTriggers = getSalvageTriggersThisTurn(context.state, context.controllerId);
+    const salvageTriggers = requireSalvageApi().getSalvageTriggersThisTurn(context.state, context.controllerId);
     const thresholdsMet = Math.floor(salvageTriggers / options.threshold);
     const payoutMultiplier = options.maxThresholds
       ? Math.min(thresholdsMet, options.maxThresholds)

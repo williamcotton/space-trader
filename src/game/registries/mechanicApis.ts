@@ -22,19 +22,21 @@ export type SurgeMechanicApi = {
   incrementTacticsCastThisTurn(state: GameState, playerId: PlayerId): void;
 };
 
-type MechanicApiRegistry = {
-  bloom: BloomMechanicApi;
-  salvage: SalvageMechanicApi;
-  surge: SurgeMechanicApi;
+export type MechanicCompatibilityApi = {
+  installCompatibilityShim?(state: GameState): void;
 };
 
 const mechanicApis = new Map<string, unknown>();
 
-export function registerMechanicApi<K extends keyof MechanicApiRegistry>(mechanicId: K, api: MechanicApiRegistry[K]): void {
+export function registerMechanicApi<T extends object>(mechanicId: string, api: T): void {
   mechanicApis.set(mechanicId, api);
 }
 
-export function getMechanicApi<K extends keyof MechanicApiRegistry>(mechanicId: K): MechanicApiRegistry[K] | undefined {
+export function getMechanicApi<T>(mechanicId: string): T | undefined {
   const api = mechanicApis.get(mechanicId);
-  return api as MechanicApiRegistry[K] | undefined;
+  return api as T | undefined;
+}
+
+export function getRegisteredMechanicApis(): Array<[string, unknown]> {
+  return [...mechanicApis.entries()];
 }

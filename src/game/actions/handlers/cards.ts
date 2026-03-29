@@ -9,12 +9,9 @@ import { syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord 
 import { createContinuousEffectId, LAYER, nextEffectTimestamp } from "../../systems/continuousEffects";
 import type { InstructionContext } from "../instructions";
 import { executeInstructions } from "../instructionHandlers";
-import {
-  getTacticsCastThisTurn,
-  incrementTacticsCastThisTurn,
-  resetResolutionMechanicState,
-} from "../../mechanics";
+import { resetResolutionMechanicState } from "../../mechanics";
 import { resolveCardCounterable } from "../../registries/cardCounterability";
+import { getMechanicApi, type SurgeMechanicApi } from "../../registries/mechanicApis";
 import { getUnitDeploymentAdjustment } from "../../registries/unitDeployment";
 
 function applyCardCost(state: GameState, playerId: PlayerId, cost: CardCost): void {
@@ -36,6 +33,14 @@ function removeCardFromHand(state: GameState, playerId: PlayerId, cardInstanceId
 
 function addCardToZone(state: GameState, playerId: PlayerId, zone: "hand" | "discard" | "exile", card: CardInstance): void {
   state.zones[playerId][zone].push(card);
+}
+
+function requireSurgeApi(): SurgeMechanicApi {
+  const api = getMechanicApi<SurgeMechanicApi>("surge");
+  if (!api) {
+    throw new Error("Missing registered surge mechanic API.");
+  }
+  return api;
 }
 
 export function drawCardForPlayer(state: GameState, playerId: PlayerId, drawReason: "opening_hand" | "start_phase_draw"): void {
@@ -251,7 +256,7 @@ export function handlePlayCard(
     return [];
   }
 
-  const surgeActive = card.kind === "tactic" && getTacticsCastThisTurn(state, command.playerId) > 0;
+  const surgeActive = card.kind === "tactic" && requireSurgeApi().getTacticsCastThisTurn(state, command.playerId) > 0;
   const effectId = card.play.stackEffectId;
   const effectDefinition = getStackEffectDefinition(effectId);
   if (!effectDefinition) {
@@ -337,7 +342,7 @@ export function reduceCardPlayedToStack(
   state.priorityPlayerId = event.nextPriorityPlayerId;
   state.consecutivePriorityPasses = 0;
   if (cardDefinition.kind === "tactic") {
-    incrementTacticsCastThisTurn(state, event.playerId);
+    requireSurgeApi().incrementTacticsCastThisTurn(state, event.playerId);
   }
   state.log.push({
     turn: state.turn,

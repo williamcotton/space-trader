@@ -3,9 +3,9 @@ import type { GameCommand } from "./commands";
 import { dispatchCommand } from "./reducers";
 import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
 import { requireMapDefinition } from "../content/maps/catalog";
+import { RELAY_KEYWORD, SPROUT_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage, getEffectiveUnitSiegeDamageBonus } from "../systems/unitStats";
-import { RELAY_KEYWORD, SPROUT_KEYWORD } from "../systems/keywords";
 
 function setupState() {
   return createInitialGameState({ map: requireMapDefinition("frontier_belt") });

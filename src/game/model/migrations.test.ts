@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { requireMapDefinition } from "../content/maps/catalog";
-import { RELAY_KEYWORD } from "../systems/keywords";
+import { RELAY_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
 import { migrateRuntimeState } from "./migrations";
 import { createInitialGameState } from "./state";
 

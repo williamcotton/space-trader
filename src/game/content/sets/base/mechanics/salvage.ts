@@ -6,9 +6,10 @@ import { registerTriggerConditionEvaluator } from "../../../../registries/trigge
 import { registerTriggerConditionScoreContributor } from "../../../../registries/aiMechanics";
 import { registerMechanicStateInitializer, registerMechanicStateMigrator, registerMechanicTurnResetHook } from "../../../../registries/mechanicState";
 import { getRegisteredResourceIds } from "../../../registry";
-import { SALVAGE_KEYWORD, unitHasActiveKeyword } from "../../../../systems/keywords";
+import { unitHasActiveKeyword } from "../../../../systems/keywords";
 import { ensureMechanicStateNamespace } from "../../../mechanics/stateAccess";
 import { registerMechanicApi } from "../../../../registries/mechanicApis";
+import { SALVAGE_KEYWORD } from "./keywordIds";
 
 const SALVAGE_MECHANIC_ID = "salvage";
 

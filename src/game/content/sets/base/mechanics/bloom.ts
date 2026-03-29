@@ -11,9 +11,10 @@ import {
   registerMechanicStateMigrator,
   registerMechanicTurnResetHook,
 } from "../../../../registries/mechanicState";
-import { BLOOM_KEYWORD, unitHasActiveKeyword } from "../../../../systems/keywords";
+import { unitHasActiveKeyword } from "../../../../systems/keywords";
 import { ensureMechanicStateNamespace } from "../../../mechanics/stateAccess";
 import { registerMechanicApi } from "../../../../registries/mechanicApis";
+import { BLOOM_KEYWORD } from "./keywordIds";
 
 const BLOOM_MECHANIC_ID = "bloom";
 

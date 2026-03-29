@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { requireMapDefinition } from "../content/maps/catalog";
+import { RELAY_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
 import { createInitialGameState, type UnitEntity } from "../model/state";
 import { getCascadeAffectedHexes } from "./cascade";
-import { RELAY_KEYWORD } from "./keywords";
 
 function createUnit(id: string, coord: { q: number; r: number }, keywords: string[] = []): UnitEntity {
   return {

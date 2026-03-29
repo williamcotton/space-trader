@@ -18,7 +18,7 @@ import { getCascadeAffectedHexes } from "../systems/cascade";
 import { getLegalPlayCardTargetOptions } from "../rules/cardPlayOptions";
 import { getEffectiveUnitAttackDamage } from "../systems/unitStats";
 import { getSpellScoringResolver, registerSpellScoringResolver } from "../registries/spellScoring";
-import { getTacticsCastThisTurn } from "../mechanics";
+import { getMechanicApi, type SurgeMechanicApi } from "../registries/mechanicApis";
 import {
   applyUnitBuffScoreContributions,
   getCascadeScoreBonus,
@@ -30,6 +30,14 @@ const CURRENCY_RESOURCE_ID = "credits";
 function getResourceOrder(): ResourceType[] {
   const resourceIds = getRegisteredResourceIds();
   return resourceIds.length > 0 ? resourceIds : [CURRENCY_RESOURCE_ID];
+}
+
+function requireSurgeApi(): SurgeMechanicApi {
+  const api = getMechanicApi<SurgeMechanicApi>("surge");
+  if (!api) {
+    throw new Error("Missing registered surge mechanic API.");
+  }
+  return api;
 }
 
 const AI_WEIGHTS = {
@@ -1025,7 +1033,7 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
     if (!effect) {
       continue;
     }
-    const surgeActive = getTacticsCastThisTurn(state, botPlayerId) > 0;
+    const surgeActive = requireSurgeApi().getTacticsCastThisTurn(state, botPlayerId) > 0;
     const effectConfigs = getResolvedCardPlayEffectConfigs(card, surgeActive);
 
     const legalTargets = getLegalPlayCardTargetOptions(state, botPlayerId, cardInstance.instanceId, card);

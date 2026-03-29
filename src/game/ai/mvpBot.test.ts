@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
 import { requireMapDefinition } from "../content/maps/catalog";
+import { SPROUT_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
 import { hexDistance } from "../model/hex";
 import { createInitialGameState } from "../model/state";
-import { SPROUT_KEYWORD } from "../systems/keywords";
 import { decideMvpBotCommand } from "./mvpBot";
 
 function setupState() {

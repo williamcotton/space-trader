@@ -32,13 +32,9 @@ import {
   canTargetEntityDirectly,
   getAttackKeywordBlockReason,
   getTargetingKeywordBlockReason,
-  hasBastionKeyword,
-  hasBloomKeyword,
-  hasRelayKeyword,
-  hasSalvageKeyword,
-  hasSproutKeyword,
   isUnitBlockedFromAttackingBySummoningSickness,
   isUnitBlockedFromMovingBySummoningSickness,
+  keywordListHas,
   unitHasActiveKeyword,
 } from "./systems/keywords";
 
@@ -83,11 +79,7 @@ export const presentationFacade = {
 } as const;
 
 export const keywordRulesFacade = {
-  hasSproutKeyword,
-  hasRelayKeyword,
-  hasBloomKeyword,
-  hasSalvageKeyword,
-  hasBastionKeyword,
+  keywordListHas,
   unitHasActiveKeyword,
   isUnitBlockedFromMovingBySummoningSickness,
   isUnitBlockedFromAttackingBySummoningSickness,

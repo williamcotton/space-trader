@@ -1,6 +1,6 @@
 import { cardHasKeyword } from "../../../cards/catalog";
 import { registerCardCounterabilityHook } from "../../../../registries/cardCounterability";
-import { UNCOUNTERABLE_KEYWORD } from "../../../../systems/keywords";
+import { UNCOUNTERABLE_KEYWORD } from "./keywordIds";
 
 let installed = false;
 

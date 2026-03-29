@@ -1,6 +1,7 @@
 import { hexDistance } from "../../../../model/hex";
 import { registerUnitStatHook } from "../../../../registries/unitStatHooks";
-import { BASTION_KEYWORD, unitHasActiveKeyword } from "../../../../systems/keywords";
+import { unitHasActiveKeyword } from "../../../../systems/keywords";
+import { BASTION_KEYWORD } from "./keywordIds";
 
 let installed = false;
 

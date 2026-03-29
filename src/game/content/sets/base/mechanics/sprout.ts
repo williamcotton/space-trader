@@ -1,6 +1,6 @@
 import { registerUnitActionBlocker } from "../../../../registries/directInteraction";
 import { registerUnitDeploymentAdjustmentHook } from "../../../../registries/unitDeployment";
-import { SPROUT_KEYWORD } from "../../../../systems/keywords";
+import { SPROUT_KEYWORD } from "./keywordIds";
 
 let installed = false;
 

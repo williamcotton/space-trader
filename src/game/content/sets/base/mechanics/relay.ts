@@ -1,6 +1,7 @@
 import { registerCascadeScoreContributor, registerTriggerConditionScoreContributor } from "../../../../registries/aiMechanics";
 import { registerCascadeBranchProvider } from "../../../../registries/cascadeBranches";
-import { RELAY_KEYWORD, unitHasActiveKeyword } from "../../../../systems/keywords";
+import { unitHasActiveKeyword } from "../../../../systems/keywords";
+import { RELAY_KEYWORD } from "./keywordIds";
 
 const USED_RELAY_UNITS_MEMORY_KEY = "relay.usedUnits";
 

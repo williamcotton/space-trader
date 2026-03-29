@@ -1,7 +1,8 @@
 import type { PlayerId } from "../../../../model/ids";
 import type { EntityState, GameState } from "../../../../model/state";
 import { registerDirectAttackBlocker, registerDirectTargetingBlocker } from "../../../../registries/directInteraction";
-import { STEALTH_KEYWORD, unitHasActiveKeyword } from "../../../../systems/keywords";
+import { unitHasActiveKeyword } from "../../../../systems/keywords";
+import { STEALTH_KEYWORD } from "./keywordIds";
 
 function isEnemyStealthedUnit(
   state: Readonly<GameState>,
