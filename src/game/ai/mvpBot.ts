@@ -809,6 +809,61 @@ function scoreResourcesByUnitCountSpell(
   return score;
 }
 
+function scoreResourcesByBloomCountSpell(
+  state: GameState,
+  botPlayerId: PlayerId,
+  options: {
+    threshold: number;
+    resourcesPerThreshold: Partial<Record<ResourceType, number>>;
+    maxThresholds?: number;
+  }
+): number {
+  const bloomedUnits = state.bloomedUnitIdsThisTurn
+    .map((unitId) => state.entities[unitId])
+    .filter((entity): entity is UnitEntity => entity?.kind === "unit" && entity.ownerId === botPlayerId);
+  const thresholdsMet = Math.floor(bloomedUnits.length / options.threshold);
+  const payoutMultiplier = options.maxThresholds
+    ? Math.min(thresholdsMet, options.maxThresholds)
+    : thresholdsMet;
+
+  if (payoutMultiplier <= 0) {
+    return -Infinity;
+  }
+
+  let score = 48 + payoutMultiplier * 18;
+  for (const resource of RESOURCE_ORDER) {
+    score += (options.resourcesPerThreshold[resource] ?? 0) * payoutMultiplier * AI_WEIGHTS.gainedResourceValue;
+  }
+
+  return score;
+}
+
+function scoreResourcesBySalvageCountSpell(
+  state: GameState,
+  botPlayerId: PlayerId,
+  options: {
+    threshold: number;
+    resourcesPerThreshold: Partial<Record<ResourceType, number>>;
+    maxThresholds?: number;
+  }
+): number {
+  const thresholdsMet = Math.floor(state.salvageTriggersThisTurn[botPlayerId] / options.threshold);
+  const payoutMultiplier = options.maxThresholds
+    ? Math.min(thresholdsMet, options.maxThresholds)
+    : thresholdsMet;
+
+  if (payoutMultiplier <= 0) {
+    return -Infinity;
+  }
+
+  let score = 48 + payoutMultiplier * 18;
+  for (const resource of RESOURCE_ORDER) {
+    score += (options.resourcesPerThreshold[resource] ?? 0) * payoutMultiplier * AI_WEIGHTS.gainedResourceValue;
+  }
+
+  return score;
+}
+
 function scoreHexAreaDamageSpell(
   state: GameState,
   botPlayerId: PlayerId,
@@ -937,6 +992,18 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
           effectConfigs
             .filter((effectConfig) => effectConfig.type === "resources_by_unit_count")
             .map((effectConfig) => scoreResourcesByUnitCountSpell(state, botPlayerId, effectConfig))
+        );
+      } else if (effect.behavior.type === "resources_by_bloom_count" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = combineConfiguredSpellScores(
+          effectConfigs
+            .filter((effectConfig) => effectConfig.type === "resources_by_bloom_count")
+            .map((effectConfig) => scoreResourcesByBloomCountSpell(state, botPlayerId, effectConfig))
+        );
+      } else if (effect.behavior.type === "resources_by_salvage_count" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
+        score = combineConfiguredSpellScores(
+          effectConfigs
+            .filter((effectConfig) => effectConfig.type === "resources_by_salvage_count")
+            .map((effectConfig) => scoreResourcesBySalvageCountSpell(state, botPlayerId, effectConfig))
         );
       } else if (effect.behavior.type === "damage_enemy_base" && !targeting.targetEntityId && !targeting.targetHex && !targeting.targetStackItemId) {
         score = scoreBaseDamageSpell(state, botPlayerId, effect.behavior.amount, state.phase);
@@ -1076,11 +1143,33 @@ function scoreResourceUnit(candidate: DeployCandidate, ctx: DeployBoardContext):
   return score;
 }
 
-function scoreUtilityUnit(_candidate: DeployCandidate, ctx: DeployBoardContext): number {
+function scoreUtilityUnit(candidate: DeployCandidate, ctx: DeployBoardContext): number {
   let score = ctx.boardCounts.utility === 0 ? AI_WEIGHTS.utilityFirstDeploy : AI_WEIGHTS.utilityAdditional;
   if (ctx.enemyCombatCount > ctx.boardCounts.combat) {
     score += AI_WEIGHTS.utilityOutnumberedPenalty;
   }
+
+  const alliedCombatScale = Math.max(1, ctx.boardCounts.combat);
+  for (const aura of candidate.card.unit.auras ?? []) {
+    score += (aura.attackBonus ?? 0) * alliedCombatScale * 5;
+    score += (aura.armorBonus ?? 0) * alliedCombatScale * 5;
+    score += (aura.siegeBonus ?? 0) * alliedCombatScale * 6;
+  }
+
+  for (const trigger of candidate.card.triggers ?? []) {
+    switch (trigger.condition.type) {
+      case "on_owner_surged_tactic_played":
+        score += 16;
+        break;
+      case "on_owner_salvaged":
+        score += 14;
+        break;
+      default:
+        score += 8;
+        break;
+    }
+  }
+
   return score;
 }
 

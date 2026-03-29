@@ -152,6 +152,7 @@ export type GameState = {
   bloomedUnitIdsThisTurn: EntityId[];
   lastBloomSourceItemId: string | null;
   lastBloomedUnitIds: EntityId[];
+  salvageTriggersThisTurn: Record<PlayerId, number>;
   tacticalHarvestEligibleUnitIds: EntityId[];
   tacticalHarvestedUnitIds: EntityId[];
 };
@@ -471,6 +472,10 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     bloomedUnitIdsThisTurn: [],
     lastBloomSourceItemId: null,
     lastBloomedUnitIds: [],
+    salvageTriggersThisTurn: {
+      player_1: 0,
+      player_2: 0,
+    },
     tacticalHarvestEligibleUnitIds: [],
     tacticalHarvestedUnitIds: [],
   };

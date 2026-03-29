@@ -6,6 +6,8 @@ export const STEALTH_KEYWORD = "stealth";
 export const SPROUT_KEYWORD = "sprout";
 export const RELAY_KEYWORD = "relay";
 export const BLOOM_KEYWORD = "bloom";
+export const SALVAGE_KEYWORD = "salvage";
+export const BASTION_KEYWORD = "bastion";
 export const UNCOUNTERABLE_KEYWORD = "uncounterable";
 
 export function hasSproutKeyword(keywords?: readonly string[]): boolean {
@@ -18,6 +20,14 @@ export function hasRelayKeyword(keywords?: readonly string[]): boolean {
 
 export function hasBloomKeyword(keywords?: readonly string[]): boolean {
   return Boolean(keywords?.includes(BLOOM_KEYWORD));
+}
+
+export function hasSalvageKeyword(keywords?: readonly string[]): boolean {
+  return Boolean(keywords?.includes(SALVAGE_KEYWORD));
+}
+
+export function hasBastionKeyword(keywords?: readonly string[]): boolean {
+  return Boolean(keywords?.includes(BASTION_KEYWORD));
 }
 
 export function unitHasActiveKeyword(

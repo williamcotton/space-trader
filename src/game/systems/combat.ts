@@ -1,6 +1,6 @@
 import { hexDistance } from "../model/hex";
 import type { EntityState, GameState, UnitEntity } from "../model/state";
-import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "./unitStats";
+import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage, getEffectiveUnitSiegeDamageBonus } from "./unitStats";
 import { getPlayerBase } from "../model/queries";
 
 export type CombatBreakdown = {
@@ -43,21 +43,18 @@ function getSupplyPenalty(distanceFromFriendlyBase: number): number {
   return Math.max(0, Math.ceil((distanceFromFriendlyBase - 6) / 3));
 }
 
-function getBaseSiegeBonus(attacker: UnitEntity, target: EntityState): number {
-  return target.kind === "base" ? attacker.siegeDamageBonus : 0;
-}
-
 export function resolveCombatAttack(state: GameState, attacker: UnitEntity, target: EntityState): CombatResolution {
   const attackerBase = getPlayerBase(state, attacker.ownerId);
   const distanceFromFriendlyBase = attackerBase ? hexDistance(attacker.coord, attackerBase.coord) : 0;
   const effectiveAttackDamage = getEffectiveUnitAttackDamage(state, attacker);
+  const effectiveSiegeDamageBonus = getEffectiveUnitSiegeDamageBonus(state, attacker);
   const effectiveTargetArmor = target.kind === "unit" ? getEffectiveUnitArmor(state, target) : 0;
 
   const rawAttack =
     effectiveAttackDamage +
     getTemporaryAttackBuffs(state, attacker, target) +
     getFactionAttackBonus(state, attacker) +
-    getBaseSiegeBonus(attacker, target);
+    (target.kind === "base" ? effectiveSiegeDamageBonus : 0);
   const defense =
     effectiveTargetArmor +
     getTerrainDefenseBonus(state, target) +

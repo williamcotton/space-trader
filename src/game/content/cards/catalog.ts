@@ -14,6 +14,8 @@ import type {
   EffectRelation,
   GlobalUnitBuffOptions,
   HexAreaDamageOptions,
+  ResourcesByBloomCountOptions,
+  ResourcesBySalvageCountOptions,
   MassDamageOptions,
   ResourcesByUnitCountOptions,
 } from "./instructionFactories";
@@ -93,6 +95,20 @@ export type ResourcesByUnitCountPlayEffectConfig = {
   maxThresholds?: number;
 };
 
+export type ResourcesByBloomCountPlayEffectConfig = {
+  type: "resources_by_bloom_count";
+  threshold: number;
+  resourcesPerThreshold: CardCost;
+  maxThresholds?: number;
+};
+
+export type ResourcesBySalvageCountPlayEffectConfig = {
+  type: "resources_by_salvage_count";
+  threshold: number;
+  resourcesPerThreshold: CardCost;
+  maxThresholds?: number;
+};
+
 export type HexAreaDamagePlayEffectConfig = {
   type: "hex_area_damage";
   amount: number;
@@ -116,6 +132,8 @@ export type CardPlayEffectConfig =
   | DestroyDamagedUnitsPlayEffectConfig
   | DrawAndGainResourcesPlayEffectConfig
   | ResourcesByUnitCountPlayEffectConfig
+  | ResourcesByBloomCountPlayEffectConfig
+  | ResourcesBySalvageCountPlayEffectConfig
   | HexAreaDamagePlayEffectConfig
   | CascadeUnitBuffPlayEffectConfig;
 
@@ -124,6 +142,7 @@ export type UnitAura = {
   targetRole?: UnitRole;
   attackBonus?: number;
   armorBonus?: number;
+  siegeBonus?: number;
 };
 
 export type UnitTemplate = {
@@ -354,6 +373,24 @@ function createResourcesByUnitCountEffectConfig(options: ResourcesByUnitCountOpt
   };
 }
 
+function createResourcesByBloomCountEffectConfig(options: ResourcesByBloomCountOptions): ResourcesByBloomCountPlayEffectConfig {
+  return {
+    type: "resources_by_bloom_count",
+    threshold: options.threshold,
+    resourcesPerThreshold: options.resourcesPerThreshold,
+    maxThresholds: options.maxThresholds,
+  };
+}
+
+function createResourcesBySalvageCountEffectConfig(options: ResourcesBySalvageCountOptions): ResourcesBySalvageCountPlayEffectConfig {
+  return {
+    type: "resources_by_salvage_count",
+    threshold: options.threshold,
+    resourcesPerThreshold: options.resourcesPerThreshold,
+    maxThresholds: options.maxThresholds,
+  };
+}
+
 function createHexAreaDamageEffectConfig(options: HexAreaDamageOptions): HexAreaDamagePlayEffectConfig {
   return {
     type: "hex_area_damage",
@@ -460,6 +497,32 @@ function resourcesByUnitCountTacticPlay(
   });
 }
 
+function resourcesByBloomCountTacticPlay(
+  options: ResourcesByBloomCountOptions & {
+    surgeBonus?: ResourcesByBloomCountOptions;
+    sourceDestinationOnResolve?: CardSourceDestination;
+  }
+): CardPlayProfile {
+  return tacticPlay("resources_by_bloom_count", {
+    sourceDestinationOnResolve: options.sourceDestinationOnResolve,
+    effectConfig: createResourcesByBloomCountEffectConfig(options),
+    surgeEffectConfig: options.surgeBonus ? createResourcesByBloomCountEffectConfig(options.surgeBonus) : undefined,
+  });
+}
+
+function resourcesBySalvageCountTacticPlay(
+  options: ResourcesBySalvageCountOptions & {
+    surgeBonus?: ResourcesBySalvageCountOptions;
+    sourceDestinationOnResolve?: CardSourceDestination;
+  }
+): CardPlayProfile {
+  return tacticPlay("resources_by_salvage_count", {
+    sourceDestinationOnResolve: options.sourceDestinationOnResolve,
+    effectConfig: createResourcesBySalvageCountEffectConfig(options),
+    surgeEffectConfig: options.surgeBonus ? createResourcesBySalvageCountEffectConfig(options.surgeBonus) : undefined,
+  });
+}
+
 export function getCardPlayEffectConfig(card: CardDefinition | undefined): CardPlayEffectConfig | undefined {
   return card?.play.effectConfig;
 }
@@ -494,6 +557,18 @@ function getEffectConfigMagnitude(effectConfig: CardPlayEffectConfig): number {
         ...(["credits", "alloy", "flux", "biomass"] as const).map((resource) => effectConfig.resources[resource] ?? 0)
       );
     case "resources_by_unit_count":
+      return Math.max(
+        ...(["credits", "alloy", "flux", "biomass"] as const).map(
+          (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
+        )
+      );
+    case "resources_by_bloom_count":
+      return Math.max(
+        ...(["credits", "alloy", "flux", "biomass"] as const).map(
+          (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
+        )
+      );
+    case "resources_by_salvage_count":
       return Math.max(
         ...(["credits", "alloy", "flux", "biomass"] as const).map(
           (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
@@ -1149,6 +1224,27 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       },
     },
   },
+  iron_formation: {
+    id: "iron_formation",
+    name: "Iron Formation",
+    faction: "alloy_clan",
+    kind: "tactic",
+    speed: "main",
+    cost: { credits: 4, alloy: 2 },
+    text: "Friendly units get +1 ATK and +2 ARM until end of turn.",
+    play: globalUnitBuffTacticPlay({
+      attackBonus: 1,
+      armorBonus: 2,
+      relation: "ally",
+    }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Iron Formation",
+        accent: "alloy",
+      },
+    },
+  },
   emergency_war_chest: {
     id: "emergency_war_chest",
     name: "Emergency War Chest",
@@ -1194,6 +1290,54 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       },
     },
   },
+  canopy_dividend: {
+    id: "canopy_dividend",
+    name: "Canopy Dividend",
+    faction: "biomass_swarm",
+    kind: "tactic",
+    speed: "main",
+    cost: { biomass: 1 },
+    text: "Gain 1 credit and 1 biomass for every 2 of your units that bloomed this turn, up to 2 times.",
+    play: resourcesByBloomCountTacticPlay({
+      threshold: 2,
+      resourcesPerThreshold: {
+        credits: 1,
+        biomass: 1,
+      },
+      maxThresholds: 2,
+    }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Canopy Dividend",
+        accent: "biomass",
+      },
+    },
+  },
+  scrap_dividend: {
+    id: "scrap_dividend",
+    name: "Scrap Dividend",
+    faction: "alloy_clan",
+    kind: "tactic",
+    speed: "main",
+    cost: { alloy: 1 },
+    text: "Gain 1 credit and 1 alloy for every salvage trigger you created this turn, up to 2 times.",
+    play: resourcesBySalvageCountTacticPlay({
+      threshold: 1,
+      resourcesPerThreshold: {
+        credits: 1,
+        alloy: 1,
+      },
+      maxThresholds: 2,
+    }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Scrap Dividend",
+        accent: "alloy",
+      },
+    },
+  },
   frontline_scout_card: {
     id: "frontline_scout_card",
     name: "Frontline Scout",
@@ -1201,7 +1345,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "unit",
     speed: "main",
     cost: { credits: 2, alloy: 1 },
-    text: "Deploy a combat scout near your base.",
+    text: "Salvage (When this unit destroys an enemy unit in combat, gain 1 alloy.) Deploy a combat scout near your base.",
     play: unitPlay(),
     onResolve: deployUnit("frontline_scout_card"),
     unit: {
@@ -1213,6 +1357,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       moveRange: 2,
       attackRange: 1,
       attackActionsPerTurn: 1,
+      keywords: ["salvage"],
     },
   },
   alloy_guard_card: {
@@ -1222,7 +1367,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "unit",
     speed: "main",
     cost: { credits: 3, alloy: 2 },
-    text: "Deploy an armored combat unit near your base.",
+    text: "Salvage (When this unit destroys an enemy unit in combat, gain 1 alloy.) Bastion (While this unit is adjacent to another allied unit, it gets +1 ARM.) Deploy an armored combat unit near your base.",
     play: unitPlay(),
     onResolve: deployUnit("alloy_guard_card"),
     unit: {
@@ -1234,6 +1379,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       moveRange: 1,
       attackRange: 1,
       attackActionsPerTurn: 1,
+      keywords: ["salvage", "bastion"],
     },
   },
   flux_runner_card: {
@@ -1278,6 +1424,56 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       attackActionsPerTurn: 1,
       auras: [{ type: "adjacent_ally_buff", targetRole: "combat", attackBonus: 1 }],
     },
+  },
+  linebreak_marshal_card: {
+    id: "linebreak_marshal_card",
+    name: "Linebreak Marshal",
+    faction: "alloy_clan",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 2, alloy: 1 },
+    text: "Bastion (While this unit is adjacent to another allied unit, it gets +1 ARM.) Adjacent allied combat units get +1 SG.",
+    play: unitPlay(),
+    onResolve: deployUnit("linebreak_marshal_card"),
+    unit: {
+      role: "utility",
+      hp: 5,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      keywords: ["bastion"],
+      auras: [{ type: "adjacent_ally_buff", targetRole: "combat", siegeBonus: 1 }],
+    },
+  },
+  scrap_quartermaster_card: {
+    id: "scrap_quartermaster_card",
+    name: "Scrap Quartermaster",
+    faction: "alloy_clan",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 1, alloy: 1 },
+    text: "Bastion (While this unit is adjacent to another allied unit, it gets +1 ARM.) Whenever one of your units salvages, Scrap Quartermaster deals 1 damage to the enemy base.",
+    play: unitPlay(),
+    onResolve: deployUnit("scrap_quartermaster_card"),
+    unit: {
+      role: "utility",
+      hp: 4,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      keywords: ["bastion"],
+    },
+    triggers: [{
+      condition: { type: "on_owner_salvaged" },
+      effectId: "damage_enemy_base_1_uncounterable",
+      labelSuffix: "Salvage",
+    }],
   },
   relay_savant_card: {
     id: "relay_savant_card",
@@ -1447,7 +1643,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "unit",
     speed: "main",
     cost: { alloy: 1 },
-    text: "Deploy an armored resource unit near your base.",
+    text: "Bastion (While this unit is adjacent to another allied unit, it gets +1 ARM.) Deploy an armored resource unit near your base.",
     play: unitPlay(),
     onResolve: deployUnit("forge_hauler_card"),
     unit: {
@@ -1459,6 +1655,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
       moveRange: 4,
       attackRange: 1,
       attackActionsPerTurn: 1,
+      keywords: ["bastion"],
     },
   },
   ion_skimmer_card: {

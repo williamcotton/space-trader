@@ -4,7 +4,7 @@ import { dispatchCommand } from "./reducers";
 import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
 import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
-import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "../systems/unitStats";
+import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage, getEffectiveUnitSiegeDamageBonus } from "../systems/unitStats";
 import { RELAY_KEYWORD, SPROUT_KEYWORD } from "../systems/keywords";
 
 function setupState() {
@@ -2109,6 +2109,194 @@ describe("dispatchCommand", () => {
 
     expect(state.players.player_1.resources.credits).toBe(1);
     expect(state.players.player_1.resources.biomass).toBe(1);
+  });
+
+  it("Canopy Dividend pays out from units that bloomed earlier in the turn", () => {
+    const state = createInitialGameState({
+      map: FRONTIER_BELT_MAP,
+      factions: {
+        player_1: "biomass_swarm",
+        player_2: "flux_collective",
+      },
+    });
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 0;
+    state.players.player_1.resources.biomass = 1;
+    state.bloomedUnitIdsThisTurn = ["unit_player_1_scout", "unit_player_1_harvester"];
+
+    const cardInstanceId = addCardToHand(state, "player_1", "canopy_dividend");
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    expect(state.players.player_1.resources.credits).toBe(1);
+    expect(state.players.player_1.resources.biomass).toBe(1);
+  });
+
+  it("Salvage generates alloy when an alloy unit destroys an enemy unit in combat", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+    state.players.player_1.resources.alloy = 0;
+
+    const attacker = state.entities.unit_player_1_scout;
+    const target = state.entities.unit_player_2_harvester;
+    if (!attacker || attacker.kind !== "unit" || !target || target.kind !== "unit") {
+      throw new Error("Expected units for Salvage test.");
+    }
+
+    attacker.coord = { q: 0, r: 0 };
+    attacker.hasSummoningSickness = false;
+    attacker.attacksRemaining = 1;
+    state.selectedEntityId = attacker.id;
+    target.coord = { q: 1, r: 0 };
+    target.hp = 2;
+
+    const attack = dispatchCommand(state, {
+      type: "ATTACK_UNIT",
+      playerId: "player_1",
+      attackerId: attacker.id,
+      targetId: target.id,
+    });
+    expect(attack.ok).toBe(true);
+
+    expect(state.entities[target.id]).toBeUndefined();
+    expect(state.players.player_1.resources.alloy).toBe(1);
+    expect(state.salvageTriggersThisTurn.player_1).toBe(1);
+  });
+
+  it("Bastion grants +1 ARM while adjacent to another allied unit", () => {
+    const state = setupState();
+    advanceToPhase(state, "main");
+    state.players.player_1.resources.alloy = 1;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "forge_hauler_card");
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+    resolveStackByPassing(state);
+
+    const hauler = Object.values(state.entities).find((entity) =>
+      entity.kind === "unit" && entity.ownerId === "player_1" && entity.sourceCardId === "forge_hauler_card"
+    );
+    const scout = state.entities.unit_player_1_scout;
+    if (!hauler || hauler.kind !== "unit" || !scout || scout.kind !== "unit") {
+      throw new Error("Expected forge hauler and scout for Bastion test.");
+    }
+
+    scout.coord = { q: hauler.coord.q + 3, r: hauler.coord.r };
+    expect(getEffectiveUnitArmor(state, hauler)).toBe(hauler.armor);
+    scout.coord = { q: hauler.coord.q + 1, r: hauler.coord.r };
+    expect(getEffectiveUnitArmor(state, hauler)).toBe(hauler.armor + 1);
+  });
+
+  it("Linebreak Marshal grants adjacent allied combat units +1 siege", () => {
+    const state = setupState();
+    advanceToPhase(state, "main");
+    state.players.player_1.resources.credits = 2;
+    state.players.player_1.resources.alloy = 1;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "linebreak_marshal_card");
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+    resolveStackByPassing(state);
+
+    const marshal = Object.values(state.entities).find((entity) =>
+      entity.kind === "unit" && entity.ownerId === "player_1" && entity.sourceCardId === "linebreak_marshal_card"
+    );
+    const scout = state.entities.unit_player_1_scout;
+    if (!marshal || marshal.kind !== "unit" || !scout || scout.kind !== "unit") {
+      throw new Error("Expected linebreak marshal and scout for siege test.");
+    }
+
+    scout.coord = { q: marshal.coord.q + 1, r: marshal.coord.r };
+    expect(getEffectiveUnitSiegeDamageBonus(state, scout)).toBe(scout.siegeDamageBonus + 1);
+  });
+
+  it("Scrap Dividend pays out from salvage triggers created earlier in the turn", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 0;
+    state.players.player_1.resources.alloy = 1;
+    state.salvageTriggersThisTurn.player_1 = 2;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "scrap_dividend");
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    expect(state.players.player_1.resources.credits).toBe(2);
+    expect(state.players.player_1.resources.alloy).toBe(2);
+  });
+
+  it("Scrap Quartermaster pings the enemy base when an allied unit salvages", () => {
+    const state = setupState();
+    state.players.player_1.resources.credits = 1;
+    state.players.player_1.resources.alloy = 1;
+
+    advanceToPhase(state, "main");
+    const quartermasterId = addCardToHand(state, "player_1", "scrap_quartermaster_card");
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId: quartermasterId,
+    });
+    expect(play.ok).toBe(true);
+    resolveStackByPassing(state);
+    advanceToPhase(state, "tactical");
+
+    const attacker = state.entities.unit_player_1_scout;
+    const target = state.entities.unit_player_2_harvester;
+    const enemyBase = state.entities.base_player_2;
+    if (!attacker || attacker.kind !== "unit" || !target || target.kind !== "unit" || !enemyBase || enemyBase.kind !== "base") {
+      throw new Error("Expected combat setup for Scrap Quartermaster test.");
+    }
+
+    attacker.coord = { q: 0, r: 0 };
+    attacker.hasSummoningSickness = false;
+    attacker.attacksRemaining = 1;
+    state.selectedEntityId = attacker.id;
+    target.coord = { q: 1, r: 0 };
+    target.hp = 2;
+
+    const attack = dispatchCommand(state, {
+      type: "ATTACK_UNIT",
+      playerId: "player_1",
+      attackerId: attacker.id,
+      targetId: target.id,
+    });
+    expect(attack.ok).toBe(true);
+    expect(state.stack.some((item) => item.label.includes("Scrap Quartermaster"))).toBe(true);
+
+    resolveStackByPassing(state);
+    expect(enemyBase.hp).toBe(BASE_STARTING_HP - 1);
   });
 
   it("War Protocol buffs only friendly combat units until end of turn", () => {

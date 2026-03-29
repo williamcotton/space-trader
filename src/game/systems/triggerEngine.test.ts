@@ -377,6 +377,76 @@ describe("triggerEngine", () => {
       expect(triggered[0]?.effectId).toBe("gain_credit_1_uncounterable");
     });
 
+    it("fires on_owner_salvaged for Scrap Quartermaster", () => {
+      const state = createState();
+      state.entities.unit_player_1_quartermaster = {
+        id: "unit_player_1_quartermaster",
+        kind: "unit",
+        name: "Scrap Quartermaster",
+        ownerId: "player_1",
+        role: "utility",
+        hp: 4,
+        maxHp: 4,
+        attackDamage: 1,
+        siegeDamageBonus: 0,
+        armor: 0,
+        moveRange: 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 0, r: 0 },
+        keywords: ["bastion"],
+        carries: null,
+        sourceCardId: "scrap_quartermaster_card",
+        hasSummoningSickness: false,
+        movesRemaining: 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+      state.entities.unit_player_1_salvager = {
+        id: "unit_player_1_salvager",
+        kind: "unit",
+        name: "Frontline Scout",
+        ownerId: "player_1",
+        role: "combat",
+        hp: 6,
+        maxHp: 6,
+        attackDamage: 2,
+        siegeDamageBonus: 1,
+        armor: 0,
+        moveRange: 2,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 1, r: 0 },
+        keywords: ["salvage"],
+        carries: null,
+        sourceCardId: "frontline_scout_card",
+        hasSummoningSickness: false,
+        movesRemaining: 2,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+
+      const salvageEvent: GameEvent = {
+        type: "UNIT_ATTACK_DECLARED",
+        playerId: "player_1",
+        attackerId: "unit_player_1_salvager",
+        targetId: "unit_player_2_target",
+        attacksRemaining: 0,
+        damageDealt: 2,
+        targetHpRemaining: 0,
+        targetDestroyed: true,
+      };
+
+      resetTriggerDepth();
+      incrementTriggerDepth();
+      const triggered = evaluateTriggersFromEvent(state, salvageEvent);
+
+      expect(triggered).toHaveLength(1);
+      expect(triggered[0]?.effectId).toBe("damage_enemy_base_1_uncounterable");
+    });
+
     it("fires on_cascaded for Arc Repeater and targets an enemy within range 2", () => {
       const state = createState();
       state.entities.unit_player_1_arc = {

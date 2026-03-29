@@ -4,7 +4,7 @@ import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/st
 import type { GamePhase } from "../model/enums";
 import type { PlayerId } from "../model/ids";
 import type { GameState, UnitEntity } from "../model/state";
-import { canTargetEntityDirectly } from "./keywords";
+import { canTargetEntityDirectly, SALVAGE_KEYWORD, unitHasActiveKeyword } from "./keywords";
 import { hexDistance } from "../model/hex";
 import { getCascadeAffectedHexes } from "./cascade";
 import { createStackItemId, getOpponentPlayer } from "../turn/stack";
@@ -14,6 +14,7 @@ import { createStackItemId, getOpponentPlayer } from "../turn/stack";
 export type TriggerCondition =
   | { type: "on_owner_tactic_played" }
   | { type: "on_owner_surged_tactic_played" }
+  | { type: "on_owner_salvaged" }
   | { type: "on_cascaded" }
   | { type: "on_self_bloomed" }
   | { type: "on_owner_unit_bloomed" }
@@ -147,6 +148,20 @@ function doesEventMatchCondition(
         return false;
       }
       return getCardDefinition(event.cardId)?.kind === "tactic";
+
+    case "on_owner_salvaged":
+      if (event.type !== "UNIT_ATTACK_DECLARED" || !event.targetDestroyed) {
+        return false;
+      }
+      {
+        const attacker = state.entities[event.attackerId];
+        return Boolean(
+          attacker &&
+          attacker.kind === "unit" &&
+          attacker.ownerId === unit.ownerId &&
+          unitHasActiveKeyword(state, attacker, SALVAGE_KEYWORD)
+        );
+      }
 
     case "on_cascaded": {
       if (event.type !== "STACK_ITEM_RESOLVED" || event.controllerId !== unit.ownerId || !event.targetHex || !event.sourceCardId) {

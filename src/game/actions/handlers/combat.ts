@@ -4,6 +4,7 @@ import type { GameState } from "../../model/state";
 import { hexDistance } from "../../model/hex";
 import { resolveCombatAttack } from "../../systems/combat";
 import { getResourceNodeAtCoord, getResourceNodeById } from "../../systems/harvesting";
+import { SALVAGE_KEYWORD, unitHasActiveKeyword } from "../../systems/keywords";
 
 export function addUniqueTrackedUnit(target: string[], entityId: string): void {
   if (!target.includes(entityId)) {
@@ -134,6 +135,15 @@ export function reduceUnitAttackDeclared(
   }
 
   if (event.targetDestroyed && target?.kind === "unit") {
+    if (target.ownerId !== attacker.ownerId && unitHasActiveKeyword(state, attacker, SALVAGE_KEYWORD)) {
+      state.players[attacker.ownerId].resources.alloy += 1;
+      state.salvageTriggersThisTurn[attacker.ownerId] += 1;
+      state.log.push({
+        turn: state.turn,
+        text: `${attacker.id} salvaged wreckage and generated 1 alloy.`,
+      });
+    }
+
     if (target.carries) {
       state.log.push({
         turn: state.turn,

@@ -73,7 +73,7 @@ describe("starter decks", () => {
     expect(countCopies(fluxCards, "ion_shower")).toBe(4);
     expect(countCopies(biomassCards, "spore_bloom")).toBe(4);
 
-    for (const cards of [alloyCards, biomassCards]) {
+    for (const cards of [biomassCards]) {
       expect(countCopies(cards, "chain_beacon")).toBeGreaterThanOrEqual(2);
     }
   });
@@ -86,6 +86,10 @@ describe("starter decks", () => {
     expect(countCopies(alloyCards, "patchwork_barrier")).toBe(4);
     expect(countCopies(alloyCards, "scorched_protocol")).toBe(4);
     expect(countCopies(alloyCards, "war_protocol")).toBe(2);
+    expect(countCopies(alloyCards, "iron_formation")).toBe(2);
+    expect(countCopies(alloyCards, "scrap_dividend")).toBe(2);
+    expect(countCopies(alloyCards, "linebreak_marshal_card")).toBe(2);
+    expect(countCopies(alloyCards, "scrap_quartermaster_card")).toBe(2);
     expect(countCopies(fluxCards, "emergency_war_chest")).toBe(2);
     expect(countCopies(fluxCards, "meteor_chain")).toBe(2);
     expect(countCopies(fluxCards, "ion_surge_archive")).toBe(4);
@@ -101,6 +105,7 @@ describe("starter decks", () => {
     expect(countCopies(biomassCards, "compost_broker_card")).toBe(2);
     expect(countCopies(biomassCards, "overgrowth_wave")).toBe(4);
     expect(countCopies(biomassCards, "spore_harvest")).toBe(2);
+    expect(countCopies(biomassCards, "canopy_dividend")).toBe(2);
     expect(countCopies(biomassCards, "orbital_purge")).toBe(2);
   });
 

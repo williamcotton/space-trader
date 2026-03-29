@@ -19,7 +19,7 @@ export const LAYER = {
 
 export type StatModifier = {
   type: "stat_modifier";
-  stat: "attackDamage" | "armor" | "moveRange" | "attackRange" | "hp" | "maxHp";
+  stat: "attackDamage" | "armor" | "siegeDamageBonus" | "moveRange" | "attackRange" | "hp" | "maxHp";
   amount: number;
 };
 
@@ -138,7 +138,7 @@ export function getEffectiveKeywordsForUnit(
 export function getEffectiveStatValue(
   state: Readonly<GameState>,
   unit: UnitEntity,
-  stat: "attackDamage" | "armor"
+  stat: "attackDamage" | "armor" | "siegeDamageBonus"
 ): number {
   const base = unit[stat];
 
@@ -148,12 +148,27 @@ export function getEffectiveStatValue(
     )
     .sort((a, b) => a.layer - b.layer || a.timestamp - b.timestamp);
 
-  return effects.reduce((value, effect) => {
+  let value = effects.reduce((value, effect) => {
     if (effect.payload.type === "stat_modifier") {
       return value + effect.payload.amount;
     }
     return value;
   }, base);
+
+  // Bastion is a positional evergreen: adjacent formations reinforce armor.
+  if (stat === "armor" && getEffectiveKeywordsForUnit(state, unit).includes("bastion")) {
+    const hasAdjacentAlly = Object.values(state.entities).some((entity) =>
+      entity.kind === "unit" &&
+      entity.ownerId === unit.ownerId &&
+      entity.id !== unit.id &&
+      hexDistance(entity.coord, unit.coord) === 1
+    );
+    if (hasAdjacentAlly) {
+      value += 1;
+    }
+  }
+
+  return value;
 }
 
 // --- Expiry & cleanup ---

@@ -48,6 +48,8 @@ export function advancePhase(state: GameState): void {
     state.bloomedUnitIdsThisTurn = [];
     state.lastBloomSourceItemId = null;
     state.lastBloomedUnitIds = [];
+    state.salvageTriggersThisTurn.player_1 = 0;
+    state.salvageTriggersThisTurn.player_2 = 0;
     clearTemporaryUnitModifiers(state);
     resetUnitActionBudgetsForPlayer(state, state.activePlayerId);
   }

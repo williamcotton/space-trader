@@ -98,6 +98,7 @@ describe("phaseMachine", () => {
     state.bloomedUnitIdsThisTurn = ["unit_player_1_test_bloom"];
     state.lastBloomSourceItemId = "stack_test_bloom";
     state.lastBloomedUnitIds = ["unit_player_1_test_bloom"];
+    state.salvageTriggersThisTurn.player_1 = 2;
 
     advancePhase(state); // economy
     advancePhase(state); // main
@@ -108,5 +109,9 @@ describe("phaseMachine", () => {
     expect(state.bloomedUnitIdsThisTurn).toEqual([]);
     expect(state.lastBloomSourceItemId).toBeNull();
     expect(state.lastBloomedUnitIds).toEqual([]);
+    expect(state.salvageTriggersThisTurn).toEqual({
+      player_1: 0,
+      player_2: 0,
+    });
   });
 });

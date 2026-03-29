@@ -507,6 +507,52 @@ describe("decideMvpBotCommand", () => {
     });
   });
 
+  it("casts Canopy Dividend when enough of its units bloomed this turn", () => {
+    const state = createInitialGameState({
+      map: FRONTIER_BELT_MAP,
+      factions: {
+        player_1: "biomass_swarm",
+        player_2: "flux_collective",
+      },
+    });
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_1.hand = [];
+    state.players.player_1.resources.biomass = 1;
+    state.bloomedUnitIdsThisTurn = ["unit_player_1_scout", "unit_player_1_harvester"];
+
+    const cardInstanceId = addCardToHand(state, "player_1", "canopy_dividend");
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+  });
+
+  it("casts Scrap Dividend when it has salvage payouts banked for the turn", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_1.hand = [];
+    state.players.player_1.resources.alloy = 1;
+    state.salvageTriggersThisTurn.player_1 = 2;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "scrap_dividend");
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+  });
+
   it("casts Rivet Volley at the enemy base when it is lethal", () => {
     const state = setupState();
     state.activePlayerId = "player_1";

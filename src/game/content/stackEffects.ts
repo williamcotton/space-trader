@@ -7,6 +7,8 @@ import {
   createGlobalUnitBuffInstructions,
   createHexAreaDamageInstructions,
   createMassDamageInstructions,
+  createResourcesByBloomCountInstructions,
+  createResourcesBySalvageCountInstructions,
   createResourcesByUnitCountInstructions,
 } from "./cards/instructionFactories";
 import { LAYER } from "../systems/continuousEffects";
@@ -86,6 +88,12 @@ export type StackEffectBehavior =
     }
   | {
       type: "resources_by_unit_count";
+    }
+  | {
+      type: "resources_by_bloom_count";
+    }
+  | {
+      type: "resources_by_salvage_count";
     }
   | {
       type: "hex_area_damage";
@@ -270,6 +278,10 @@ function createInstructionsForPlayEffectConfig(context: InstructionContext, effe
       return createDrawAndGainResourcesInstructions(effectConfig)(context);
     case "resources_by_unit_count":
       return createResourcesByUnitCountInstructions(effectConfig)(context);
+    case "resources_by_bloom_count":
+      return createResourcesByBloomCountInstructions(effectConfig)(context);
+    case "resources_by_salvage_count":
+      return createResourcesBySalvageCountInstructions(effectConfig)(context);
     case "hex_area_damage":
       return createHexAreaDamageInstructions(effectConfig)(context);
     case "cascade_unit_buff":
@@ -341,6 +353,14 @@ function createGainResourcesInstructions(resources: Partial<Record<ResourceType,
 
 function createCardOwnedResourcesByUnitCountInstructions(context: InstructionContext): GameInstruction[] {
   return createCardOwnedConfiguredInstructions(context, "resources_by_unit_count", "missing unit-count resource config on source card.");
+}
+
+function createCardOwnedResourcesByBloomCountInstructions(context: InstructionContext): GameInstruction[] {
+  return createCardOwnedConfiguredInstructions(context, "resources_by_bloom_count", "missing bloom-count resource config on source card.");
+}
+
+function createCardOwnedResourcesBySalvageCountInstructions(context: InstructionContext): GameInstruction[] {
+  return createCardOwnedConfiguredInstructions(context, "resources_by_salvage_count", "missing salvage-count resource config on source card.");
 }
 
 function createCardOwnedHexAreaDamageInstructions(context: InstructionContext): GameInstruction[] {
@@ -638,6 +658,38 @@ const STACK_EFFECTS: Record<string, StackEffectDefinition> = {
     },
     createInstructions: createCardOwnedResourcesByUnitCountInstructions,
   },
+  resources_by_bloom_count: {
+    id: "resources_by_bloom_count",
+    label: "Resources By Bloom Count",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "resources_by_bloom_count",
+    },
+    createInstructions: createCardOwnedResourcesByBloomCountInstructions,
+  },
+  resources_by_salvage_count: {
+    id: "resources_by_salvage_count",
+    label: "Resources By Salvage Count",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "resources_by_salvage_count",
+    },
+    createInstructions: createCardOwnedResourcesBySalvageCountInstructions,
+  },
   hex_area_damage: {
     id: "hex_area_damage",
     label: "Hex Area Damage",
@@ -737,6 +789,8 @@ export function getStackEffectMagnitude(effectId: string, sourceCardId?: string 
     case "destroy_damaged_units":
     case "draw_and_gain_resources":
     case "resources_by_unit_count":
+    case "resources_by_bloom_count":
+    case "resources_by_salvage_count":
     case "hex_area_damage":
       if (sourceCardId) {
         return getCardPlayEffectMagnitude(getCardDefinition(sourceCardId), surgeActive);

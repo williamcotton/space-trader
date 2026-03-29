@@ -123,6 +123,20 @@ export function migrateRuntimeState(state: GameState): void {
     }
   }
 
+  if (!state.salvageTriggersThisTurn) {
+    state.salvageTriggersThisTurn = {
+      player_1: 0,
+      player_2: 0,
+    };
+  } else {
+    if (typeof state.salvageTriggersThisTurn.player_1 !== "number") {
+      state.salvageTriggersThisTurn.player_1 = 0;
+    }
+    if (typeof state.salvageTriggersThisTurn.player_2 !== "number") {
+      state.salvageTriggersThisTurn.player_2 = 0;
+    }
+  }
+
   if (!Array.isArray(state.bloomedUnitIdsThisTurn)) {
     state.bloomedUnitIdsThisTurn = [];
   }

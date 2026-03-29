@@ -9,6 +9,10 @@ export function getEffectiveUnitArmor(state: GameState, unit: UnitEntity): numbe
   return getEffectiveStatValue(state, unit, "armor");
 }
 
+export function getEffectiveUnitSiegeDamageBonus(state: GameState, unit: UnitEntity): number {
+  return getEffectiveStatValue(state, unit, "siegeDamageBonus");
+}
+
 export function clearTemporaryUnitModifiers(state: GameState): void {
   purgeExpiredEffects(state);
 }

@@ -128,6 +128,20 @@ function deployUnitToBattlefield(
           timestamp: ts,
         });
       }
+      if (aura.siegeBonus) {
+        const ts = nextEffectTimestamp(state);
+        state.continuousEffects.push({
+          id: createContinuousEffectId(state, `${unitEntityId}_aura_sg`),
+          sourceEntityId: unitEntityId,
+          sourceCardId: cardId,
+          controllerId: playerId,
+          payload: { type: "stat_modifier", stat: "siegeDamageBonus", amount: aura.siegeBonus },
+          target: { type: "adjacent_allies", sourceEntityId: unitEntityId, roleFilter: aura.targetRole },
+          expiry: { type: "while_source_alive", sourceEntityId: unitEntityId },
+          layer: LAYER.STATIC,
+          timestamp: ts,
+        });
+      }
     }
   }
 

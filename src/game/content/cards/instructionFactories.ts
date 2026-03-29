@@ -52,6 +52,18 @@ export type ResourcesByUnitCountOptions = {
   maxThresholds?: number;
 };
 
+export type ResourcesByBloomCountOptions = {
+  threshold: number;
+  resourcesPerThreshold: CardCost;
+  maxThresholds?: number;
+};
+
+export type ResourcesBySalvageCountOptions = {
+  threshold: number;
+  resourcesPerThreshold: CardCost;
+  maxThresholds?: number;
+};
+
 export type HexAreaDamageOptions = {
   amount: number;
   radius: number;
@@ -407,6 +419,78 @@ export function createResourcesByUnitCountInstructions(options: ResourcesByUnitC
       {
         type: "LOG",
         text: `Resolved ${context.item.label}: converted ${targets.length} matching unit${targets.length === 1 ? "" : "s"} into ${payoutMultiplier} payout${payoutMultiplier === 1 ? "" : "s"}.`,
+      },
+    ];
+  };
+}
+
+export function createResourcesByBloomCountInstructions(options: ResourcesByBloomCountOptions) {
+  return (context: InstructionContext): GameInstruction[] => {
+    const matchingUnits = context.state.bloomedUnitIdsThisTurn
+      .map((unitId) => context.state.entities[unitId])
+      .filter((entity): entity is UnitEntity => entity?.kind === "unit" && entity.ownerId === context.controllerId);
+    const thresholdsMet = Math.floor(matchingUnits.length / options.threshold);
+    const payoutMultiplier = options.maxThresholds
+      ? Math.min(thresholdsMet, options.maxThresholds)
+      : thresholdsMet;
+
+    if (payoutMultiplier <= 0) {
+      return [{
+        type: "LOG",
+        text: `Resolved ${context.item.label}: only ${matchingUnits.length} bloomed unit${matchingUnits.length === 1 ? "" : "s"} this turn; needed ${options.threshold} for payout.`,
+      }];
+    }
+
+    const resources = Object.fromEntries(
+      Object.entries(options.resourcesPerThreshold)
+        .map(([resource, amount]) => [resource, (amount ?? 0) * payoutMultiplier])
+        .filter(([, amount]) => Number(amount) > 0)
+    ) as CardCost;
+
+    return [
+      {
+        type: "GAIN_RESOURCES",
+        playerId: context.controllerId,
+        resources,
+      },
+      {
+        type: "LOG",
+        text: `Resolved ${context.item.label}: converted ${matchingUnits.length} bloomed unit${matchingUnits.length === 1 ? "" : "s"} into ${payoutMultiplier} payout${payoutMultiplier === 1 ? "" : "s"}.`,
+      },
+    ];
+  };
+}
+
+export function createResourcesBySalvageCountInstructions(options: ResourcesBySalvageCountOptions) {
+  return (context: InstructionContext): GameInstruction[] => {
+    const salvageTriggers = context.state.salvageTriggersThisTurn[context.controllerId];
+    const thresholdsMet = Math.floor(salvageTriggers / options.threshold);
+    const payoutMultiplier = options.maxThresholds
+      ? Math.min(thresholdsMet, options.maxThresholds)
+      : thresholdsMet;
+
+    if (payoutMultiplier <= 0) {
+      return [{
+        type: "LOG",
+        text: `Resolved ${context.item.label}: only ${salvageTriggers} salvage trigger${salvageTriggers === 1 ? "" : "s"} this turn; needed ${options.threshold} for payout.`,
+      }];
+    }
+
+    const resources = Object.fromEntries(
+      Object.entries(options.resourcesPerThreshold)
+        .map(([resource, amount]) => [resource, (amount ?? 0) * payoutMultiplier])
+        .filter(([, amount]) => Number(amount) > 0)
+    ) as CardCost;
+
+    return [
+      {
+        type: "GAIN_RESOURCES",
+        playerId: context.controllerId,
+        resources,
+      },
+      {
+        type: "LOG",
+        text: `Resolved ${context.item.label}: converted ${salvageTriggers} salvage trigger${salvageTriggers === 1 ? "" : "s"} into ${payoutMultiplier} payout${payoutMultiplier === 1 ? "" : "s"}.`,
       },
     ];
   };

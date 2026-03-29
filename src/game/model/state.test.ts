@@ -64,6 +64,10 @@ describe("createInitialGameState", () => {
     expect(state.bloomedUnitIdsThisTurn).toEqual([]);
     expect(state.lastBloomSourceItemId).toBeNull();
     expect(state.lastBloomedUnitIds).toEqual([]);
+    expect(state.salvageTriggersThisTurn).toEqual({
+      player_1: 0,
+      player_2: 0,
+    });
   });
 
   it("hydrates starting unit keywords from source card definitions", () => {
