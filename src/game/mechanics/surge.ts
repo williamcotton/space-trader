@@ -1,9 +1,19 @@
 import type { PlayerId } from "../model/ids";
 import type { GameState } from "../model/state";
+import { registerTriggerConditionEvaluator } from "../registries/triggerConditions";
+import { registerTriggerConditionScoreContributor } from "../registries/aiMechanics";
 import { registerMechanicStateInitializer, registerMechanicStateMigrator, registerMechanicTurnResetHook } from "../registries/mechanicState";
+import { getCardDefinition } from "../content/cards/catalog";
 import { ensureMechanicStateNamespace } from "./stateAccess";
 
 const SURGE_MECHANIC_ID = "surge";
+
+declare module "../model/state" {
+  interface GameState {
+    /** @deprecated Use surge mechanic helpers. */
+    tacticsCastThisTurn: Record<PlayerId, number>;
+  }
+}
 
 type SurgeTurnState = {
   tacticsCastByPlayer: Record<PlayerId, number>;
@@ -58,3 +68,14 @@ registerMechanicStateMigrator(SURGE_MECHANIC_ID, (state) => {
 });
 
 registerMechanicTurnResetHook(SURGE_MECHANIC_ID, resetSurgeTurnState);
+
+registerTriggerConditionEvaluator("on_owner_surged_tactic_played", (_state, event, _condition, unit) => {
+  if (event.type !== "CARD_PLAYED_TO_STACK" || event.playerId !== unit.ownerId || !event.surgeActive) {
+    return false;
+  }
+  return getCardDefinition(event.cardId)?.kind === "tactic";
+});
+
+registerTriggerConditionScoreContributor("surge_trigger_bonus", (condition) =>
+  condition.type === "on_owner_surged_tactic_played" ? 16 : null
+);

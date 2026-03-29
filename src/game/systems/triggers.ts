@@ -47,6 +47,8 @@ function resolveAutoTarget(
     case "weakest_enemy_unit_in_range_2":
       return null;
   }
+
+  return null;
 }
 
 export type TriggerContext = {

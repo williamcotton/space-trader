@@ -1,9 +1,22 @@
 import type { PlayerId } from "../model/ids";
 import type { GameState } from "../model/state";
+import { registerCombatHook } from "../registries/combatHooks";
+import { registerSpellScoringResolver } from "../registries/spellScoring";
+import { registerTriggerConditionEvaluator } from "../registries/triggerConditions";
+import { registerTriggerConditionScoreContributor } from "../registries/aiMechanics";
 import { registerMechanicStateInitializer, registerMechanicStateMigrator, registerMechanicTurnResetHook } from "../registries/mechanicState";
+import { getRegisteredResourceIds } from "../content/registry";
+import { SALVAGE_KEYWORD, unitHasActiveKeyword } from "../systems/keywords";
 import { ensureMechanicStateNamespace } from "./stateAccess";
 
 const SALVAGE_MECHANIC_ID = "salvage";
+
+declare module "../model/state" {
+  interface GameState {
+    /** @deprecated Use salvage mechanic helpers. */
+    salvageTriggersThisTurn: Record<PlayerId, number>;
+  }
+}
 
 type SalvageTurnState = {
   triggersByPlayer: Record<PlayerId, number>;
@@ -54,3 +67,63 @@ registerMechanicStateMigrator(SALVAGE_MECHANIC_ID, (state) => {
 });
 
 registerMechanicTurnResetHook(SALVAGE_MECHANIC_ID, resetSalvageTurnState);
+
+registerCombatHook("salvage_reward", {
+  onUnitDestroyedByAttack: ({ state, attacker, target }) => {
+    if (target.ownerId === attacker.ownerId || !unitHasActiveKeyword(state, attacker, SALVAGE_KEYWORD)) {
+      return;
+    }
+
+    state.players[attacker.ownerId].resources.alloy += 1;
+    incrementSalvageTriggersThisTurn(state, attacker.ownerId);
+    state.log.push({
+      turn: state.turn,
+      text: `${attacker.id} salvaged wreckage and generated 1 alloy.`,
+    });
+  },
+});
+
+registerTriggerConditionEvaluator("on_owner_salvaged", (state, event, _condition, unit) => {
+  if (event.type !== "UNIT_ATTACK_DECLARED" || !event.targetDestroyed) {
+    return false;
+  }
+
+  const attacker = state.entities[event.attackerId];
+  return Boolean(
+    attacker &&
+    attacker.kind === "unit" &&
+    attacker.ownerId === unit.ownerId &&
+    unitHasActiveKeyword(state, attacker, SALVAGE_KEYWORD)
+  );
+});
+
+registerTriggerConditionScoreContributor("salvage_trigger_bonus", (condition) =>
+  condition.type === "on_owner_salvaged" ? 14 : null
+);
+
+registerSpellScoringResolver("resources_by_salvage_count", ({ state, botPlayerId, targeting, effectConfigs }) => {
+  if (targeting.targetEntityId || targeting.targetHex || targeting.targetStackItemId) {
+    return -Infinity;
+  }
+
+  const effectConfig = effectConfigs.find((config) => config.type === "resources_by_salvage_count");
+  if (!effectConfig || effectConfig.type !== "resources_by_salvage_count") {
+    return -Infinity;
+  }
+
+  const thresholdsMet = Math.floor(getSalvageTriggersThisTurn(state, botPlayerId) / effectConfig.threshold);
+  const payoutMultiplier = effectConfig.maxThresholds
+    ? Math.min(thresholdsMet, effectConfig.maxThresholds)
+    : thresholdsMet;
+
+  if (payoutMultiplier <= 0) {
+    return -Infinity;
+  }
+
+  let score = 48 + payoutMultiplier * 18;
+  for (const resource of getRegisteredResourceIds()) {
+    score += (effectConfig.resourcesPerThreshold[resource] ?? 0) * payoutMultiplier * 12;
+  }
+
+  return score;
+});

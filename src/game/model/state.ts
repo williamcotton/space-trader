@@ -110,7 +110,7 @@ export type UnitEntity = {
 
 export type EntityState = BaseEntity | UnitEntity;
 
-export type StackItem = {
+export interface StackItem {
   id: string;
   label: string;
   controllerId: PlayerId;
@@ -128,7 +128,7 @@ export type StackItem = {
   sourceCardId: string | null;
   sourceCardOwnerId: PlayerId | null;
   pendingUnitEntityId: EntityId | null;
-};
+}
 
 export type MatchLogEntry = {
   turn: number;
@@ -141,7 +141,7 @@ export type MechanicStateBuckets = {
   resolution: Record<string, unknown>;
 };
 
-export type GameState = {
+export interface GameState {
   stateVersion: number;
   matchId: string;
   turn: number;
@@ -163,19 +163,9 @@ export type GameState = {
   winner: PlayerId | null;
   lastRejectedReason: string | null;
   mechanicState: MechanicStateBuckets;
-  /** @deprecated Use surge mechanic helpers. */
-  tacticsCastThisTurn: Record<PlayerId, number>;
-  /** @deprecated Use bloom mechanic helpers. */
-  bloomedUnitIdsThisTurn: EntityId[];
-  /** @deprecated Use bloom mechanic helpers. */
-  lastBloomSourceItemId: string | null;
-  /** @deprecated Use bloom mechanic helpers. */
-  lastBloomedUnitIds: EntityId[];
-  /** @deprecated Use salvage mechanic helpers. */
-  salvageTriggersThisTurn: Record<PlayerId, number>;
   tacticalHarvestEligibleUnitIds: EntityId[];
   tacticalHarvestedUnitIds: EntityId[];
-};
+}
 
 export function getUnitKeywords(unit: UnitEntity): string[] {
   return unit.keywords ? [...unit.keywords] : [];
@@ -405,7 +395,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     player_2: createInitialZonesForPlayer(PLAYER_TWO, factionTwo, OPENING_HAND_SIZE, options.randomSource),
   } satisfies Record<PlayerId, PlayerZones>;
 
-  const state: GameState = {
+  const state = {
     stateVersion: 22,
     matchId: options.matchId ?? "match_frontier_belt",
     turn: 1,
@@ -455,20 +445,9 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       turn: {},
       resolution: {},
     },
-    tacticsCastThisTurn: {
-      player_1: 0,
-      player_2: 0,
-    },
-    bloomedUnitIdsThisTurn: [],
-    lastBloomSourceItemId: null,
-    lastBloomedUnitIds: [],
-    salvageTriggersThisTurn: {
-      player_1: 0,
-      player_2: 0,
-    },
     tacticalHarvestEligibleUnitIds: [],
     tacticalHarvestedUnitIds: [],
-  };
+  } as unknown as GameState;
 
   initializeMechanicState(state);
   return state;

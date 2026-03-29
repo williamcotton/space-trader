@@ -2,24 +2,24 @@ import type { GameEvent } from "../actions/events";
 import type { GameState, UnitEntity } from "../model/state";
 import type { TriggerCondition } from "../systems/triggerEngine";
 
-export type TriggerConditionEvaluator<K extends TriggerCondition["type"] = TriggerCondition["type"]> = (
+export type TriggerConditionEvaluator = (
   state: GameState,
   event: GameEvent,
-  condition: Extract<TriggerCondition, { type: K }>,
+  condition: TriggerCondition,
   unit: UnitEntity
 ) => boolean;
 
-const triggerConditionEvaluators = new Map<TriggerCondition["type"], TriggerConditionEvaluator>();
+const triggerConditionEvaluators = new Map<string, TriggerConditionEvaluator>();
 
-export function registerTriggerConditionEvaluator<K extends TriggerCondition["type"]>(
-  type: K,
-  evaluator: TriggerConditionEvaluator<K>
+export function registerTriggerConditionEvaluator(
+  type: string,
+  evaluator: TriggerConditionEvaluator
 ): void {
-  triggerConditionEvaluators.set(type, evaluator as unknown as TriggerConditionEvaluator);
+  triggerConditionEvaluators.set(type, evaluator);
 }
 
 export function getTriggerConditionEvaluator(
-  type: TriggerCondition["type"]
+  type: string
 ): TriggerConditionEvaluator | undefined {
   return triggerConditionEvaluators.get(type);
 }

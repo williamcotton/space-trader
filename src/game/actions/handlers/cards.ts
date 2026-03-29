@@ -1,6 +1,6 @@
 import type { GameCommand } from "../commands";
 import type { GameEvent } from "../events";
-import { cardHasKeyword, getCardDefinition, getUnitCardKeywords, type CardCost } from "../../content/cards/catalog";
+import { getCardDefinition, getUnitCardKeywords, type CardCost } from "../../content/cards/catalog";
 import { getStackEffectDefinition, getStackEffectMagnitude, type CounterDestination } from "../../content/stackEffects";
 import { createStackItemId, getOpponentPlayer, popTopStackItem } from "../../turn/stack";
 import type { PlayerId } from "../../model/ids";
@@ -9,12 +9,13 @@ import { syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord 
 import { createContinuousEffectId, LAYER, nextEffectTimestamp } from "../../systems/continuousEffects";
 import type { InstructionContext } from "../instructions";
 import { executeInstructions } from "../instructionHandlers";
-import { hasSproutKeyword, UNCOUNTERABLE_KEYWORD } from "../../systems/keywords";
 import {
   getTacticsCastThisTurn,
   incrementTacticsCastThisTurn,
-  resetBloomResolutionState,
+  resetResolutionMechanicState,
 } from "../../mechanics";
+import { resolveCardCounterable } from "../../registries/cardCounterability";
+import { getUnitDeploymentAdjustment } from "../../registries/unitDeployment";
 
 function applyCardCost(state: GameState, playerId: PlayerId, cost: CardCost): void {
   const pool = state.players[playerId].resources;
@@ -75,9 +76,9 @@ function deployUnitToBattlefield(
     return;
   }
   const keywords = getUnitCardKeywords(cardId);
-  const gainsImmediateActions = hasSproutKeyword(keywords);
-  const movesRemaining = gainsImmediateActions ? cardDefinition.unit.moveRange : 0;
-  const attacksRemaining = gainsImmediateActions ? cardDefinition.unit.attackActionsPerTurn : 0;
+  const deploymentAdjustment = getUnitDeploymentAdjustment(cardDefinition, keywords);
+  const movesRemaining = deploymentAdjustment.movesRemaining ?? 0;
+  const attacksRemaining = deploymentAdjustment.attacksRemaining ?? 0;
 
   state.entities[unitEntityId] = {
     id: unitEntityId,
@@ -273,7 +274,7 @@ export function handlePlayCard(
       targetEntityId: command.targetEntityId ?? null,
       targetHex: command.targetHex ?? null,
       objectKind: effectDefinition.object.kind,
-      counterable: effectDefinition.object.counterable && !cardHasKeyword(card, UNCOUNTERABLE_KEYWORD),
+      counterable: resolveCardCounterable(card, effectDefinition, effectDefinition.object.counterable),
       defaultCounterDestination: effectDefinition.object.defaultCounterDestination,
       nextPriorityPlayerId: getOpponentPlayer(command.playerId),
       pendingUnitEntityId: card.play.reserveEntityId ? createSummonedUnitId(state, command.playerId, card.id) : null,
@@ -416,7 +417,7 @@ export function reduceStackItemResolved(
     return;
   }
 
-  resetBloomResolutionState(state);
+  resetResolutionMechanicState(state);
   state.priorityPlayerId = state.activePlayerId;
   state.consecutivePriorityPasses = 0;
   const resolvedSourceDestination = applyResolvedStackEffect(state, resolvedItem);

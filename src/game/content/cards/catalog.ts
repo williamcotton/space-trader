@@ -201,10 +201,10 @@ export type CardPlayProfile =
       isValidHexTarget: HexTargetPredicate;
     });
 
-export type AutoTargetStrategy = "weakest_enemy_unit" | "weakest_enemy_unit_in_range_2";
+export type AutoTargetStrategy = string;
 
 export type UnitTrigger = {
-  event: "on_owner_tactic_played" | "on_owner_surged_tactic_played";
+  event: string;
   effectId: string;
   labelSuffix: string;
   autoTarget: AutoTargetStrategy;
@@ -757,11 +757,15 @@ export const BASE_CARD_DEFINITIONS: Record<string, CardDefinition> = {
           layer: LAYER.TEMPORARY,
         },
         {
-          type: "TRIGGER_BLOOM",
-          unitIds: [ctx.targetEntityId],
-          sourceLabel: "Brace Protocol",
-          sourceItemId: ctx.item.id,
-          excludeEffectIdPrefix: `ce_brace_${ctx.item.id}`,
+          type: "RUN_MECHANIC_INSTRUCTION",
+          mechanicId: "bloom",
+          operation: "trigger",
+          payload: {
+            unitIds: [ctx.targetEntityId],
+            sourceLabel: "Brace Protocol",
+            sourceItemId: ctx.item.id,
+            excludeEffectIdPrefix: `ce_brace_${ctx.item.id}`,
+          },
         },
       ];
     },

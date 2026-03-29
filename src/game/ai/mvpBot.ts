@@ -9,21 +9,21 @@ import { getPrimaryResourceForFaction, MAX_HAND_SIZE, type EntityState, type Gam
 import { resolveCombatAttack } from "../systems/combat";
 import { canAffordCardCost, getEnemyEntities, getFirstOpenBaseAdjacentTile, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../model/queries";
 import {
-  RELAY_KEYWORD,
-  unitHasActiveKeyword,
-} from "../systems/keywords";
-import {
   canAttackEntityDirectly,
   canUnitAttack,
   canUnitMove,
 } from "../rules/directInteraction";
-import { BLOOM_KEYWORD } from "../systems/keywords";
 import { getOpponentPlayer } from "../turn/stack";
 import { getCascadeAffectedHexes } from "../systems/cascade";
 import { getLegalPlayCardTargetOptions } from "../rules/cardPlayOptions";
 import { getEffectiveUnitAttackDamage } from "../systems/unitStats";
 import { getSpellScoringResolver, registerSpellScoringResolver } from "../registries/spellScoring";
-import { getBloomedUnitIdsThisTurn, getSalvageTriggersThisTurn, getTacticsCastThisTurn } from "../mechanics";
+import { getTacticsCastThisTurn } from "../mechanics";
+import {
+  applyUnitBuffScoreContributions,
+  getCascadeScoreBonus,
+  getTriggerConditionScoreBonus,
+} from "../registries/aiMechanics";
 
 const CURRENCY_RESOURCE_ID = "credits";
 
@@ -532,14 +532,15 @@ function scoreUnitBuffOpportunity(
 
   let score = affectedUnits.length * 4;
   let hasMeaningfulOpportunity = false;
-
-  const freshBloomUnits = affectedUnits.filter((unit) =>
-    !getBloomedUnitIdsThisTurn(state).includes(unit.id) &&
-    unitHasActiveKeyword(state, unit, BLOOM_KEYWORD)
-  );
-  if (freshBloomUnits.length > 0) {
+  const mechanicContributions = applyUnitBuffScoreContributions({
+    state,
+    botPlayerId,
+    affectedUnits,
+    options,
+  });
+  score += mechanicContributions.scoreDelta;
+  if (mechanicContributions.hasMeaningfulOpportunity) {
     hasMeaningfulOpportunity = true;
-    score += freshBloomUnits.length * AI_WEIGHTS.gainedResourceValue;
   }
 
   for (const unit of affectedUnits) {
@@ -635,13 +636,16 @@ function scoreCascadeAttackBuffTarget(
 
   const score = scoreUnitBuffOpportunity(state, botPlayerId, affectedUnits, options);
   let totalScore = score === -Infinity ? -Infinity : score + affectedHexes.length;
-
-  if (options.grantedKeywords?.includes(RELAY_KEYWORD)) {
-    const newlyRelayedUnits = affectedUnits.filter((unit) => !unitHasActiveKeyword(state, unit, RELAY_KEYWORD));
-    if (newlyRelayedUnits.length > 0) {
-      totalScore = totalScore === -Infinity ? 0 : totalScore;
-      totalScore += newlyRelayedUnits.length * 18;
-    }
+  const cascadeBonus = getCascadeScoreBonus({
+    state,
+    botPlayerId,
+    affectedHexes,
+    affectedUnits,
+    options,
+  });
+  if (cascadeBonus !== 0) {
+    totalScore = totalScore === -Infinity ? 0 : totalScore;
+    totalScore += cascadeBonus;
   }
 
   return totalScore;
@@ -816,61 +820,6 @@ function scoreResourcesByUnitCountSpell(
   return score;
 }
 
-function scoreResourcesByBloomCountSpell(
-  state: GameState,
-  botPlayerId: PlayerId,
-  options: {
-    threshold: number;
-    resourcesPerThreshold: Partial<Record<ResourceType, number>>;
-    maxThresholds?: number;
-  }
-): number {
-  const bloomedUnits = getBloomedUnitIdsThisTurn(state)
-    .map((unitId) => state.entities[unitId])
-    .filter((entity): entity is UnitEntity => entity?.kind === "unit" && entity.ownerId === botPlayerId);
-  const thresholdsMet = Math.floor(bloomedUnits.length / options.threshold);
-  const payoutMultiplier = options.maxThresholds
-    ? Math.min(thresholdsMet, options.maxThresholds)
-    : thresholdsMet;
-
-  if (payoutMultiplier <= 0) {
-    return -Infinity;
-  }
-
-  let score = 48 + payoutMultiplier * 18;
-  for (const resource of getResourceOrder()) {
-    score += (options.resourcesPerThreshold[resource] ?? 0) * payoutMultiplier * AI_WEIGHTS.gainedResourceValue;
-  }
-
-  return score;
-}
-
-function scoreResourcesBySalvageCountSpell(
-  state: GameState,
-  botPlayerId: PlayerId,
-  options: {
-    threshold: number;
-    resourcesPerThreshold: Partial<Record<ResourceType, number>>;
-    maxThresholds?: number;
-  }
-): number {
-  const thresholdsMet = Math.floor(getSalvageTriggersThisTurn(state, botPlayerId) / options.threshold);
-  const payoutMultiplier = options.maxThresholds
-    ? Math.min(thresholdsMet, options.maxThresholds)
-    : thresholdsMet;
-
-  if (payoutMultiplier <= 0) {
-    return -Infinity;
-  }
-
-  let score = 48 + payoutMultiplier * 18;
-  for (const resource of getResourceOrder()) {
-    score += (options.resourcesPerThreshold[resource] ?? 0) * payoutMultiplier * AI_WEIGHTS.gainedResourceValue;
-  }
-
-  return score;
-}
-
 function scoreHexAreaDamageSpell(
   state: GameState,
   botPlayerId: PlayerId,
@@ -1012,28 +961,6 @@ registerSpellScoringResolver("resources_by_unit_count", ({ state, botPlayerId, t
     effectConfigs
       .filter((effectConfig) => effectConfig.type === "resources_by_unit_count")
       .map((effectConfig) => scoreResourcesByUnitCountSpell(state, botPlayerId, effectConfig))
-  );
-});
-
-registerSpellScoringResolver("resources_by_bloom_count", ({ state, botPlayerId, targeting, effectConfigs }) => {
-  if (targeting.targetEntityId || targeting.targetHex || targeting.targetStackItemId) {
-    return -Infinity;
-  }
-  return combineConfiguredSpellScores(
-    effectConfigs
-      .filter((effectConfig) => effectConfig.type === "resources_by_bloom_count")
-      .map((effectConfig) => scoreResourcesByBloomCountSpell(state, botPlayerId, effectConfig))
-  );
-});
-
-registerSpellScoringResolver("resources_by_salvage_count", ({ state, botPlayerId, targeting, effectConfigs }) => {
-  if (targeting.targetEntityId || targeting.targetHex || targeting.targetStackItemId) {
-    return -Infinity;
-  }
-  return combineConfiguredSpellScores(
-    effectConfigs
-      .filter((effectConfig) => effectConfig.type === "resources_by_salvage_count")
-      .map((effectConfig) => scoreResourcesBySalvageCountSpell(state, botPlayerId, effectConfig))
   );
 });
 
@@ -1241,17 +1168,7 @@ function scoreUtilityUnit(candidate: DeployCandidate, ctx: DeployBoardContext): 
   }
 
   for (const trigger of candidate.card.triggers ?? []) {
-    switch (trigger.condition.type) {
-      case "on_owner_surged_tactic_played":
-        score += 16;
-        break;
-      case "on_owner_salvaged":
-        score += 14;
-        break;
-      default:
-        score += 8;
-        break;
-    }
+    score += getTriggerConditionScoreBonus(trigger.condition) ?? 8;
   }
 
   return score;

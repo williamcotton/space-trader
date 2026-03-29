@@ -14,7 +14,12 @@ export type GameInstruction =
   | { type: "DEAL_DAMAGE"; targetEntityId: EntityId; amount: number; sourceLabel: string }
   | { type: "DESTROY_ENTITY"; targetEntityId: EntityId; sourceLabel: string }
   | { type: "DEPLOY_UNIT"; cardId: string; controllerId: PlayerId; entityId?: string; spawnCoord?: HexCoord }
-  | { type: "TRIGGER_BLOOM"; unitIds: EntityId[]; sourceLabel: string; sourceItemId: string; excludeEffectIdPrefix?: string }
+  | {
+      type: "RUN_MECHANIC_INSTRUCTION";
+      mechanicId: string;
+      operation: string;
+      payload: Record<string, unknown>;
+    }
   | {
       type: "APPLY_CONTINUOUS_EFFECT";
       effectId: string;

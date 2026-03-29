@@ -129,11 +129,15 @@ function createBloomInstruction(
   }
 
   return {
-    type: "TRIGGER_BLOOM",
-    unitIds: units.map((unit) => unit.id),
-    sourceLabel: context.item.label,
-    sourceItemId: context.item.id,
-    excludeEffectIdPrefix: options?.excludeEffectIdPrefix,
+    type: "RUN_MECHANIC_INSTRUCTION",
+    mechanicId: "bloom",
+    operation: "trigger",
+    payload: {
+      unitIds: units.map((unit) => unit.id),
+      sourceLabel: context.item.label,
+      sourceItemId: context.item.id,
+      excludeEffectIdPrefix: options?.excludeEffectIdPrefix,
+    },
   };
 }
 

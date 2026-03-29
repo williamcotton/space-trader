@@ -3,6 +3,7 @@ import type { UnitRole } from "../model/enums";
 import type { GameState, UnitEntity } from "../model/state";
 import { hexDistance } from "../model/hex";
 import type { ReplacementEffectPayload } from "./replacementEngine";
+import { getRegisteredUnitStatAdjustments } from "../registries/unitStatHooks";
 
 // --- Layer constants (MTG-inspired ordering) ---
 
@@ -155,18 +156,7 @@ export function getEffectiveStatValue(
     return value;
   }, base);
 
-  // Bastion is a positional evergreen: adjacent formations reinforce armor.
-  if (stat === "armor" && getEffectiveKeywordsForUnit(state, unit).includes("bastion")) {
-    const hasAdjacentAlly = Object.values(state.entities).some((entity) =>
-      entity.kind === "unit" &&
-      entity.ownerId === unit.ownerId &&
-      entity.id !== unit.id &&
-      hexDistance(entity.coord, unit.coord) === 1
-    );
-    if (hasAdjacentAlly) {
-      value += 1;
-    }
-  }
+  value += getRegisteredUnitStatAdjustments(state, unit, stat);
 
   return value;
 }

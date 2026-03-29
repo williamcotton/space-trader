@@ -1,20 +1,17 @@
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, UnitEntity } from "../model/state";
 import {
-  canAttackEntityDirectly as canAttackEntityDirectlyFromKeywords,
-  canTargetEntityDirectly as canTargetEntityDirectlyFromKeywords,
-  getAttackKeywordBlockReason,
-  getTargetingKeywordBlockReason,
-  isUnitBlockedFromAttackingBySummoningSickness,
-  isUnitBlockedFromMovingBySummoningSickness,
-} from "../systems/keywords";
+  getDirectAttackBlockReasonFromRegistry,
+  getDirectTargetingBlockReasonFromRegistry,
+  getUnitActionBlockReason,
+} from "../registries/directInteraction";
 
 export function getUnitMoveActionBlockReason(unit: Readonly<Pick<UnitEntity, "hasSummoningSickness" | "keywords">>): string | null {
-  return isUnitBlockedFromMovingBySummoningSickness(unit) ? "Unit has summoning sickness." : null;
+  return getUnitActionBlockReason(unit, "move");
 }
 
 export function getUnitAttackActionBlockReason(unit: Readonly<Pick<UnitEntity, "hasSummoningSickness" | "keywords">>): string | null {
-  return isUnitBlockedFromAttackingBySummoningSickness(unit) ? "Unit has summoning sickness." : null;
+  return getUnitActionBlockReason(unit, "attack");
 }
 
 export function canUnitMove(unit: Readonly<Pick<UnitEntity, "hasSummoningSickness" | "keywords">>): boolean {
@@ -30,7 +27,7 @@ export function getDirectTargetingBlockReason(
   sourcePlayerId: PlayerId,
   target: EntityState
 ): string | null {
-  return getTargetingKeywordBlockReason(state, sourcePlayerId, target);
+  return getDirectTargetingBlockReasonFromRegistry(state, sourcePlayerId, target);
 }
 
 export function canTargetEntityDirectly(
@@ -38,7 +35,7 @@ export function canTargetEntityDirectly(
   sourcePlayerId: PlayerId,
   target: EntityState
 ): boolean {
-  return canTargetEntityDirectlyFromKeywords(state, sourcePlayerId, target);
+  return getDirectTargetingBlockReason(state, sourcePlayerId, target) === null;
 }
 
 export function getDirectAttackBlockReason(
@@ -46,7 +43,7 @@ export function getDirectAttackBlockReason(
   sourcePlayerId: PlayerId,
   target: EntityState
 ): string | null {
-  return getAttackKeywordBlockReason(state, sourcePlayerId, target);
+  return getDirectAttackBlockReasonFromRegistry(state, sourcePlayerId, target);
 }
 
 export function canAttackEntityDirectly(
@@ -54,5 +51,5 @@ export function canAttackEntityDirectly(
   sourcePlayerId: PlayerId,
   target: EntityState
 ): boolean {
-  return canAttackEntityDirectlyFromKeywords(state, sourcePlayerId, target);
+  return getDirectAttackBlockReason(state, sourcePlayerId, target) === null;
 }

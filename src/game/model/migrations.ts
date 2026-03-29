@@ -244,7 +244,7 @@ export function migrateRuntimeState(state: GameState): void {
     state.stateVersion = CURRENT_STATE_VERSION;
     state.log.push({
       turn: state.turn,
-      text: "State migrated to v21 (surge and bloom tracking).",
+      text: `State migrated to v${CURRENT_STATE_VERSION} (mechanic state compatibility).`,
     });
   }
 }

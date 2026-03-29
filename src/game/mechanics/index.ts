@@ -1,5 +1,10 @@
 import type { GameState } from "../model/state";
-import { initializeRegisteredMechanicState, migrateRegisteredMechanicState, resetRegisteredTurnMechanicState } from "../registries/mechanicState";
+import {
+  initializeRegisteredMechanicState,
+  migrateRegisteredMechanicState,
+  resetRegisteredResolutionMechanicState,
+  resetRegisteredTurnMechanicState,
+} from "../registries/mechanicState";
 import { installBloomCompatibilityShims } from "./bloom";
 import { installSalvageCompatibilityShim } from "./salvage";
 import { installSurgeCompatibilityShim } from "./surge";
@@ -7,6 +12,11 @@ import { installSurgeCompatibilityShim } from "./surge";
 import "./surge";
 import "./bloom";
 import "./salvage";
+import "./sprout";
+import "./stealth";
+import "./relay";
+import "./bastion";
+import "./uncounterable";
 
 export { getBloomedUnitIdsThisTurn, getLastBloomSourceItemId, getLastBloomedUnitIds, resetBloomResolutionState, setLastBloomSourceItemId } from "./bloom";
 export { getSalvageTriggersThisTurn, incrementSalvageTriggersThisTurn } from "./salvage";
@@ -42,4 +52,8 @@ export function migrateMechanicState(state: GameState): void {
 
 export function resetTurnMechanicState(state: GameState): void {
   resetRegisteredTurnMechanicState(state);
+}
+
+export function resetResolutionMechanicState(state: GameState): void {
+  resetRegisteredResolutionMechanicState(state);
 }

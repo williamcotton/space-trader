@@ -668,6 +668,112 @@ Success criteria:
 - adding a faction module and starter recipe is enough to put a new faction in the game
 - adding a new resource module is enough to theme and track that resource
 
+### Phase 6.5: Extract Mechanic Runtime Behavior From Core
+
+Goal:
+- make the core engine a generic runtime shell by moving as much live gameplay behavior as possible out of core files and into set-owned mechanic, card, faction, and effect modules
+
+Restated more bluntly:
+- core should orchestrate commands, events, instructions, hooks, and rendering
+- Base Set should behave like the first expansion, not like privileged built-in engine behavior
+- the engine should stop “knowing Bloom” or “knowing Flux” or “knowing Meteor Chain” except through registered contracts
+
+Why this phase exists:
+- phase 6 makes faction/resource identity data-driven, but the engine is still not honestly modular if adding `Bloom 2`, `Overheat`, `Fortify`, or a graveyard mechanic requires edits in core files
+- the architecture is only truly extensible once mechanic modules own their runtime hooks the same way sets own their cards/factions/resources
+- without this phase, expansion support would still be superficial: sets could add data, but not truly add behavior without patching the kernel
+
+Current problems this phase must eliminate:
+- mechanic names still appear directly in core layers like `instructionHandlers.ts`, `triggerEngine.ts`, `mvpBot.ts`, `animations.ts`, `validators.ts`, `keywords.ts`, and compatibility state/migration code
+- some mechanics still rely on bespoke instruction types, bespoke trigger condition types, or bespoke animation assumptions
+- mechanics can own state, but they still do not fully own event emission, animation payloads, consumer scoring, or legality hooks
+- card/effect/faction-specific behavior still leaks into engine consumers through assumptions about effect families, faction accents, keyword semantics, or gameplay event meaning
+- Base Set still has privileged implicit ownership of behavior that should instead come from loaded set modules
+
+Work:
+- introduce a mechanic runtime registry layer that supports set-owned and mechanic-owned hooks for:
+  - event emission
+  - trigger condition registration
+  - instruction registration
+  - legality / direct-interaction hooks
+  - combat hooks
+  - continuous-effect interpretation hooks
+  - animation event/build hooks
+  - AI scoring hooks
+  - per-turn / per-resolution reset hooks
+- define a stricter kernel boundary:
+  - core owns sequencing and generic state transitions
+  - sets own gameplay semantics
+  - if code is meaningfully about a named mechanic, named card family, named faction, or named set identity, it should live outside the kernel unless there is a compelling generic-runtime reason not to
+- move non-generic behavior out of core even when it is not “a mechanic” in the narrow keyword sense:
+  - effect-family-specific animation decisions
+  - faction-owned presentation/runtime accents
+  - card-family-specific AI heuristics
+  - set-owned trigger/event meaning
+- move existing live mechanics onto that layer:
+  - `bloom`
+  - `surge`
+  - `relay`
+  - `salvage`
+  - `bastion`
+  - `sprout`
+  - `stealth`
+  - `uncounterable`
+- make Base Set use those same extension points explicitly:
+  - `base/mechanics/*` should register mechanic hooks
+  - `base/factions/*` should register faction-owned metadata and runtime hooks where applicable
+  - `base/cards/*` and `base/effects/*` should describe effect behavior through data plus registered helpers rather than core switches
+- remove mechanic-specific event assumptions from the core renderer:
+  - mechanics should emit their own render-facing events or animation payloads
+  - example: `Bloom` should no longer be “only a log line plus biomass grant”; it should emit a mechanic event that an animation builder can consume
+- remove Base-Set-only assumptions from the renderer and UI shell:
+  - card/effect/faction visuals should come from registered presentation/effect metadata
+  - core render code should only know generic animation primitives and registered builders
+- remove mechanic-specific trigger condition unions from the core trigger engine:
+  - trigger engine should evaluate registered condition handlers against the full condition object
+  - mechanic modules should register conditions like `on_self_bloomed`, `on_owner_unit_bloomed`, `on_owner_surged_tactic_played`, etc.
+- remove mechanic- and set-specific validation assumptions from the core rules layer:
+  - targeting/playability/direct-interaction rules should delegate through registered legality hooks wherever semantics are not purely generic
+- move mechanic-specific AI scoring out of `mvpBot.ts` and into registered scoring helpers:
+  - the bot can still call shared facades, but core bot code should not know `bloom`, `surge`, or `salvage` by name
+- move effect-family and set-owned heuristics out of the core bot as well:
+  - if a family of cards needs scoring that is not generic, that scorer should be registered by the owning set/mechanic/effect module
+- move mechanic-specific instruction execution out of generic core handlers where practical:
+  - if a mechanic needs a special instruction family, its module should register the handler
+  - if a mechanic can be modeled as generic effects plus mechanic state/events, prefer that over bespoke core instruction logic
+- move keyword behavior off the shared keyword file where practical:
+  - `keywords.ts` should ideally become a thin keyword access facade plus registry wiring
+  - mechanic-specific behavior should live in mechanic modules, not in the shared keyword utility file
+- move any remaining Base-Set-owned semantic tables out of core directories and into set modules:
+  - this includes effect metadata, faction identity metadata, runtime-facing animation accents, and other set-owned semantics that are still hanging off core files for historical reasons
+- keep compatibility shims only where needed to avoid breaking existing saves during this phase
+
+Concrete phase-6.5 targets by current mechanic:
+- `Bloom`
+  - move bloom trigger execution, bloom-triggered event emission, bloom trigger conditions, bloom animation, and bloom-related bot scoring behind mechanic-owned registrations
+- `Surge`
+  - move surge-active evaluation helpers, surged-cast trigger conditions, and surge-related bot heuristics behind mechanic-owned registrations
+- `Relay`
+  - move cascade extension behavior behind mechanic-owned cascade hooks instead of direct keyword checks in core cascade logic
+- `Salvage`
+  - move salvage combat rewards and salvage-count payoffs behind mechanic-owned combat/event hooks
+- `Bastion`
+  - move bastion adjacency/stat behavior behind mechanic-owned continuous-effect or stat hooks
+- `Sprout`, `Stealth`, `Uncounterable`
+  - move direct-interaction and playability behavior behind registered keyword/direct-interaction hooks rather than hardcoded shared keyword branches
+
+Important constraint:
+- do not solve this by replacing compile-time closure with one giant untyped registry blob
+- each mechanic should still have a typed local module surface and should register typed hooks into the engine
+- keep the kernel small on purpose; phase 6.5 should delete knowledge from the core, not just move switches around
+
+Success criteria:
+- adding a new mechanic no longer requires touching core files like `instructionHandlers.ts`, `triggerEngine.ts`, `animations.ts`, `mvpBot.ts`, `validators.ts`, `keywords.ts`, `phaseMachine.ts`, or `migrations.ts`
+- existing mechanics (`bloom`, `surge`, `relay`, `salvage`, `bastion`, `sprout`, `stealth`, `uncounterable`) are implemented through mechanic modules plus registries rather than direct core branching
+- mechanics can emit animations and triggers without adding new hardcoded cases to the renderer or trigger engine
+- Base Set is using the same runtime extension seams that future expansions will use
+- if a behavior is specific to a mechanic, faction, card family, or set, it lives outside the kernel unless it is truly generic infrastructure
+
 ### Phase 7: Expansion Set Loading
 
 Goal:
@@ -684,6 +790,10 @@ Recommended near-term stance:
 - use a code manifest first
 - dynamic discovery can come later if needed
 
+Important sequencing note:
+- phase 7 should not begin until phase 6.5 is substantially complete
+- otherwise expansions will still be forced to patch mechanic behavior through core files, which defeats the whole point of set modularity
+
 Success criteria:
 - Base Set and one expansion can load together cleanly
 - an expansion can add cards to an existing faction and also add a new faction in the same package
@@ -699,7 +809,7 @@ Work:
 - update docs to describe the registry/set model as the real architecture
 
 Success criteria:
-- the core engine no longer directly knows specific mechanics, faction IDs, or effect-family names
+- the core engine no longer directly knows specific mechanics, faction IDs, or effect-family names except through registry/facade boundaries
 
 ## Practical Rules For The Refactor
 

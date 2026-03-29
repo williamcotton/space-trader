@@ -14,14 +14,9 @@ import { removeStackItemById } from "../turn/stack";
 import type { GameInstruction } from "./instructions";
 import { drawCardForPlayer } from "./handlers/cards";
 import { applyReplacementEffects } from "../systems/replacementEngine";
-import { BLOOM_KEYWORD, hasSproutKeyword, unitHasActiveKeyword } from "../systems/keywords";
 import { getInstructionHandler, registerInstructionHandler } from "../registries/instructionHandlers";
-import {
-  getBloomedUnitIdsThisTurn,
-  getLastBloomSourceItemId,
-  getLastBloomedUnitIds,
-  setLastBloomSourceItemId,
-} from "../mechanics";
+import { getMechanicInstructionHandler } from "../registries/mechanicInstructions";
+import { getUnitDeploymentAdjustment } from "../registries/unitDeployment";
 
 // --- Internal helpers (extracted from handlers/cards.ts) ---
 
@@ -65,9 +60,9 @@ function deployUnitInternal(
   const suffix = Object.keys(state.entities).length + state.log.length + state.turn;
   const unitEntityId = entityId ?? `unit_${controllerId}_${cardId}_${suffix}`;
   const keywords = getUnitCardKeywords(cardId);
-  const gainsImmediateActions = hasSproutKeyword(keywords);
-  const movesRemaining = gainsImmediateActions ? cardDefinition.unit.moveRange : 0;
-  const attacksRemaining = gainsImmediateActions ? cardDefinition.unit.attackActionsPerTurn : 0;
+  const deploymentAdjustment = getUnitDeploymentAdjustment(cardDefinition, keywords);
+  const movesRemaining = deploymentAdjustment.movesRemaining ?? 0;
+  const attacksRemaining = deploymentAdjustment.attacksRemaining ?? 0;
 
   state.entities[unitEntityId] = {
     id: unitEntityId,
@@ -198,46 +193,19 @@ function handleDeployUnit(state: GameState, instr: Extract<GameInstruction, { ty
   deployUnitInternal(state, instr.cardId, instr.controllerId, instr.entityId, instr.spawnCoord);
 }
 
-function handleTriggerBloom(
+function handleRunMechanicInstruction(
   state: GameState,
-  instr: Extract<GameInstruction, { type: "TRIGGER_BLOOM" }>
+  instr: Extract<GameInstruction, { type: "RUN_MECHANIC_INSTRUCTION" }>
 ): void {
-  if (getLastBloomSourceItemId(state) !== instr.sourceItemId) {
-    setLastBloomSourceItemId(state, instr.sourceItemId);
-    getLastBloomedUnitIds(state).length = 0;
-  }
-
-  const unitIds = [...new Set(instr.unitIds)].sort((a, b) => a.localeCompare(b));
-  let bloomsTriggered = 0;
-
-  for (const unitId of unitIds) {
-    const entity = state.entities[unitId];
-    if (!entity || entity.kind !== "unit") {
-      continue;
-    }
-
-    if (getBloomedUnitIdsThisTurn(state).includes(unitId)) {
-      continue;
-    }
-
-    if (!unitHasActiveKeyword(state, entity, BLOOM_KEYWORD, {
-      excludeEffectIdPrefix: instr.excludeEffectIdPrefix,
-    })) {
-      continue;
-    }
-
-    getBloomedUnitIdsThisTurn(state).push(unitId);
-    getLastBloomedUnitIds(state).push(unitId);
-    state.players[entity.ownerId].resources.biomass += 1;
-    bloomsTriggered += 1;
-  }
-
-  if (bloomsTriggered > 0) {
+  const handler = getMechanicInstructionHandler(instr.mechanicId);
+  if (!handler) {
     state.log.push({
       turn: state.turn,
-      text: `${instr.sourceLabel}: Bloom triggered on ${bloomsTriggered} unit${bloomsTriggered === 1 ? "" : "s"} and generated ${bloomsTriggered} biomass.`,
+      text: `Missing mechanic instruction handler for ${instr.mechanicId}:${instr.operation}.`,
     });
+    return;
   }
+  handler(state, instr.operation, instr.payload);
 }
 
 function handleApplyContinuousEffect(
@@ -299,7 +267,7 @@ function handleLog(state: GameState, instr: Extract<GameInstruction, { type: "LO
 registerInstructionHandler("DEAL_DAMAGE", handleDealDamage);
 registerInstructionHandler("DESTROY_ENTITY", handleDestroyEntity);
 registerInstructionHandler("DEPLOY_UNIT", handleDeployUnit);
-registerInstructionHandler("TRIGGER_BLOOM", handleTriggerBloom);
+registerInstructionHandler("RUN_MECHANIC_INSTRUCTION", handleRunMechanicInstruction);
 registerInstructionHandler("APPLY_CONTINUOUS_EFFECT", handleApplyContinuousEffect);
 registerInstructionHandler("DRAW_CARDS", handleDrawCards);
 registerInstructionHandler("GAIN_RESOURCES", handleGainResources);

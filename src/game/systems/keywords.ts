@@ -1,6 +1,11 @@
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, UnitEntity } from "../model/state";
 import { getEffectiveKeywordsForUnit } from "./continuousEffects";
+import {
+  getDirectAttackBlockReasonFromRegistry,
+  getDirectTargetingBlockReasonFromRegistry,
+  getUnitActionBlockReason,
+} from "../registries/directInteraction";
 
 export const STEALTH_KEYWORD = "stealth";
 export const SPROUT_KEYWORD = "sprout";
@@ -44,21 +49,13 @@ export function unitHasActiveKeyword(
 export function isUnitBlockedFromMovingBySummoningSickness(
   unit: Readonly<Pick<UnitEntity, "hasSummoningSickness" | "keywords">>
 ): boolean {
-  return unit.hasSummoningSickness && !hasSproutKeyword(unit.keywords);
+  return getUnitActionBlockReason(unit, "move") !== null;
 }
 
 export function isUnitBlockedFromAttackingBySummoningSickness(
   unit: Readonly<Pick<UnitEntity, "hasSummoningSickness" | "keywords">>
 ): boolean {
-  return unit.hasSummoningSickness && !hasSproutKeyword(unit.keywords);
-}
-
-function isEnemyStealthedUnit(
-  _state: Readonly<GameState>,
-  sourcePlayerId: PlayerId,
-  target: EntityState
-): target is UnitEntity {
-  return target.kind === "unit" && target.ownerId !== sourcePlayerId && unitHasActiveKeyword(_state, target, STEALTH_KEYWORD);
+  return getUnitActionBlockReason(unit, "attack") !== null;
 }
 
 export function getTargetingKeywordBlockReason(
@@ -66,11 +63,7 @@ export function getTargetingKeywordBlockReason(
   sourcePlayerId: PlayerId,
   target: EntityState
 ): string | null {
-  if (isEnemyStealthedUnit(state, sourcePlayerId, target)) {
-    return "Stealthed enemy units cannot be targeted directly.";
-  }
-
-  return null;
+  return getDirectTargetingBlockReasonFromRegistry(state, sourcePlayerId, target);
 }
 
 export function canTargetEntityDirectly(
@@ -78,7 +71,7 @@ export function canTargetEntityDirectly(
   sourcePlayerId: PlayerId,
   target: EntityState
 ): boolean {
-  return getTargetingKeywordBlockReason(state, sourcePlayerId, target) === null;
+  return getDirectTargetingBlockReasonFromRegistry(state, sourcePlayerId, target) === null;
 }
 
 export function getAttackKeywordBlockReason(
@@ -86,11 +79,7 @@ export function getAttackKeywordBlockReason(
   sourcePlayerId: PlayerId,
   target: EntityState
 ): string | null {
-  if (isEnemyStealthedUnit(state, sourcePlayerId, target)) {
-    return "Stealthed enemy units cannot be attacked directly.";
-  }
-
-  return null;
+  return getDirectAttackBlockReasonFromRegistry(state, sourcePlayerId, target);
 }
 
 export function canAttackEntityDirectly(
@@ -98,5 +87,5 @@ export function canAttackEntityDirectly(
   sourcePlayerId: PlayerId,
   target: EntityState
 ): boolean {
-  return getAttackKeywordBlockReason(state, sourcePlayerId, target) === null;
+  return getDirectAttackBlockReasonFromRegistry(state, sourcePlayerId, target) === null;
 }

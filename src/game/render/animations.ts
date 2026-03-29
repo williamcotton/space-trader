@@ -9,6 +9,7 @@ import { getCascadeAffectedHexes } from "../systems/cascade";
 import { getMapAxialBounds, hexDistance, isWithinMapBounds } from "../model/hex";
 import { getFactionAnimationAccent } from "../registries/presentation";
 import { getStackResolveAnimationBuilder, registerStackResolveAnimationBuilder } from "../registries/stackResolveAnimations";
+import { buildRegisteredMechanicAnimations } from "../registries/mechanicAnimations";
 
 type EntitySnapshot = {
   kind: EntityState["kind"];
@@ -665,6 +666,8 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
   if (!before.winner && state.winner) {
     animations.push(buildVictoryAnimation(state, state.winner));
   }
+
+  animations.push(...buildRegisteredMechanicAnimations(events, before, state));
 
   return animations;
 }

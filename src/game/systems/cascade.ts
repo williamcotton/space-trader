@@ -2,7 +2,7 @@ import { areSameHex, isWithinMapBounds } from "../model/hex";
 import { HEX_DIRECTIONS } from "../model/queries";
 import type { PlayerId } from "../model/ids";
 import type { GameState, HexCoord, UnitEntity } from "../model/state";
-import { RELAY_KEYWORD, unitHasActiveKeyword } from "./keywords";
+import { getAdditionalCascadeBranches, type CascadeBranch } from "../registries/cascadeBranches";
 
 function toHexKey(coord: HexCoord): string {
   return `${coord.q},${coord.r}`;
@@ -36,16 +36,11 @@ export function getCascadeAffectedHexes(
     excludeKeywordEffectIdPrefix?: string;
   }
 ): HexCoord[] {
-  type CascadeBranch = {
-    origin: HexCoord;
-    totalWaves: number;
-  };
-
   const visitedHexes = new Set<string>();
   const usedEchoUnits = new Set<string>();
-  const usedRelayUnits = new Set<string>();
   const affected: HexCoord[] = [];
   const branchQueue: CascadeBranch[] = [{ origin: { ...origin }, totalWaves }];
+  const mechanicMemory = new Map<string, unknown>();
 
   while (branchQueue.length > 0) {
     const branch = branchQueue.shift();
@@ -82,19 +77,15 @@ export function getCascadeAffectedHexes(
         break;
       }
 
-      const relayedUnits = getFriendlyUnitsOnHexes(state, controllerId, waveAffected);
-      for (const unit of relayedUnits) {
-        if (
-          !unitHasActiveKeyword(state, unit, RELAY_KEYWORD, {
-            excludeEffectIdPrefix: options?.excludeKeywordEffectIdPrefix,
-          }) ||
-          usedRelayUnits.has(unit.id)
-        ) {
-          continue;
-        }
-        usedRelayUnits.add(unit.id);
-        branchQueue.push({ origin: { ...unit.coord }, totalWaves: branch.totalWaves });
-      }
+      branchQueue.push(...getAdditionalCascadeBranches({
+        state,
+        controllerId,
+        waveAffectedHexes: waveAffected,
+        branch,
+        options,
+        getFriendlyUnitsOnHexes: (hexes) => getFriendlyUnitsOnHexes(state, controllerId, hexes),
+        memory: mechanicMemory,
+      }));
 
       if (wave === branch.totalWaves - 1) {
         break;
