@@ -1,5 +1,6 @@
 import type { CanvasAnimation, GameFrame } from "../types";
 import { getPlayerAnimationPalette, getPlayerTheme, getResourceTheme } from "../presentation";
+import { tryGetFactionPresentation, tryGetRegisteredResourceTheme } from "../registries/presentation";
 import { toPixel, clamp, drawHexOutline, drawResourceGlyph, truncateLabel } from "./primitives";
 import { getStackAnchor, drawStackGlyph } from "./overlays";
 
@@ -13,6 +14,38 @@ export type AnimationDrawContext = {
 };
 
 type AnimationLayer = "base" | "foreground";
+
+function hexToRgbParts(hex: string): string {
+  const sanitized = hex.replace("#", "");
+  if (sanitized.length !== 6) {
+    return "214, 227, 255";
+  }
+  return `${parseInt(sanitized.slice(0, 2), 16)}, ${parseInt(sanitized.slice(2, 4), 16)}, ${parseInt(sanitized.slice(4, 6), 16)}`;
+}
+
+function resolveAnimationAccentColors(accent: string): { stroke: string; fill: string } {
+  if (accent === "neutral") {
+    return { stroke: "230, 237, 255", fill: "246, 249, 255" };
+  }
+
+  const factionPresentation = tryGetFactionPresentation(accent);
+  if (factionPresentation) {
+    return {
+      stroke: hexToRgbParts(factionPresentation.theme.primary),
+      fill: hexToRgbParts(factionPresentation.theme.secondary),
+    };
+  }
+
+  const resourceTheme = tryGetRegisteredResourceTheme(accent);
+  if (resourceTheme) {
+    return {
+      stroke: hexToRgbParts(resourceTheme.color),
+      fill: hexToRgbParts(resourceTheme.color),
+    };
+  }
+
+  return { stroke: "230, 237, 255", fill: "246, 249, 255" };
+}
 
 function isForegroundAnimation(animation: CanvasAnimation): boolean {
   return animation.kind === "match_intro" || animation.kind === "victory_fanfare";
@@ -63,9 +96,10 @@ function drawAttackAnimation(d: AnimationDrawContext, animation: Extract<CanvasA
 function drawHarvestAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "harvest" }>): void {
   const position = toPixel(animation.coord, d.originX, d.originY, d.hexSize);
   const resourceTheme = getResourceTheme(animation.resourceType);
+  const resourceRgb = hexToRgbParts(resourceTheme.color);
   d.ctx.beginPath();
   d.ctx.arc(position.x, position.y, d.hexSize * (0.24 + d.progress * 0.46), 0, Math.PI * 2);
-  d.ctx.strokeStyle = `rgba(${resourceTheme.color === "#e8f15e" ? "232, 241, 94" : resourceTheme.color === "#b7c2d1" ? "183, 194, 209" : resourceTheme.color === "#6ea8ff" ? "110, 168, 255" : "95, 227, 143"}, ${0.82 - d.progress * 0.58})`;
+  d.ctx.strokeStyle = `rgba(${resourceRgb}, ${0.82 - d.progress * 0.58})`;
   d.ctx.lineWidth = 2;
   d.ctx.stroke();
 
@@ -246,13 +280,7 @@ function drawSpellResolveAnimation(d: AnimationDrawContext, animation: Extract<C
 
 function drawHexShowerAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "hex_shower" }>): void {
   const origin = toPixel(animation.origin, d.originX, d.originY, d.hexSize);
-  const accentColors = {
-    alloy: { stroke: "255, 178, 118", fill: "255, 223, 194" },
-    flux: { stroke: "104, 223, 255", fill: "197, 246, 255" },
-    biomass: { stroke: "122, 246, 165", fill: "209, 255, 224" },
-    neutral: { stroke: "214, 227, 255", fill: "241, 246, 255" },
-  } as const;
-  const colors = accentColors[animation.accent];
+  const colors = resolveAnimationAccentColors(animation.accent);
 
   for (const [index, hex] of animation.hexes.entries()) {
     const position = toPixel(hex, d.originX, d.originY, d.hexSize);
@@ -305,13 +333,7 @@ function drawHexShowerAnimation(d: AnimationDrawContext, animation: Extract<Canv
 
 function drawBoardBlastAnimation(d: AnimationDrawContext, animation: Extract<CanvasAnimation, { kind: "board_blast" }>): void {
   const center = toPixel(animation.center, d.originX, d.originY, d.hexSize);
-  const accentColors = {
-    alloy: { stroke: "255, 178, 118", fill: "255, 223, 194" },
-    flux: { stroke: "104, 223, 255", fill: "197, 246, 255" },
-    biomass: { stroke: "122, 246, 165", fill: "209, 255, 224" },
-    neutral: { stroke: "230, 237, 255", fill: "246, 249, 255" },
-  } as const;
-  const colors = accentColors[animation.accent];
+  const colors = resolveAnimationAccentColors(animation.accent);
 
   for (let ringIndex = 0; ringIndex < 3; ringIndex += 1) {
     const ringProgress = clamp((d.progress - ringIndex * 0.12) / (1 - ringIndex * 0.12 || 1), 0, 1);

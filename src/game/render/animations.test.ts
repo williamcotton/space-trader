@@ -226,7 +226,7 @@ describe("buildAnimationsFromEvents", () => {
       playerId: "player_2",
       origin: targetHex,
       label: "Meteor Chain",
-      accent: "flux",
+      accent: "flux_collective",
     });
     if (animations[0]?.kind !== "hex_shower") {
       throw new Error("Expected hex shower animation for Meteor Chain.");

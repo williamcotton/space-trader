@@ -1,5 +1,7 @@
 import { axialToPixel } from "../model/hex";
+import type { ResourceType } from "../model/enums";
 import type { HexCoord } from "../model/state";
+import { getRegisteredResourceTheme, tryGetRegisteredResourceTheme } from "../registries/presentation";
 
 export function toPixel(coord: HexCoord, originX: number, originY: number, hexSize: number): { x: number; y: number } {
   return axialToPixel(coord, { x: originX, y: originY }, hexSize);
@@ -67,7 +69,7 @@ export function drawResourceGlyph(
   context: CanvasRenderingContext2D,
   x: number,
   y: number,
-  resourceType: "credits" | "alloy" | "flux" | "biomass",
+  resourceType: ResourceType,
   size: number
 ): void {
   context.save();
@@ -114,6 +116,15 @@ export function drawResourceGlyph(
       context.lineTo(0, -size * 0.42);
       context.stroke();
       break;
+    default: {
+      const theme = tryGetRegisteredResourceTheme(resourceType) ?? getRegisteredResourceTheme("credits");
+      context.font = `${Math.max(8, size * 1.4)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillStyle = theme.color;
+      context.fillText(theme.shortLabel.toUpperCase().slice(0, 2), 0, 0);
+      break;
+    }
   }
 
   context.restore();

@@ -84,7 +84,7 @@ function buildHexShowerAnimation(
   baseId: string,
   label: string,
   waves: number,
-  accent: "alloy" | "flux" | "biomass" | "neutral"
+  accent: string
 ): CanvasAnimation | null {
   if (!event.targetHex) {
     return null;

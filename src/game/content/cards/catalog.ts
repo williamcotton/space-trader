@@ -7,7 +7,7 @@ import { hexDistance, isWithinMapBounds } from "../../model/hex";
 import { LAYER } from "../../systems/continuousEffects";
 import type { CardTrigger } from "../../systems/triggerEngine";
 import { getPlayEffectMagnitudeCalculator, registerPlayEffectMagnitudeCalculator } from "../../registries/playEffects";
-import { getRegisteredCardDefinition, registerCardDefinitions } from "../registry";
+import { getRegisteredCardDefinition, getRegisteredResourceIds, registerCardDefinitions } from "../registry";
 import type {
   CascadeUnitBuffOptions,
   CascadeUnitBuffReward,
@@ -42,7 +42,7 @@ export type CardKeyword = string;
 export type CardSpeed = "instant" | "main";
 export type CardTargetMode = "none" | "entity" | "stack_item" | "hex";
 export type CardSourceDestination = "discard" | "hand" | "exile" | "none";
-export type CardAnimationAccent = "alloy" | "flux" | "biomass" | "neutral";
+export type CardAnimationAccent = string;
 
 export type CardCost = Partial<Record<ResourceType, number>>;
 
@@ -553,28 +553,32 @@ registerPlayEffectMagnitudeCalculator("destroy_damaged_units", () => 0);
 registerPlayEffectMagnitudeCalculator("draw_and_gain_resources", (effectConfig) =>
   Math.max(
     effectConfig.drawCount,
-    ...(["credits", "alloy", "flux", "biomass"] as const).map((resource) => effectConfig.resources[resource] ?? 0)
+    ...getRegisteredResourceIds().map((resource) => effectConfig.resources[resource] ?? 0),
+    0
   )
 );
 registerPlayEffectMagnitudeCalculator("resources_by_unit_count", (effectConfig) =>
   Math.max(
-    ...(["credits", "alloy", "flux", "biomass"] as const).map(
+    ...getRegisteredResourceIds().map(
       (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
-    )
+    ),
+    0
   )
 );
 registerPlayEffectMagnitudeCalculator("resources_by_bloom_count", (effectConfig) =>
   Math.max(
-    ...(["credits", "alloy", "flux", "biomass"] as const).map(
+    ...getRegisteredResourceIds().map(
       (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
-    )
+    ),
+    0
   )
 );
 registerPlayEffectMagnitudeCalculator("resources_by_salvage_count", (effectConfig) =>
   Math.max(
-    ...(["credits", "alloy", "flux", "biomass"] as const).map(
+    ...getRegisteredResourceIds().map(
       (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
-    )
+    ),
+    0
   )
 );
 registerPlayEffectMagnitudeCalculator("hex_area_damage", (effectConfig) => effectConfig.amount);

@@ -2,6 +2,7 @@ import type { ResourceType } from "./enums";
 import type { GameState, StackItem } from "./state";
 import type { PlayerId } from "./ids";
 import { getCardDefinition, getCardKeywords, type CardCost, type CardDefinition } from "../content/cards/catalog";
+import { getRegisteredResourceIds } from "../content/registry";
 import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
 import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleTheme } from "../presentation";
 import { getLegalPlayCardTargetOptions } from "../rules/cardPlayOptions";
@@ -107,7 +108,7 @@ export type CostEntry = {
 };
 
 export function getCostEntries(cost: CardCost): CostEntry[] {
-  return (["credits", "alloy", "flux", "biomass"] as const)
+  return getRegisteredResourceIds()
     .map((resource) => ({ resource, amount: cost[resource] ?? 0 }))
     .filter((entry) => entry.amount > 0);
 }

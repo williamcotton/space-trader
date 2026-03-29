@@ -15,7 +15,7 @@ import { getPlayEffectResolver, registerPlayEffectResolver } from "../registries
 import { getStackEffectMagnitudeCalculator, registerStackEffectMagnitudeCalculator } from "../registries/stackEffectMagnitudes";
 import { LAYER } from "../systems/continuousEffects";
 import type { ResourceType, UnitRole } from "../model/enums";
-import { getRegisteredStackEffectDefinition, registerStackEffectDefinitions } from "./registry";
+import { getRegisteredResourceIds, getRegisteredStackEffectDefinition, registerStackEffectDefinitions } from "./registry";
 
 export type CounterDestination = "discard" | "hand" | "exile" | "none";
 export type StackObjectKind = "spell" | "ability";
@@ -811,7 +811,7 @@ registerStackEffectMagnitudeCalculator("cascade_unit_buff", (behavior, options) 
 );
 registerStackEffectMagnitudeCalculator("draw_cards", (behavior) => behavior.count);
 registerStackEffectMagnitudeCalculator("gain_resources", (behavior) =>
-  Math.max(...(["credits", "alloy", "flux", "biomass"] as const).map((resource) => behavior.resources[resource] ?? 0))
+  Math.max(...getRegisteredResourceIds().map((resource) => behavior.resources[resource] ?? 0), 0)
 );
 registerStackEffectMagnitudeCalculator("noop_log", () => 0);
 registerStackEffectMagnitudeCalculator("deploy_unit", () => 0);

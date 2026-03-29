@@ -4,6 +4,7 @@ import { cardHasKeyword, getCardDefinition, getUnitCardKeywords, type CardCost }
 import { getStackEffectDefinition, getStackEffectMagnitude, type CounterDestination } from "../../content/stackEffects";
 import { createStackItemId, getOpponentPlayer, popTopStackItem } from "../../turn/stack";
 import type { PlayerId } from "../../model/ids";
+import type { ResourceType } from "../../model/enums";
 import { syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../../model/state";
 import { createContinuousEffectId, LAYER, nextEffectTimestamp } from "../../systems/continuousEffects";
 import type { InstructionContext } from "../instructions";
@@ -17,8 +18,8 @@ import {
 
 function applyCardCost(state: GameState, playerId: PlayerId, cost: CardCost): void {
   const pool = state.players[playerId].resources;
-  for (const resource of ["credits", "alloy", "flux", "biomass"] as const) {
-    pool[resource] = Math.max(0, pool[resource] - (cost[resource] ?? 0));
+  for (const [resource, amount] of Object.entries(cost)) {
+    pool[resource as ResourceType] = Math.max(0, pool[resource as ResourceType] - (amount ?? 0));
   }
 }
 

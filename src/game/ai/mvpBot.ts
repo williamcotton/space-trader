@@ -1,10 +1,11 @@
 import type { GameCommand } from "../actions/commands";
 import { getCardDefinition, getResolvedCardPlayEffectConfigs, type CardDefinition } from "../content/cards/catalog";
+import { getRegisteredResourceIds } from "../content/registry";
 import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
-import type { Faction, ResourceType } from "../model/enums";
+import type { ResourceType } from "../model/enums";
 import type { PlayerId } from "../model/ids";
-import { MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord, type UnitEntity } from "../model/state";
+import { getPrimaryResourceForFaction, MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord, type UnitEntity } from "../model/state";
 import { resolveCombatAttack } from "../systems/combat";
 import { canAffordCardCost, getEnemyEntities, getFirstOpenBaseAdjacentTile, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../model/queries";
 import {
@@ -22,18 +23,14 @@ import { getCascadeAffectedHexes } from "../systems/cascade";
 import { getLegalPlayCardTargetOptions } from "../rules/cardPlayOptions";
 import { getEffectiveUnitAttackDamage } from "../systems/unitStats";
 import { getSpellScoringResolver, registerSpellScoringResolver } from "../registries/spellScoring";
-import {
-  getBloomedUnitIdsThisTurn,
-  getSalvageTriggersThisTurn,
-  getTacticsCastThisTurn,
-} from "../mechanics";
+import { getBloomedUnitIdsThisTurn, getSalvageTriggersThisTurn, getTacticsCastThisTurn } from "../mechanics";
 
-const RESOURCE_ORDER: ResourceType[] = ["credits", "alloy", "flux", "biomass"];
-const PRIMARY_RESOURCE_BY_FACTION: Record<Faction, ResourceType> = {
-  alloy_clan: "alloy",
-  flux_collective: "flux",
-  biomass_swarm: "biomass",
-};
+const CURRENCY_RESOURCE_ID = "credits";
+
+function getResourceOrder(): ResourceType[] {
+  const resourceIds = getRegisteredResourceIds();
+  return resourceIds.length > 0 ? resourceIds : [CURRENCY_RESOURCE_ID];
+}
 
 const AI_WEIGHTS = {
   // scoreEnemyEntityThreat
@@ -172,20 +169,21 @@ function getUnitRoleCounts(state: GameState, playerId: PlayerId): Record<"combat
 
 function getPriorityOrderForResourceSet(resources: Set<ResourceType>, primaryResource: ResourceType, creditsFirst: boolean): ResourceType[] {
   const ordered: ResourceType[] = [];
+  const resourceOrder = getResourceOrder();
 
-  if (creditsFirst && resources.has("credits")) {
-    ordered.push("credits");
+  if (creditsFirst && resources.has(CURRENCY_RESOURCE_ID)) {
+    ordered.push(CURRENCY_RESOURCE_ID);
   }
 
   if (resources.has(primaryResource) && !ordered.includes(primaryResource)) {
     ordered.push(primaryResource);
   }
 
-  if (!creditsFirst && resources.has("credits") && !ordered.includes("credits")) {
-    ordered.push("credits");
+  if (!creditsFirst && resources.has(CURRENCY_RESOURCE_ID) && !ordered.includes(CURRENCY_RESOURCE_ID)) {
+    ordered.push(CURRENCY_RESOURCE_ID);
   }
 
-  for (const resource of RESOURCE_ORDER) {
+  for (const resource of resourceOrder) {
     if (ordered.includes(resource)) {
       continue;
     }
@@ -198,14 +196,15 @@ function getPriorityOrderForResourceSet(resources: Set<ResourceType>, primaryRes
 
 function getPriorityResourceOrderFromHand(state: GameState, botPlayerId: PlayerId): ResourceType[] {
   const faction = state.players[botPlayerId].faction;
-  const primaryResource = PRIMARY_RESOURCE_BY_FACTION[faction];
+  const primaryResource = getPrimaryResourceForFaction(faction);
   const resources = state.players[botPlayerId].resources;
   const missingResources = new Set<ResourceType>();
   const requiredResources = new Set<ResourceType>();
   const focusCards = getEconomyFocusCards(state, botPlayerId);
+  const resourceOrder = getResourceOrder();
 
   for (const card of focusCards) {
-    for (const resource of RESOURCE_ORDER) {
+    for (const resource of resourceOrder) {
       const required = card.cost[resource] ?? 0;
       if (required > 0) {
         requiredResources.add(resource);
@@ -226,7 +225,7 @@ function getPriorityResourceOrderFromHand(state: GameState, botPlayerId: PlayerI
     return requiredPriority;
   }
 
-  return getPriorityOrderForResourceSet(new Set<ResourceType>(RESOURCE_ORDER), primaryResource, true);
+  return getPriorityOrderForResourceSet(new Set<ResourceType>(resourceOrder), primaryResource, true);
 }
 
 function shouldHarvestResourceType(state: GameState, botPlayerId: PlayerId, resourceType: ResourceType): boolean {
@@ -319,7 +318,7 @@ function chooseDiscardCardCommand(state: GameState, botPlayerId: PlayerId): Game
         };
       }
 
-      const totalCost = RESOURCE_ORDER.reduce((sum, resource) => sum + (card.cost[resource] ?? 0), 0);
+      const totalCost = getResourceOrder().reduce((sum, resource) => sum + (card.cost[resource] ?? 0), 0);
       let score = totalCost * 10;
 
       if (card.faction !== playerFaction && card.faction !== "neutral") {
@@ -412,7 +411,7 @@ function scoreDamageSpellTarget(
       score += AI_WEIGHTS.basePingDeckEmptyBonus;
     }
 
-    const totalResources = RESOURCE_ORDER.reduce(
+    const totalResources = getResourceOrder().reduce(
       (sum, resource) => sum + state.players[botPlayerId].resources[resource],
       0
     );
@@ -604,7 +603,7 @@ function scoreUnitBuffOpportunity(
 
   if (options.reward && affectedUnits.length >= options.reward.minUnits) {
     hasMeaningfulOpportunity = true;
-    const rewardBase = options.reward.resource === "credits" ? 18 : 14;
+    const rewardBase = options.reward.resource === CURRENCY_RESOURCE_ID ? 18 : 14;
     score += rewardBase * options.reward.amount;
   }
 
@@ -759,7 +758,7 @@ function scoreDrawAndGainResourcesSpell(
   }
 ): number {
   let score = options.drawCount * AI_WEIGHTS.drawCardValue;
-  for (const resource of RESOURCE_ORDER) {
+  for (const resource of getResourceOrder()) {
     score += (options.resources[resource] ?? 0) * AI_WEIGHTS.gainedResourceValue;
   }
 
@@ -804,7 +803,7 @@ function scoreResourcesByUnitCountSpell(
   }
 
   let score = matchingUnits.length * 4;
-  for (const resource of RESOURCE_ORDER) {
+  for (const resource of getResourceOrder()) {
     score += (options.resourcesPerThreshold[resource] ?? 0) * payoutMultiplier * AI_WEIGHTS.gainedResourceValue;
   }
   score += payoutMultiplier * 18;
@@ -839,7 +838,7 @@ function scoreResourcesByBloomCountSpell(
   }
 
   let score = 48 + payoutMultiplier * 18;
-  for (const resource of RESOURCE_ORDER) {
+  for (const resource of getResourceOrder()) {
     score += (options.resourcesPerThreshold[resource] ?? 0) * payoutMultiplier * AI_WEIGHTS.gainedResourceValue;
   }
 
@@ -865,7 +864,7 @@ function scoreResourcesBySalvageCountSpell(
   }
 
   let score = 48 + payoutMultiplier * 18;
-  for (const resource of RESOURCE_ORDER) {
+  for (const resource of getResourceOrder()) {
     score += (options.resourcesPerThreshold[resource] ?? 0) * payoutMultiplier * AI_WEIGHTS.gainedResourceValue;
   }
 
@@ -1284,7 +1283,7 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
   const boardCounts = getUnitRoleCounts(state, botPlayerId);
   const enemyCombatCount = getUnitRoleCounts(state, getOpponentPlayer(botPlayerId)).combat;
   const hasMissingResourceForHand = focusCards.some((card) => {
-    for (const resource of RESOURCE_ORDER) {
+    for (const resource of getResourceOrder()) {
       if ((card.cost[resource] ?? 0) > resources[resource]) {
         return true;
       }
@@ -1300,7 +1299,7 @@ function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): Ga
         return null;
       }
 
-      const totalCost = (card.cost.credits ?? 0) + (card.cost.alloy ?? 0) + (card.cost.flux ?? 0) + (card.cost.biomass ?? 0);
+      const totalCost = getResourceOrder().reduce((sum, resource) => sum + (card.cost[resource] ?? 0), 0);
       const isFactionCard = card.faction === playerFaction;
       const isNeutralCard = card.faction === "neutral";
 

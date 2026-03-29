@@ -3,6 +3,7 @@ import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { decideMvpBotCommand } from "./ai/mvpBot";
 import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
 import { getCardDefinition } from "./content/cards/catalog";
+import { getRegisteredResourceIds } from "./content/registry";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
 import { findEntityAtHex } from "./model/queries";
 import { createInitialGameState } from "./model/state";
@@ -586,7 +587,7 @@ export class GameRuntime {
 
   debugAddTestResources(playerId: PlayerId, amount = 100): void {
     const pool = this.state.players[playerId].resources;
-    for (const resource of ["credits", "alloy", "flux", "biomass"] as const) {
+    for (const resource of getRegisteredResourceIds()) {
       pool[resource] += amount;
     }
 

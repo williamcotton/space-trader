@@ -3,6 +3,12 @@ import { PLAYER_ONE, PLAYER_TWO, type EntityId, type NodeId, type PlayerId } fro
 import "../content/sets/base";
 import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
 import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
+import {
+  getRegisteredFactionIds,
+  getRegisteredFactionModule,
+  getRegisteredPrimaryResourceIdForFaction,
+  getRegisteredResourceIds,
+} from "../content/registry";
 import type { ContinuousEffect } from "../systems/continuousEffects";
 import { initializeMechanicState } from "../mechanics";
 
@@ -203,13 +209,15 @@ export function getConfiguredDepositAmount(rules: GameRules, resourceType: Resou
 }
 
 export function getPrimaryResourceForFaction(faction: Faction): Exclude<ResourceType, "credits"> {
-  if (faction === "alloy_clan") {
-    return "alloy";
+  return getRegisteredPrimaryResourceIdForFaction(faction) as Exclude<ResourceType, "credits">;
+}
+
+export function createEmptyResourcePool(initialValue = 0): ResourcePool {
+  const pool = Object.fromEntries(getRegisteredResourceIds().map((resourceId) => [resourceId, initialValue])) as ResourcePool;
+  if (!("credits" in pool)) {
+    pool.credits = initialValue;
   }
-  if (faction === "flux_collective") {
-    return "flux";
-  }
-  return "biomass";
+  return pool;
 }
 
 function shuffleCards<T>(cards: T[], randomSource: () => number): T[] {
@@ -223,12 +231,10 @@ function shuffleCards<T>(cards: T[], randomSource: () => number): T[] {
 
 function createStartingResources(playerId: PlayerId, faction: Faction): ResourcePool {
   const primary = getPrimaryResourceForFaction(faction);
-  return {
-    credits: playerId === PLAYER_ONE ? PLAYER_ONE_STARTING_CREDITS : PLAYER_TWO_STARTING_CREDITS,
-    alloy: primary === "alloy" ? STARTING_PRIMARY_RESOURCE : 0,
-    flux: primary === "flux" ? STARTING_PRIMARY_RESOURCE : 0,
-    biomass: primary === "biomass" ? STARTING_PRIMARY_RESOURCE : 0,
-  };
+  const resources = createEmptyResourcePool();
+  resources.credits = playerId === PLAYER_ONE ? PLAYER_ONE_STARTING_CREDITS : PLAYER_TWO_STARTING_CREDITS;
+  resources[primary] = STARTING_PRIMARY_RESOURCE;
+  return resources;
 }
 
 function cloneMap(map: MapState): MapState {
@@ -284,8 +290,17 @@ export function syncPlayerZoneCounts(state: Pick<GameState, "players" | "zones">
 
 export function createInitialGameState(options: CreateInitialGameStateOptions): GameState {
   const map = cloneMap(options.map);
-  const factionOne = options.factions?.player_1 ?? "alloy_clan";
-  const factionTwo = options.factions?.player_2 ?? "flux_collective";
+  const registeredFactions = getRegisteredFactionIds();
+  if (registeredFactions.length === 0) {
+    throw new Error("No registered factions are available.");
+  }
+  const factionOne = options.factions?.player_1 ?? registeredFactions[0] ?? "alloy_clan";
+  const factionTwo = options.factions?.player_2 ?? registeredFactions[1] ?? registeredFactions[0] ?? factionOne;
+  const factionOneModule = getRegisteredFactionModule(factionOne);
+  const factionTwoModule = getRegisteredFactionModule(factionTwo);
+  if (!factionOneModule || !factionTwoModule) {
+    throw new Error(`Missing faction module configuration for ${!factionOneModule ? factionOne : factionTwo}.`);
+  }
   const rules = {
     ...createDefaultGameRules(),
     ...(options.rules ?? {}),
@@ -296,9 +311,57 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   const unitTwoId: EntityId = "unit_player_2_scout";
   const harvesterOneId: EntityId = "unit_player_1_harvester";
   const harvesterTwoId: EntityId = "unit_player_2_harvester";
-  const expeditionHarvesterCard = getCardDefinition("expedition_harvester_card");
-  const expeditionHarvesterMoveRange =
-    expeditionHarvesterCard && expeditionHarvesterCard.kind === "unit" ? expeditionHarvesterCard.unit.moveRange : 3;
+  const createStartingUnit = (
+    id: EntityId,
+    ownerId: PlayerId,
+    cardId: string,
+    coord: HexCoord,
+    overrides?: {
+      name?: string;
+      hp?: number;
+      attackDamage?: number;
+      siegeDamageBonus?: number;
+      armor?: number;
+      moveRange?: number;
+      attackRange?: number;
+      attackActionsPerTurn?: number;
+      keywords?: string[];
+    }
+  ): UnitEntity => {
+    const cardDefinition = getCardDefinition(cardId);
+    if (!cardDefinition || cardDefinition.kind !== "unit") {
+      throw new Error(`Expected starting unit card ${cardId} to be a unit.`);
+    }
+
+    const maxHp = overrides?.hp ?? cardDefinition.unit.hp;
+    const attackActionsPerTurn = overrides?.attackActionsPerTurn ?? cardDefinition.unit.attackActionsPerTurn;
+    const moveRange = overrides?.moveRange ?? cardDefinition.unit.moveRange;
+
+    return {
+      id,
+      kind: "unit",
+      name: overrides?.name ?? cardDefinition.name,
+      ownerId,
+      role: cardDefinition.unit.role,
+      hp: maxHp,
+      maxHp,
+      attackDamage: overrides?.attackDamage ?? cardDefinition.unit.attackDamage,
+      siegeDamageBonus: overrides?.siegeDamageBonus ?? cardDefinition.unit.siegeDamageBonus,
+      armor: overrides?.armor ?? cardDefinition.unit.armor,
+      moveRange,
+      attackRange: overrides?.attackRange ?? cardDefinition.unit.attackRange,
+      attackActionsPerTurn,
+      coord,
+      keywords: overrides?.keywords ?? getUnitCardKeywords(cardId),
+      carries: null,
+      sourceCardId: cardId,
+      hasSummoningSickness: false,
+      movesRemaining: moveRange,
+      attacksRemaining: attackActionsPerTurn,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+  };
 
   const entities: Record<EntityId, EntityState> = {
     [baseOneId]: {
@@ -319,114 +382,22 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       maxHp: BASE_STARTING_HP,
       coord: { ...map.spawnPoints.player_2 },
     },
-    [unitOneId]: {
-      id: unitOneId,
-      kind: "unit",
-      name: "Frontline Scout",
-      ownerId: PLAYER_ONE,
-      role: "combat",
-      hp: 6,
-      maxHp: 6,
-      attackDamage: 2,
-      siegeDamageBonus: 1,
-      armor: 0,
-      moveRange: 2,
-      attackRange: 1,
-      attackActionsPerTurn: 1,
-      coord: {
+    [unitOneId]: createStartingUnit(unitOneId, PLAYER_ONE, factionOneModule.startingCombatUnitCardId, {
         q: map.spawnPoints.player_1.q + 1,
         r: map.spawnPoints.player_1.r,
-      },
-      keywords: getUnitCardKeywords("frontline_scout_card"),
-      carries: null,
-      sourceCardId: "frontline_scout_card",
-      hasSummoningSickness: false,
-      movesRemaining: 2,
-      attacksRemaining: 1,
-      temporaryAttackBonus: 0,
-      temporaryArmorBonus: 0,
-    },
-    [unitTwoId]: {
-      id: unitTwoId,
-      kind: "unit",
-      name: "Command Runner",
-      ownerId: PLAYER_TWO,
-      role: "combat",
-      hp: 6,
-      maxHp: 6,
-      attackDamage: 2,
-      siegeDamageBonus: 0,
-      armor: 0,
-      moveRange: 2,
-      attackRange: 1,
-      attackActionsPerTurn: 1,
-      coord: {
+      }, factionOneModule.startingCombatUnitOverrides),
+    [unitTwoId]: createStartingUnit(unitTwoId, PLAYER_TWO, factionTwoModule.startingCombatUnitCardId, {
         q: map.spawnPoints.player_2.q - 1,
         r: map.spawnPoints.player_2.r,
-      },
-      keywords: getUnitCardKeywords("flux_runner_card"),
-      carries: null,
-      sourceCardId: "flux_runner_card",
-      hasSummoningSickness: false,
-      movesRemaining: 2,
-      attacksRemaining: 1,
-      temporaryAttackBonus: 0,
-      temporaryArmorBonus: 0,
-    },
-    [harvesterOneId]: {
-      id: harvesterOneId,
-      kind: "unit",
-      name: "Expedition Harvester",
-      ownerId: PLAYER_ONE,
-      role: "resource",
-      hp: 5,
-      maxHp: 5,
-      attackDamage: 1,
-      siegeDamageBonus: 0,
-      armor: 0,
-      moveRange: expeditionHarvesterMoveRange,
-      attackRange: 1,
-      attackActionsPerTurn: 1,
-      coord: {
+      }, factionTwoModule.startingCombatUnitOverrides),
+    [harvesterOneId]: createStartingUnit(harvesterOneId, PLAYER_ONE, factionOneModule.startingResourceUnitCardId, {
         q: map.spawnPoints.player_1.q,
         r: map.spawnPoints.player_1.r + 1,
-      },
-      keywords: getUnitCardKeywords("expedition_harvester_card"),
-      carries: null,
-      sourceCardId: "expedition_harvester_card",
-      hasSummoningSickness: false,
-      movesRemaining: expeditionHarvesterMoveRange,
-      attacksRemaining: 1,
-      temporaryAttackBonus: 0,
-      temporaryArmorBonus: 0,
-    },
-    [harvesterTwoId]: {
-      id: harvesterTwoId,
-      kind: "unit",
-      name: "Expedition Harvester",
-      ownerId: PLAYER_TWO,
-      role: "resource",
-      hp: 5,
-      maxHp: 5,
-      attackDamage: 1,
-      siegeDamageBonus: 0,
-      armor: 0,
-      moveRange: expeditionHarvesterMoveRange,
-      attackRange: 1,
-      attackActionsPerTurn: 1,
-      coord: {
+      }, factionOneModule.startingResourceUnitOverrides),
+    [harvesterTwoId]: createStartingUnit(harvesterTwoId, PLAYER_TWO, factionTwoModule.startingResourceUnitCardId, {
         q: map.spawnPoints.player_2.q,
         r: map.spawnPoints.player_2.r - 1,
-      },
-      keywords: getUnitCardKeywords("expedition_harvester_card"),
-      carries: null,
-      sourceCardId: "expedition_harvester_card",
-      hasSummoningSickness: false,
-      movesRemaining: expeditionHarvesterMoveRange,
-      attacksRemaining: 1,
-      temporaryAttackBonus: 0,
-      temporaryArmorBonus: 0,
-    },
+      }, factionTwoModule.startingResourceUnitOverrides),
   };
 
   const zones = {

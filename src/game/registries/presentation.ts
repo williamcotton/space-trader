@@ -46,6 +46,10 @@ export function getFactionPresentation(factionId: Faction): FactionPresentation 
   return presentation;
 }
 
+export function tryGetFactionPresentation(factionId: Faction): FactionPresentation | null {
+  return factionPresentations.get(factionId) ?? null;
+}
+
 export function getFactionAnimationAccent(factionId: Faction | "neutral" | null | undefined): CardAnimationAccent {
   if (!factionId || factionId === "neutral") {
     return "neutral";
@@ -63,6 +67,10 @@ export function getRegisteredResourceTheme(resourceType: ResourceType): Resource
     throw new Error(`Missing resource theme for ${resourceType}.`);
   }
   return theme;
+}
+
+export function tryGetRegisteredResourceTheme(resourceType: ResourceType): ResourceTheme | null {
+  return resourceThemes.get(resourceType) ?? null;
 }
 
 export function registerUnitRoleTheme(role: UnitRole, theme: RoleTheme): void {

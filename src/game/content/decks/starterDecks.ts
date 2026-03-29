@@ -90,7 +90,7 @@ const BIOMASS_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["orbital_purge", 2],
 ];
 
-export const BASE_STARTER_DECKS: Record<Faction, string[]> = {
+export const BASE_STARTER_DECKS: Record<string, string[]> = {
   alloy_clan: defineStarterDeck(ALLOY_STARTER_ENTRIES),
   flux_collective: defineStarterDeck(FLUX_STARTER_ENTRIES),
   biomass_swarm: defineStarterDeck(BIOMASS_STARTER_ENTRIES),

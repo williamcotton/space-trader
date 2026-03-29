@@ -1,4 +1,5 @@
 import type { PlayerId } from "./ids";
+import type { ResourceType } from "./enums";
 import type { EntityState, GameState, HexCoord, UnitEntity } from "./state";
 import { areSameHex, isWithinMapBounds } from "./hex";
 import type { CardCost } from "../content/cards/catalog";
@@ -53,13 +54,8 @@ export function getFirstOpenBaseAdjacentTile(state: GameState, playerId: PlayerI
   return null;
 }
 
-export function canAffordCost(pool: Partial<Record<"credits" | "alloy" | "flux" | "biomass", number>>, cost: CardCost): boolean {
-  return (
-    (pool.credits ?? 0) >= (cost.credits ?? 0) &&
-    (pool.alloy ?? 0) >= (cost.alloy ?? 0) &&
-    (pool.flux ?? 0) >= (cost.flux ?? 0) &&
-    (pool.biomass ?? 0) >= (cost.biomass ?? 0)
-  );
+export function canAffordCost(pool: Partial<Record<ResourceType, number>>, cost: CardCost): boolean {
+  return Object.entries(cost).every(([resource, amount]) => (pool[resource as ResourceType] ?? 0) >= (amount ?? 0));
 }
 
 export function canAffordCardCost(state: GameState, playerId: PlayerId, cost: CardCost): boolean {

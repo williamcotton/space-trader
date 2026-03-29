@@ -10,6 +10,18 @@ export type DeckRecipe = {
   cardIds: string[];
 };
 
+export type StartingUnitOverrides = Partial<{
+  name: string;
+  hp: number;
+  attackDamage: number;
+  siegeDamageBonus: number;
+  armor: number;
+  moveRange: number;
+  attackRange: number;
+  attackActionsPerTurn: number;
+  keywords: string[];
+}>;
+
 export type FactionModule = {
   id: string;
   label: string;
@@ -17,6 +29,10 @@ export type FactionModule = {
   mechanics: string[];
   theme: PlayerTheme;
   mirrorAltTheme?: PlayerTheme;
+  startingCombatUnitCardId: string;
+  startingResourceUnitCardId: string;
+  startingCombatUnitOverrides?: StartingUnitOverrides;
+  startingResourceUnitOverrides?: StartingUnitOverrides;
 };
 
 export type ResourceModule = {

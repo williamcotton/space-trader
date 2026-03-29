@@ -92,7 +92,7 @@ export type CanvasAnimation =
       origin: HexCoord;
       hexes: HexCoord[];
       label: string;
-      accent: "alloy" | "flux" | "biomass" | "neutral";
+      accent: string;
     }
   | {
       id: string;
@@ -103,7 +103,7 @@ export type CanvasAnimation =
       center: HexCoord;
       hexes: HexCoord[];
       label: string;
-      accent: "alloy" | "flux" | "biomass" | "neutral";
+      accent: string;
     }
   | {
       id: string;

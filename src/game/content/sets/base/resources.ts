@@ -1,34 +1,43 @@
 import "../../../presentation";
 import type { ResourceModule } from "../types";
-import { getRegisteredResourceTheme } from "../../../registries/presentation";
+import { registerResourceTheme } from "../../../registries/presentation";
 
 export const BASE_SET_RESOURCES: ResourceModule[] = [
   {
     id: "credits",
-    label: getRegisteredResourceTheme("credits").label,
-    shortLabel: getRegisteredResourceTheme("credits").shortLabel,
-    color: getRegisteredResourceTheme("credits").color,
-    glow: getRegisteredResourceTheme("credits").glow,
+    label: "Credits",
+    shortLabel: "C",
+    color: "#e8f15e",
+    glow: "rgba(232, 241, 94, 0.28)",
   },
   {
     id: "alloy",
-    label: getRegisteredResourceTheme("alloy").label,
-    shortLabel: getRegisteredResourceTheme("alloy").shortLabel,
-    color: getRegisteredResourceTheme("alloy").color,
-    glow: getRegisteredResourceTheme("alloy").glow,
+    label: "Alloy",
+    shortLabel: "A",
+    color: "#b7c2d1",
+    glow: "rgba(183, 194, 209, 0.24)",
   },
   {
     id: "flux",
-    label: getRegisteredResourceTheme("flux").label,
-    shortLabel: getRegisteredResourceTheme("flux").shortLabel,
-    color: getRegisteredResourceTheme("flux").color,
-    glow: getRegisteredResourceTheme("flux").glow,
+    label: "Flux",
+    shortLabel: "F",
+    color: "#6ea8ff",
+    glow: "rgba(110, 168, 255, 0.26)",
   },
   {
     id: "biomass",
-    label: getRegisteredResourceTheme("biomass").label,
-    shortLabel: getRegisteredResourceTheme("biomass").shortLabel,
-    color: getRegisteredResourceTheme("biomass").color,
-    glow: getRegisteredResourceTheme("biomass").glow,
+    label: "Biomass",
+    shortLabel: "B",
+    color: "#5fe38f",
+    glow: "rgba(95, 227, 143, 0.24)",
   },
 ];
+
+for (const resource of BASE_SET_RESOURCES) {
+  registerResourceTheme(resource.id, {
+    label: resource.label,
+    shortLabel: resource.shortLabel,
+    color: resource.color,
+    glow: resource.glow,
+  });
+}

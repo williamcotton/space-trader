@@ -9,74 +9,22 @@ import {
   getFactionPresentation,
   getRegisteredResourceTheme,
   getRegisteredUnitRoleTheme,
-  registerFactionPresentation,
-  registerResourceTheme,
   registerUnitRoleTheme,
 } from "./registries/presentation";
 
-const FACTION_THEMES: Record<Faction, PlayerTheme> = {
-  alloy_clan: {
-    label: "Alloy Clan",
-    primary: "#b7c9de",
-    secondary: "#e0eaf6",
-    glow: "rgba(183, 201, 222, 0.28)",
-    shadow: "rgba(20, 28, 42, 0.95)",
-    fillDark: "#1a2436",
-    line: "#d0dded",
-  },
-  flux_collective: {
-    label: "Flux Collective",
-    primary: "#6ea8ff",
-    secondary: "#a0c8ff",
-    glow: "rgba(110, 168, 255, 0.28)",
-    shadow: "rgba(14, 24, 52, 0.95)",
-    fillDark: "#0f1a3a",
-    line: "#97c4ff",
-  },
-  biomass_swarm: {
-    label: "Biomass Swarm",
-    primary: "#5fe38f",
-    secondary: "#a4f4c0",
-    glow: "rgba(95, 227, 143, 0.28)",
-    shadow: "rgba(12, 38, 22, 0.95)",
-    fillDark: "#0e2816",
-    line: "#8af0aa",
-  },
-};
-
-const FACTION_ALT_THEMES: Record<Faction, PlayerTheme> = {
-  alloy_clan: {
-    label: "Alloy Clan",
-    primary: "#d4a86a",
-    secondary: "#f0d4a0",
-    glow: "rgba(212, 168, 106, 0.28)",
-    shadow: "rgba(42, 30, 16, 0.95)",
-    fillDark: "#2e2010",
-    line: "#e8c896",
-  },
-  flux_collective: {
-    label: "Flux Collective",
-    primary: "#c084ff",
-    secondary: "#dab4ff",
-    glow: "rgba(192, 132, 255, 0.28)",
-    shadow: "rgba(30, 16, 52, 0.95)",
-    fillDark: "#1e1038",
-    line: "#d4a8ff",
-  },
-  biomass_swarm: {
-    label: "Biomass Swarm",
-    primary: "#e8d44e",
-    secondary: "#f4eea0",
-    glow: "rgba(232, 212, 78, 0.28)",
-    shadow: "rgba(40, 36, 12, 0.95)",
-    fillDark: "#28240e",
-    line: "#f0e078",
-  },
+const DEFAULT_PLAYER_THEME: PlayerTheme = {
+  label: "Unassigned",
+  primary: "#9db4d8",
+  secondary: "#d9e6f5",
+  glow: "rgba(157, 180, 216, 0.24)",
+  shadow: "rgba(16, 22, 38, 0.95)",
+  fillDark: "#152034",
+  line: "#d3deef",
 };
 
 let activePlayerThemes: Record<PlayerId, PlayerTheme> = {
-  player_1: FACTION_THEMES.alloy_clan,
-  player_2: FACTION_THEMES.flux_collective,
+  player_1: DEFAULT_PLAYER_THEME,
+  player_2: DEFAULT_PLAYER_THEME,
 };
 
 export function configurePlayerThemes(factions: Record<PlayerId, Faction>): void {
@@ -88,33 +36,6 @@ export function configurePlayerThemes(factions: Record<PlayerId, Faction>): void
       : getFactionPresentation(factions.player_2).theme,
   };
 }
-
-const RESOURCE_THEMES: Record<ResourceType, ResourceTheme> = {
-  credits: {
-    label: "Credits",
-    shortLabel: "C",
-    color: "#e8f15e",
-    glow: "rgba(232, 241, 94, 0.28)",
-  },
-  alloy: {
-    label: "Alloy",
-    shortLabel: "A",
-    color: "#b7c2d1",
-    glow: "rgba(183, 194, 209, 0.24)",
-  },
-  flux: {
-    label: "Flux",
-    shortLabel: "F",
-    color: "#6ea8ff",
-    glow: "rgba(110, 168, 255, 0.26)",
-  },
-  biomass: {
-    label: "Biomass",
-    shortLabel: "B",
-    color: "#5fe38f",
-    glow: "rgba(95, 227, 143, 0.24)",
-  },
-};
 
 const ROLE_THEMES: Record<UnitRole, RoleTheme> = {
   combat: {
@@ -227,32 +148,6 @@ export function getEntityDisplayName(entity: EntityState, _state: Pick<GameState
 
   return ROLE_FALLBACK_NAMES[entity.role] ?? "Unit";
 }
-
-registerFactionPresentation("alloy_clan", {
-  label: "Alloy Clan",
-  theme: FACTION_THEMES.alloy_clan,
-  mirrorAltTheme: FACTION_ALT_THEMES.alloy_clan,
-  animationAccent: "alloy",
-});
-
-registerFactionPresentation("flux_collective", {
-  label: "Flux Collective",
-  theme: FACTION_THEMES.flux_collective,
-  mirrorAltTheme: FACTION_ALT_THEMES.flux_collective,
-  animationAccent: "flux",
-});
-
-registerFactionPresentation("biomass_swarm", {
-  label: "Biomass Swarm",
-  theme: FACTION_THEMES.biomass_swarm,
-  mirrorAltTheme: FACTION_ALT_THEMES.biomass_swarm,
-  animationAccent: "biomass",
-});
-
-registerResourceTheme("credits", RESOURCE_THEMES.credits);
-registerResourceTheme("alloy", RESOURCE_THEMES.alloy);
-registerResourceTheme("flux", RESOURCE_THEMES.flux);
-registerResourceTheme("biomass", RESOURCE_THEMES.biomass);
 
 registerUnitRoleTheme("combat", ROLE_THEMES.combat);
 registerUnitRoleTheme("resource", ROLE_THEMES.resource);
