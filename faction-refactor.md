@@ -774,6 +774,161 @@ Success criteria:
 - Base Set is using the same runtime extension seams that future expansions will use
 - if a behavior is specific to a mechanic, faction, card family, or set, it lives outside the kernel unless it is truly generic infrastructure
 
+## Post-Phase-6.5 Audit: What Is Still Not Truly Pluggable
+
+Phase 6.5 removed a large amount of named-mechanic behavior from the kernel, but it did **not** finish the job of making the Base Set behave like an expansion or making set loading a first-class concept.
+
+The main remaining gaps are:
+
+### 1. Base Set Is Still Privileged Through Global Side Effects
+
+The current Base Set is still assembled out of globally self-registering modules:
+
+- `catalog.ts` still registers base card definitions
+- `stackEffects.ts` still registers base stack effects
+- `starterDecks.ts` still registers base starter recipes
+- `frontierBelt.ts` still registers the map
+- `state.ts` still imports `content/sets/base` for side effects
+
+That means Base Set is still not loaded through the same path that an expansion would use.
+
+### 2. There Is No Actual Set Loader Or Registry Lifecycle
+
+Registries exist, but the system still lacks:
+
+- an explicit `loadSets(...)` / `initializeContent(...)` entry point
+- dependency ordering
+- collision enforcement at load time
+- registry reset / unload support
+- active-set tracking
+- a per-runtime or per-match content context
+
+So the system is registry-backed, but not yet loader-backed.
+
+### 3. Base Mechanics Are Modular, But Not Yet Set-Owned
+
+The mechanic modules now live under `src/game/mechanics`, not under `content/sets/base/mechanics`.
+
+That is a good intermediate step for extracting behavior from core, but it still means:
+
+- Base Set does not yet declare its mechanics as content modules loaded by the set
+- future expansions do not yet have a first-class place to register mechanics through the same pipeline
+
+### 4. Runtime Still Uses Privileged Content Entry Points
+
+Examples:
+
+- `runtime.ts` imports `FRONTIER_BELT_MAP` directly
+- `resetWithFactions(...)` creates matches from hardcoded map imports rather than from a loaded content manifest
+- `presentation.ts` still manages active player themes through a singleton global state instead of an active content context
+
+This means the runtime shell still assumes one globally loaded world.
+
+### 5. Some Consumer Semantics Still Live In Core
+
+Several files still interpret built-in effect families or stack semantics directly:
+
+- `selectors.ts` still derives stack kind labels and detail text from hardcoded effect-family branches
+- `animations.ts` still has built-in fallback logic for specific effect-config families
+- `mvpBot.ts` still contains a substantial built-in library of effect-family heuristics
+
+This is much better than before, but it still means a truly new effect family is not plug-and-play across all consumers.
+
+### 6. Presentation Is Registry-Backed But Not Yet Set-Scoped
+
+Faction and resource themes now come from registries, but role themes and active player theme selection still behave like process-global configuration rather than content-session state.
+
+For true expansion support, presentation needs to behave like loaded content, not just a nicer global table.
+
+The remaining phases below are specifically about closing these gaps.
+
+### Phase 6.6: Introduce Explicit Set Loading And Registry Lifecycle
+
+Goal:
+- stop relying on import-time side effects as the way content enters the game
+
+Work:
+- add an explicit content bootstrap / set loader service
+- add registry reset / initialization APIs so content can be loaded deterministically
+- make set loading responsible for:
+  - dependency ordering
+  - duplicate-ID / collision enforcement
+  - one-time registration of cards, stack effects, factions, resources, maps, deck recipes, presentation, and mechanics
+- stop relying on `state.ts` importing `content/sets/base` for side effects
+- stop relying on `catalog.ts`, `stackEffects.ts`, `starterDecks.ts`, and `frontierBelt.ts` to self-register base content at module load time
+
+Important constraint:
+- do not require dynamic plugin discovery yet
+- a code manifest is enough in this phase
+
+Success criteria:
+- there is a single explicit code path that loads content sets into registries
+- tests and runtime can initialize content without depending on accidental import order
+- registries can be reset and reloaded cleanly in-process
+
+### Phase 6.7: Make Base Set Truly Self-Contained
+
+Goal:
+- make Base Set look structurally like the first expansion rather than a bundle of global facades
+
+Work:
+- move Base Set cards, stack effects, maps, starter recipes, mechanics, and presentation under `content/sets/base/*`
+- convert `base/index.ts` from “side-effect registration shell” into a true set manifest consumed by the loader
+- move base mechanic registration ownership under the Base Set package
+- make `catalog.ts`, `stackEffects.ts`, `starterDecks.ts`, and map helpers into facades / generic helpers rather than the place where Base Set content is declared
+- keep generic builder libraries where they are if they are truly reusable engine/content infrastructure
+
+Important constraint:
+- this phase is about ownership and structure, not balance or content redesign
+
+Success criteria:
+- the current playable game can be reconstructed entirely by loading the Base Set manifest
+- removing the Base Set from the manifest would leave the engine loaded but content-empty, rather than partially populated by global side effects
+
+### Phase 6.8: Add Active Content Context To Runtime, Match Setup, And Presentation
+
+Goal:
+- make content selection part of runtime state instead of assuming one global loaded world
+
+Work:
+- introduce an active content context for runtime/match setup
+- allow a match to be created from:
+  - a set list
+  - a map ID
+  - factions present in the loaded content
+  - deck recipes present in the loaded content
+- remove direct imports like `FRONTIER_BELT_MAP` from runtime-facing entry points
+- move presentation activation to loaded content context instead of process-global singleton assumptions
+- make role/resource/faction themes resolve through active loaded content rather than implicit globals
+
+Important constraint:
+- this does not require hot-swapping sets mid-match
+- it does require multiple runtime/test initializations to be deterministic and isolated
+
+Success criteria:
+- runtime can create a match from loaded content IDs rather than direct module imports
+- presentation no longer assumes one globally configured faction/theme world for the whole process
+- test harnesses can load different content bundles without depending on module-load order
+
+### Phase 6.9: Externalize Remaining Consumer And Stack/UI Semantics
+
+Goal:
+- remove the last “nice-to-have but still sticky” effect-family interpretation from core consumers
+
+Work:
+- move stack-item kind labels and detail text out of `selectors.ts` and behind stack/effect presentation descriptors or registries
+- move remaining effect-family fallback animation decisions out of `animations.ts`
+- move remaining built-in tactic/effect-family heuristics in `mvpBot.ts` behind registered scorers or effect-family descriptors where practical
+- add presentation metadata for stack items / effect families so UI does not need to know special cases like “counter,” “strike,” or built-in haymaker families
+
+Important constraint:
+- truly generic concepts like “counterable” or “stack item kind” may still exist in kernel data
+- what should move out is named content interpretation, not every generic UI concept
+
+Success criteria:
+- adding a new effect family does not require editing stack preview UI or fallback animation logic in core files
+- effect-family-specific stack/UI presentation can be registered by the owning set or effect-family module
+
 ### Phase 7: Expansion Set Loading
 
 Goal:
@@ -791,8 +946,8 @@ Recommended near-term stance:
 - dynamic discovery can come later if needed
 
 Important sequencing note:
-- phase 7 should not begin until phase 6.5 is substantially complete
-- otherwise expansions will still be forced to patch mechanic behavior through core files, which defeats the whole point of set modularity
+- phase 7 should not begin until phases 6.6 through 6.9 are substantially complete
+- otherwise expansions will still be forced to rely on Base-Set-only bootstrap paths, process-global singleton state, or core consumer branches, which defeats the whole point of set modularity
 
 Success criteria:
 - Base Set and one expansion can load together cleanly
