@@ -1,236 +1,446 @@
 # Space Trader Architecture
 
-Last updated: March 18, 2026
+Last updated: March 29, 2026
 
 ## Purpose
-Define a concrete, implementation-first architecture for the MVP described in `game-design.md`.
 
-## MVP Targets
-- Electron + React + TypeScript desktop game.
-- One playable map: Frontier Belt.
-- 1v1 match, turn-based hex tactics.
-- 3 premade faction decks, 60 cards each, max 4 copies/card.
-- Win by reducing enemy base HP to 0 (MVP target HP: 100).
-- Full stack (LIFO) instant-speed interactions.
-- StarCraft-style harvesting loop:
-  - Capture nodes by occupancy.
-  - Harvest cargo with resource units.
-  - Deposit on base-adjacent tiles during Economy Phase.
+This document describes the live architecture of the current prototype, not an earlier MVP plan.
 
-## Architectural Principles
-- Single source of truth: one authoritative mutable `GameState` inside the runtime.
-- Deterministic simulation: same input action stream => same outcomes.
-- Clear separation:
-  - Rules/simulation are pure or side-effect constrained.
-  - Rendering is view-only over state/events.
-  - UI dispatches commands but does not mutate authoritative game state directly.
-- HMR-safe development:
-  - Runtime singleton persists through module reloads.
-  - Simulation/render systems can be swapped without wiping match state.
+It is implementation-first:
+- where authoritative game state lives
+- how commands resolve
+- how content is modeled
+- what extension points are already clean
+- what future work still implies architectural changes
+
+## Live Scope
+
+- Electron + React + TypeScript desktop game
+- one playable map: Frontier Belt
+- 1v1 turn-based hex tactics
+- 3 premade faction starter decks, 60 cards each, max 4 copies
+- full stack / priority interaction for spells and abilities
+- harvesting / node-control economy loop
+- 6-phase turn flow:
+  - `start`
+  - `economy`
+  - `main`
+  - `tactical`
+  - `end`
+  - `discard`
+- win by reducing enemy base HP to `0`
+
+Current live rules snapshot:
+- base HP: `20`
+- opening hand: `5`
+- opening resources:
+  - player 1: `2 credits + 2 primary`
+  - player 2: `5 credits + 2 primary`
+- deposits:
+  - `2` credits
+  - `2` primary
+- passive economy income:
+  - `+1 credit`
+  - `+0 primary`
+- max hand size: `7`
+
+## Core Principles
+
+- Single source of truth:
+  - one authoritative mutable `GameState` inside the runtime
+- Deterministic simulation:
+  - same command stream => same state outcomes
+- Event-driven rules:
+  - commands validate
+  - events mutate
+  - triggers react
+  - rendering never decides game rules
 - Data-driven content:
-  - Cards, decks, map layouts, and resource skins loaded from content modules, not hardcoded in rules.
+  - cards, starter decks, maps, keywords, and stack behaviors are content/config driven
+- HMR-safe development:
+  - runtime survives module reloads
+  - migrations backfill hot state when schema changes
 
 ## Runtime Topology
+
 - React UI layer
-  - Menus, overlays, stack panel, logs, debug controls.
-  - Sends typed commands to game runtime.
-- Game runtime layer (`getGameRuntime()` singleton)
-  - Owns authoritative game state.
-  - Owns phase machine, priority, stack, action queue, event log.
-  - Exposes read-only snapshots/selectors to UI.
-  - Runs update/render bridge for canvas.
-- Simulation/rules layer
-  - Validates commands against state and phase.
-  - Produces deterministic domain events.
-  - Applies events to state.
+  - panels, hand, top bar, stack, debug controls
+  - subscribes to runtime snapshots
+  - dispatches typed commands only
+- Runtime layer: `src/game/runtime.ts`
+  - owns the canonical `GameState`
+  - owns bot toggles, pending targeting, priority-stop settings, and animation queue
+  - bridges simulation and render systems
+- Simulation layer
+  - validators
+  - reducers
+  - instruction handlers
+  - trigger engine
+  - stack / phase / auto-flow logic
 - Presentation layer
-  - Canvas renderer reads state + transient animation events.
-  - RAF loop for animation only; turn progression remains event-driven.
+  - canvas rendering
+  - frame animation stepping
+  - no authority over gameplay outcomes
 
-## Simulation Clock vs Render Clock
-- Simulation clock: discrete and rule-driven.
-  - Advances only when actions/events resolve.
-  - Handles phases, stack resolution, attacks, harvesting deposits.
-- Render clock: continuous (`requestAnimationFrame`).
-  - Interpolates visuals and plays effects.
-  - Never decides rules outcomes.
+## Actual Module Layout
 
-## Proposed Module Layout
 ```text
 src/game/
-  runtime/
-    gameRuntime.ts          # singleton, lifecycle, HMR persistence
-    api.ts                  # command dispatch + read API for UI
+  runtime.ts                 # singleton runtime, subscriptions, debug/dev helpers
+  systems.ts                 # updateGame/renderGame bridge
+  types.ts                   # frame + animation types
+  derived.ts                 # cached spatial/overlay derived state
+  presentation.ts            # player/resource/faction themes
+
   model/
-    state.ts                # canonical GameState and subtypes
-    ids.ts                  # branded IDs for entities/cards/players
-    enums.ts                # phase/resource/faction/tag enums
+    state.ts                 # canonical GameState, entity shapes, initial state
+    enums.ts                 # phases, factions, resources, roles
+    ids.ts                   # typed IDs / player constants
+    hex.ts                   # axial hex math
+    queries.ts               # state query helpers
+    selectors.ts             # UI selectors
+    migrations.ts            # hot-state migrations
+
   content/
-    cards/                  # card definitions
-    decks/                  # premade 60-card decklists
-    maps/
-      frontierBelt.ts       # MVP map layout + resource nodes
-    resourceSkins.ts        # map flavor names/art -> canonical resource types
-  rules/
-    validators.ts           # action legality checks
-    costs.ts                # payment and affordability
-    targeting.ts            # target validation, LOS/range checks
-    summoning.ts            # summoning sickness and exceptions
-  turn/
-    phaseMachine.ts         # Start/Economy/Main/Tactical/End transitions
-    priority.ts             # active player priority pass logic
-    stack.ts                # LIFO stack push/pop/resolve
-  systems/
-    movement.ts             # move budget and path/range checks
-    combat.ts               # locked combat formula and retaliation
-    nodeControl.ts          # occupancy capture at end step
-    harvesting.ts           # load cargo, carry, base-adjacent deposit
-    victory.ts              # base HP win condition
+    cards/catalog.ts         # card definitions, play configs, keywords, animation metadata
+    cards/instructionFactories.ts
+    decks/starterDecks.ts
+    maps/frontierBelt.ts
+    stackEffects.ts          # generic stack behaviors + effect definitions
+
   actions/
-    commands.ts             # command types from UI/AI
-    events.ts               # deterministic event types
-    reducers.ts             # apply events to GameState
+    commands.ts
+    events.ts
+    reducers.ts
+    instructions.ts
+    instructionHandlers.ts
+    handlers/
+      cards.ts
+      combat.ts
+      phase.ts
+      selection.ts
+
+  rules/
+    validators.ts
+    cardPlayOptions.ts
+
+  turn/
+    phaseMachine.ts
+    stack.ts
+    autoFlow.ts
+    priorityStops.ts
+
+  systems/
+    combat.ts
+    nodeControl.ts
+    harvesting.ts
+    victory.ts
+    keywords.ts
+    continuousEffects.ts
+    unitStats.ts
+    cascade.ts
+    replacementEngine.ts
+    triggerEngine.ts
+    triggers.ts
+
   ai/
-    mvpBot.ts               # heuristic 1v1 AI
+    mvpBot.ts
+
   render/
-    canvasRenderer.ts       # board/unit/effect drawing
-    animations.ts           # transient visuals from event stream
-  debug/
-    inspector.ts            # dev overlays + state inspectors
-    replay.ts               # action/event replay helpers
+    layout.ts
+    primitives.ts
+    grid.ts
+    entities.ts
+    overlays.ts
+    animations.ts
+    animationDrawing.ts
 ```
 
-## Canonical State Shape (MVP)
-```ts
-type GameState = {
-  matchId: string;
-  seed: number;
-  turn: number;
-  phase: "start" | "economy" | "main" | "tactical" | "end";
-  activePlayerId: PlayerId;
-  priorityPlayerId: PlayerId | null;
-  stack: StackItem[];
-  players: Record<PlayerId, PlayerState>;
-  map: MapState;
-  entities: Record<EntityId, EntityState>; // units, structures, bases
-  zones: ZoneState; // deck/hand/discard/exile style zones
-  pendingAnimations: AnimationCue[];
-  log: MatchEvent[];
-  winner: PlayerId | null;
-};
-```
+## Canonical State Model
 
-## Command -> Event -> State Flow
-1. UI/AI emits a typed command (example: `PlayCard`, `DeclareAttack`, `HarvestNode`, `PassPriority`).
-2. Validator checks legality against current phase/priority/resources/targets.
-3. If legal:
-   - Produce one or more domain events.
-   - Push stack item if command is stack-using (spells/instants/abilities).
-4. Resolver processes events:
-   - Apply event reducer to mutate `GameState`.
-   - Emit animation/log cues.
-   - Re-evaluate triggers and priority.
-5. Repeat until no pending mandatory resolutions.
+The canonical game state lives in `src/game/model/state.ts`.
 
-This keeps rules deterministic and replayable.
+Important live fields:
+- match / turn state
+  - `stateVersion`
+  - `matchId`
+  - `turn`
+  - `phase`
+  - `activePlayerId`
+  - `priorityPlayerId`
+  - `consecutivePriorityPasses`
+- UI-integrated authoritative state
+  - `hoveredHex`
+  - `selectedEntityId`
+  - `lastRejectedReason`
+- economy / rules
+  - `rules`
+  - per-player resource pools
+- board / zones
+  - `map`
+  - `players`
+  - `zones`
+  - `entities`
+- stack / effects
+  - `stack`
+  - `continuousEffects`
+  - `effectTimestampCounter`
+- logs / win state
+  - `log`
+  - `winner`
+- combo / turn bookkeeping
+  - `tacticsCastThisTurn`
+  - `bloomedUnitIdsThisTurn`
+  - `lastBloomSourceItemId`
+  - `lastBloomedUnitIds`
+  - `salvageTriggersThisTurn`
+  - `tacticalHarvestEligibleUnitIds`
+  - `tacticalHarvestedUnitIds`
 
-## Turn/Phase Architecture
-- Start Phase
-  - Draw one card ("satellite download").
-  - Start-of-turn triggers.
-- Economy Phase
-  - Deposit carried cargo for harvesters on base-adjacent tiles.
-  - Economy effects.
-- Main Phase
-  - Play non-instant cards, deploy, activate main-phase abilities.
-- Tactical Phase
-  - Unit movement and attacks (respect move/attack budgets and sickness rules).
-- End Phase
-  - Node occupancy capture.
-  - Cleanup and end triggers.
-  - Pass turn.
+Current state version:
+- `21`
 
-Phase transitions should be implemented in a strict state machine; avoid ad hoc phase checks spread across code.
+## Command -> Event -> Instruction -> State Flow
 
-## Stack/Priority Architecture
-- Full stack LIFO for stack-eligible actions.
-- Priority passes between players.
-- Resolve top stack item only after both players pass consecutively.
-- Non-stack actions (movement, node ownership updates, deposit step) bypass stack.
-- Maintain an explicit legality matrix in code for counterable vs uncounterable actions.
+The live rule pipeline is:
 
-## Combat Architecture
-- Use locked formula from design doc in one dedicated resolver (`systems/combat.ts`).
-- Inputs:
-  - attacker stats + temporary/faction bonuses
-  - defender armor + terrain/tile/faction defenses
-  - supply penalty by distance-from-friendly-base
-- Output:
-  - deterministic final damage, min 1 on successful hit
-- Include hooks for:
-  - before-attack triggers
-  - on-hit/after-damage triggers
-  - instant response windows before resolve
+1. UI or bot emits a typed command.
+2. `validators.ts` checks legality.
+3. `reducers.ts` converts legal commands into events.
+4. Events mutate state through reducer paths.
+5. Stack resolution turns card/effect metadata into instructions.
+6. `instructionHandlers.ts` applies instructions to state.
+7. `triggerEngine.ts` reacts to resulting events and can push more stack items.
+8. Auto-flow / phase / priority logic advances as needed.
 
-## Economy + Harvesting Architecture
-- Node control and harvesting are separate:
-  - `nodeControl.ts` owns ownership changes.
-  - `harvesting.ts` owns cargo lifecycle.
-- Cargo lifecycle:
-  - `empty -> loaded(resourceType) -> deposited` or `lost`.
-- Deposit rule:
-  - base-adjacent tiles at Economy Phase.
-- Keep harvesting data on unit state (`carriedCargo?: ResourceType`).
+This is the core deterministic loop.
 
-## Content Architecture
-- Card definitions should be data objects with:
-  - cost, speed, targets, tags, effect script IDs.
-- Effect execution:
-  - map effect IDs to deterministic resolver functions.
-  - avoid arbitrary script eval.
-- Decklists:
-  - validated at load time (60 cards, max 4 copies/card ID).
-- Maps:
-  - canonical mechanics (resource types) + skin names/art per map.
+## Turn And Priority Model
 
-## HMR and Development Workflow
-- Continue using singleton runtime via `getGameRuntime()`.
-- Persist runtime through `import.meta.hot.dispose`.
-- Hot-accept simulation/render modules where safe.
-- When state schema changes in incompatible ways:
-  - add `stateVersion`.
-  - provide migration or reset with explicit dev warning.
+Turn structure is explicit and state-machine driven:
+- `start`
+  - turn draw and start-of-turn setup
+- `economy`
+  - passive income and deposit resolution
+- `main`
+  - main-speed card play and deployment
+- `tactical`
+  - movement, attacks, harvest actions
+- `end`
+  - node control and cleanup transition
+- `discard`
+  - active player discards to `MAX_HAND_SIZE`
 
-## Save/Replay Strategy
-- Save format:
-  - snapshot (`GameState`) + schema version.
-- Replay format:
-  - initial seed + command log.
-- Deterministic replay should be a test target for every rules change.
+Priority model:
+- stack uses explicit `priorityPlayerId`
+- top stack item resolves only after consecutive passes
+- stack items carry:
+  - controller / owner
+  - targets
+  - source card metadata
+  - `counterable`
+  - `defaultCounterDestination`
+  - `surgeActive`
+
+## Data-Driven Card Architecture
+
+Card definitions live in `src/game/content/cards/catalog.ts`.
+
+Cards are not resolved by card-id-specific reducers.
+They are described by:
+- cost
+- speed
+- text
+- keywords
+- `play` metadata
+- optional `effectConfig`
+- optional `surgeEffectConfig`
+- optional triggers
+- optional resolve animation metadata
+
+### Resolution Model
+
+The preferred model is:
+- card owns its play metadata
+- stack effect owns generic behavior
+- generic instruction factory produces instructions
+
+This means new cards usually require:
+- a catalog entry
+- maybe a new generic effect family
+- maybe AI scoring if the effect family is new
+
+### Current Generic Effect Families
+
+The engine already supports generic effect families for:
+- mass damage
+- global buffs
+- destroy-damaged resets
+- draw and gain resources
+- unit-count resource conversion
+- bloom-count resource conversion
+- salvage-count resource conversion
+- hex-area damage
+- cascade unit buffs
+
+## Keywords, Effects, And Triggers
+
+Keywords are now a real engine surface, not just labels.
+
+Current live keywords include:
+- `stealth`
+- `sprout`
+- `relay`
+- `bloom`
+- `salvage`
+- `bastion`
+- `uncounterable`
+
+Supporting systems:
+- `systems/keywords.ts`
+  - rules hooks and shared keyword helpers
+- `systems/continuousEffects.ts`
+  - layered stat and keyword grants
+- `systems/triggerEngine.ts`
+  - event-driven unit triggers
+- `systems/cascade.ts`
+  - BFS cascade propagation
+- `systems/replacementEngine.ts`
+  - instruction replacement / prevention hooks
+
+Current trigger surface includes:
+- `on_owner_tactic_played`
+- `on_owner_surged_tactic_played`
+- `on_owner_salvaged`
+- `on_cascaded`
+- `on_self_bloomed`
+- `on_owner_unit_bloomed`
+
+## Combat And Economy Architecture
+
+### Combat
+
+`systems/combat.ts` is the authoritative combat resolver.
+
+Current combat properties:
+- effective attack and armor are layered through `unitStats.ts`
+- siege is also an effective stat now
+- supply penalty applies by distance from friendly base
+- minimum successful combat damage is `1`
+- spell damage is separate from combat damage
+
+### Economy
+
+Economy is intentionally split:
+- `nodeControl.ts`
+  - who controls nodes
+- `harvesting.ts`
+  - cargo lifecycle and economy-phase deposits
+
+Cargo lifecycle:
+- empty
+- loaded with resource
+- deposited
+- or lost on destruction
+
+## Rendering And Animation
+
+Rendering is canvas-based and read-only over state + animation queues.
+
+Important characteristics:
+- RAF drives animation only
+- gameplay remains event-driven
+- animations are built from state/event snapshots
+- cards can own resolve animation metadata in the catalog
+
+Current animation capabilities include:
+- movement / attack
+- deploy / harvest
+- death bursts
+- match intro / victory
+- cascade faux-3D hex showers
+- board-wipe / haymaker visuals
+
+## HMR, Migration, And Persistence
+
+The runtime is intentionally HMR-safe:
+- runtime singleton persists across reloads
+- systems and bot logic can hot-swap
+- `migrations.ts` upgrades restored state in place
+
+Current migration model:
+- explicit `CURRENT_STATE_VERSION`
+- backfill missing fields
+- update entity defaults and keyword sets
+- keep hot-loaded matches playable when schema changes
 
 ## Testing Strategy
-- Unit tests:
-  - validators, combat formula, harvesting flow, node capture, phase transitions.
-- Scenario tests:
-  - stack interactions (counter wars), summoning sickness, base kill conditions.
-- Replay tests:
-  - command log determinism across runs.
-- Content validation tests:
-  - card/deck/map schema constraints.
 
-## Delivery Plan
-Detailed phase-by-phase implementation work has been moved to `todos.md`.
+The project already relies heavily on deterministic tests.
 
-## Risks and Mitigations
-- Risk: stack complexity slows progress.
-  - Mitigation: strict command/event boundaries and priority tests early.
-- Risk: economy feels slow or snowbally.
-  - Mitigation: tune node density, harvester speed, and cargo throughput from telemetry.
-- Risk: HMR breaks on schema churn.
-  - Mitigation: state versioning and explicit migration/reset path.
+Important coverage areas:
+- reducers
+- validators
+- combat
+- harvesting
+- stack / priority
+- trigger engine
+- replacement engine
+- continuous effects
+- bot behavior
+- starter deck validation
+- render animation generation
 
-## Done Criteria for Architecture
-- A full match can be played on Frontier Belt from opening hand to base destruction.
-- All authoritative outcomes are produced by simulation code, not render code.
-- Stack/priority, harvesting, and node capture are deterministic and test-covered.
-- Runtime survives HMR for normal logic edits without losing current match state.
+## Current Architecture Strengths
+
+- deterministic rules core is solid
+- card content is much more data-driven than before
+- named combo mechanics can be added without rewriting the rules engine
+- HMR workflow is still strong despite schema churn
+- render effects are attached to content much more cleanly
+
+## Current Architecture Pressure Points
+
+These are the main areas where future features will want more structural work:
+
+### Graveyard / Reanimation
+
+Light recursion is possible, but real graveyard gameplay would want:
+- discard-pile targeting UI
+- zone-move instructions beyond simple draw/discard patterns
+- AI support for recursion choices
+- clearer graveyard presentation
+
+### Tokens
+
+A real token strategy likely needs:
+- token templates
+- or a dedicated deploy-from-template instruction model
+
+### Multi-Target Choice Cards
+
+Current targeting is excellent for:
+- none
+- entity
+- stack item
+- hex
+
+But “choose two targets” or “choose up to N” needs a deliberate extension.
+
+### Infinite Combo Support
+
+The engine currently supports bounded combo systems well.
+
+True infinite combos would need:
+- loop detection
+- deterministic repeat rules
+- explicit player choice flow
+- AI handling for arbitrarily large lines
+
+## Recommended Next Architecture Work
+
+- keep extending cards through generic effect families first
+- avoid card-specific resolver branches
+- treat graveyard/reanimation as its own feature wave
+- treat tokens as their own feature wave
+- decide intentionally whether spell damage should ever respect armor
