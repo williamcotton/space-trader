@@ -119,7 +119,7 @@ export interface StackItem {
   ownerId: PlayerId;
   effectId: string;
   effectMagnitude: number;
-  surgeActive?: boolean;
+  activeModifierIds?: string[];
   targetStackItemId: string | null;
   targetEntityId: EntityId | null;
   targetHex?: HexCoord | null;

@@ -48,7 +48,8 @@ describe("migrateRuntimeState", () => {
     Reflect.deleteProperty(state as typeof state & { lastBloomSourceItemId?: unknown }, "lastBloomSourceItemId");
     Reflect.deleteProperty(state as typeof state & { lastBloomedUnitIds?: unknown }, "lastBloomedUnitIds");
     Reflect.deleteProperty(state as typeof state & { salvageTriggersThisTurn?: unknown }, "salvageTriggersThisTurn");
-    Reflect.deleteProperty(state.stack[0] as typeof state.stack[number] & { surgeActive?: unknown }, "surgeActive");
+    Reflect.deleteProperty(state.stack[0] as typeof state.stack[number] & { activeModifierIds?: unknown }, "activeModifierIds");
+    (state.stack[0] as typeof state.stack[number] & { surgeActive?: unknown }).surgeActive = false;
 
     migrateRuntimeState(state);
 
@@ -63,6 +64,6 @@ describe("migrateRuntimeState", () => {
       player_1: 0,
       player_2: 0,
     });
-    expect(state.stack[0]?.surgeActive).toBe(false);
+    expect(state.stack[0]?.activeModifierIds).toEqual([]);
   });
 });

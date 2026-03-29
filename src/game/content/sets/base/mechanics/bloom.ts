@@ -245,9 +245,10 @@ export function installBloomMechanic(): void {
     const bloomedUnits = getBloomedUnitIdsThisTurn(state)
       .map((unitId) => state.entities[unitId])
       .filter((entity): entity is NonNullable<typeof entity> & { kind: "unit" } => entity?.kind === "unit" && entity.ownerId === botPlayerId);
-    const thresholdsMet = Math.floor(bloomedUnits.length / effectConfig.threshold);
-    const payoutMultiplier = effectConfig.maxThresholds
-      ? Math.min(thresholdsMet, effectConfig.maxThresholds)
+    const thresholdsMet = Math.floor(bloomedUnits.length / Number(effectConfig.threshold ?? 1));
+    const maxThresholds = typeof effectConfig.maxThresholds === "number" ? effectConfig.maxThresholds : undefined;
+    const payoutMultiplier = maxThresholds
+      ? Math.min(thresholdsMet, maxThresholds)
       : thresholdsMet;
 
     if (payoutMultiplier <= 0) {
@@ -256,7 +257,8 @@ export function installBloomMechanic(): void {
 
     let score = 48 + payoutMultiplier * 18;
     for (const resource of getRegisteredResourceIds()) {
-      score += (effectConfig.resourcesPerThreshold[resource] ?? 0) * payoutMultiplier * 12;
+      const resourcesPerThreshold = effectConfig.resourcesPerThreshold as Record<string, number> | undefined;
+      score += (resourcesPerThreshold?.[resource] ?? 0) * payoutMultiplier * 12;
     }
 
     return score;

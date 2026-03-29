@@ -11,7 +11,11 @@ import type { InstructionContext } from "../instructions";
 import { executeInstructions } from "../instructionHandlers";
 import { resetResolutionMechanicState } from "../../mechanics";
 import { resolveCardCounterable } from "../../registries/cardCounterability";
-import { getMechanicApi, type SurgeMechanicApi } from "../../registries/mechanicApis";
+import {
+  getActiveCardPlayModifierIds,
+  getCardPlayModifierLabels,
+  runCardPlayedToStackModifierHooks,
+} from "../../registries/cardPlayModifiers";
 import { getUnitDeploymentAdjustment } from "../../registries/unitDeployment";
 
 function applyCardCost(state: GameState, playerId: PlayerId, cost: CardCost): void {
@@ -33,14 +37,6 @@ function removeCardFromHand(state: GameState, playerId: PlayerId, cardInstanceId
 
 function addCardToZone(state: GameState, playerId: PlayerId, zone: "hand" | "discard" | "exile", card: CardInstance): void {
   state.zones[playerId][zone].push(card);
-}
-
-function requireSurgeApi(): SurgeMechanicApi {
-  const api = getMechanicApi<SurgeMechanicApi>("surge");
-  if (!api) {
-    throw new Error("Missing registered surge mechanic API.");
-  }
-  return api;
 }
 
 export function drawCardForPlayer(state: GameState, playerId: PlayerId, drawReason: "opening_hand" | "start_phase_draw"): void {
@@ -227,7 +223,7 @@ export function handleRespondStack(
       ownerId: command.playerId,
       effectId: command.effectId,
       effectMagnitude: getStackEffectMagnitude(command.effectId),
-      surgeActive: false,
+      activeModifierIds: [],
       targetStackItemId: command.targetStackItemId ?? null,
       targetEntityId: null,
       objectKind: definition.object.kind,
@@ -256,7 +252,7 @@ export function handlePlayCard(
     return [];
   }
 
-  const surgeActive = card.kind === "tactic" && requireSurgeApi().getTacticsCastThisTurn(state, command.playerId) > 0;
+  const activeModifierIds = getActiveCardPlayModifierIds(state, command.playerId, card);
   const effectId = card.play.stackEffectId;
   const effectDefinition = getStackEffectDefinition(effectId);
   if (!effectDefinition) {
@@ -273,8 +269,8 @@ export function handlePlayCard(
       cost: card.cost,
       stackItemId: createStackItemId(state.turn, state.log.length),
       effectId,
-      effectMagnitude: getStackEffectMagnitude(effectId, handCard.cardId, surgeActive),
-      surgeActive,
+      effectMagnitude: getStackEffectMagnitude(effectId, handCard.cardId, activeModifierIds),
+      activeModifierIds,
       targetStackItemId: command.targetStackItemId ?? null,
       targetEntityId: command.targetEntityId ?? null,
       targetHex: command.targetHex ?? null,
@@ -327,7 +323,7 @@ export function reduceCardPlayedToStack(
     ownerId: event.playerId,
     effectId: event.effectId,
     effectMagnitude: event.effectMagnitude,
-    surgeActive: event.surgeActive ?? false,
+    activeModifierIds: [...(event.activeModifierIds ?? [])],
     targetStackItemId: event.targetStackItemId,
     targetEntityId: event.targetEntityId,
     targetHex: event.targetHex ?? null,
@@ -341,12 +337,11 @@ export function reduceCardPlayedToStack(
   });
   state.priorityPlayerId = event.nextPriorityPlayerId;
   state.consecutivePriorityPasses = 0;
-  if (cardDefinition.kind === "tactic") {
-    requireSurgeApi().incrementTacticsCastThisTurn(state, event.playerId);
-  }
+  runCardPlayedToStackModifierHooks(state, event.playerId, cardDefinition, event.activeModifierIds ?? []);
+  const modifierLabels = getCardPlayModifierLabels(event.activeModifierIds ?? []);
   state.log.push({
     turn: state.turn,
-    text: `${event.playerId} cast ${event.cardName} from hand to stack${event.surgeActive ? " with Surge" : ""}.`,
+    text: `${event.playerId} cast ${event.cardName} from hand to stack${modifierLabels.length > 0 ? ` with ${modifierLabels.join(", ")}` : ""}.`,
   });
 }
 
@@ -393,7 +388,7 @@ export function reduceStackItemPushed(
     ownerId: event.ownerId,
     effectId: event.effectId,
     effectMagnitude: event.effectMagnitude,
-    surgeActive: event.surgeActive ?? false,
+    activeModifierIds: [...(event.activeModifierIds ?? [])],
     targetStackItemId: event.targetStackItemId,
     targetEntityId: event.targetEntityId,
     targetHex: event.targetHex ?? null,

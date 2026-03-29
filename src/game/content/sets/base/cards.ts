@@ -6,31 +6,32 @@ import { hexDistance, isWithinMapBounds } from "../../../model/hex";
 import { LAYER } from "../../../systems/continuousEffects";
 import type {
   CascadeUnitBuffOptions,
+  CascadeUnitBuffPlayEffectConfig,
   DestroyDamagedUnitsOptions,
+  DestroyDamagedUnitsPlayEffectConfig,
   DrawAndGainResourcesOptions,
+  DrawAndGainResourcesPlayEffectConfig,
   GlobalUnitBuffOptions,
+  GlobalUnitBuffPlayEffectConfig,
   HexAreaDamageOptions,
+  HexAreaDamagePlayEffectConfig,
+  MassDamagePlayEffectConfig,
   ResourcesByBloomCountOptions,
+  ResourcesByBloomCountPlayEffectConfig,
   ResourcesBySalvageCountOptions,
+  ResourcesBySalvageCountPlayEffectConfig,
   MassDamageOptions,
   ResourcesByUnitCountOptions,
-} from "../../cards/instructionFactories";
+  ResourcesByUnitCountPlayEffectConfig,
+} from "./playEffects";
 import type {
   CardDefinition,
   CardPlayEffectConfig,
+  CardPlayModifierEffectConfigs,
   CardPlayProfile,
   CardSourceDestination,
   CardTargetMode,
-  CascadeUnitBuffPlayEffectConfig,
-  DestroyDamagedUnitsPlayEffectConfig,
-  DrawAndGainResourcesPlayEffectConfig,
-  GlobalUnitBuffPlayEffectConfig,
-  HexAreaDamagePlayEffectConfig,
   HexTargetPredicate,
-  MassDamagePlayEffectConfig,
-  ResourcesByBloomCountPlayEffectConfig,
-  ResourcesBySalvageCountPlayEffectConfig,
-  ResourcesByUnitCountPlayEffectConfig,
   TargetPredicate,
 } from "../../cards/types";
 
@@ -45,7 +46,7 @@ function tacticPlay(
     isValidTarget?: TargetPredicate;
     isValidHexTarget?: HexTargetPredicate;
     effectConfig?: CardPlayEffectConfig;
-    surgeEffectConfig?: CardPlayEffectConfig;
+    modifierEffectConfigs?: CardPlayModifierEffectConfigs;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
@@ -58,7 +59,7 @@ function tacticPlay(
     return {
       stackEffectId,
       effectConfig: options?.effectConfig,
-      surgeEffectConfig: options?.surgeEffectConfig,
+      modifierEffectConfigs: options?.modifierEffectConfigs,
       targetMode,
       sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
       isValidTarget: options.isValidTarget,
@@ -72,7 +73,7 @@ function tacticPlay(
     return {
       stackEffectId,
       effectConfig: options?.effectConfig,
-      surgeEffectConfig: options?.surgeEffectConfig,
+      modifierEffectConfigs: options?.modifierEffectConfigs,
       targetMode,
       sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
       isValidHexTarget: options.isValidHexTarget,
@@ -82,10 +83,20 @@ function tacticPlay(
   return {
     stackEffectId,
     effectConfig: options?.effectConfig,
-    surgeEffectConfig: options?.surgeEffectConfig,
+    modifierEffectConfigs: options?.modifierEffectConfigs,
     targetMode,
     sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
   };
+}
+
+function createModifierEffectConfigs(
+  modifierId: string,
+  effectConfig?: CardPlayEffectConfig
+): CardPlayModifierEffectConfigs | undefined {
+  if (!effectConfig) {
+    return undefined;
+  }
+  return { [modifierId]: effectConfig };
 }
 
 function unitPlay(stackEffectId = "deploy_unit_card"): CardPlayProfile {
@@ -226,7 +237,7 @@ function cascadeTacticPlay(
     isValidHexTarget: options.isValidHexTarget,
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createCascadeUnitBuffEffectConfig(options),
-    surgeEffectConfig: options.surgeBonus ? createCascadeUnitBuffEffectConfig(options.surgeBonus) : undefined,
+    modifierEffectConfigs: createModifierEffectConfigs("surge", options.surgeBonus ? createCascadeUnitBuffEffectConfig(options.surgeBonus) : undefined),
   });
 }
 
@@ -239,7 +250,7 @@ function massDamageTacticPlay(
   return tacticPlay("mass_damage", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createMassDamageEffectConfig(options),
-    surgeEffectConfig: options.surgeBonus ? createMassDamageEffectConfig(options.surgeBonus) : undefined,
+    modifierEffectConfigs: createModifierEffectConfigs("surge", options.surgeBonus ? createMassDamageEffectConfig(options.surgeBonus) : undefined),
   });
 }
 
@@ -252,7 +263,7 @@ function globalUnitBuffTacticPlay(
   return tacticPlay("global_unit_buff", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createGlobalUnitBuffEffectConfig(options),
-    surgeEffectConfig: options.surgeBonus ? createGlobalUnitBuffEffectConfig(options.surgeBonus) : undefined,
+    modifierEffectConfigs: createModifierEffectConfigs("surge", options.surgeBonus ? createGlobalUnitBuffEffectConfig(options.surgeBonus) : undefined),
   });
 }
 
@@ -265,7 +276,7 @@ function destroyDamagedUnitsTacticPlay(
   return tacticPlay("destroy_damaged_units", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createDestroyDamagedUnitsEffectConfig(options),
-    surgeEffectConfig: options.surgeBonus ? createDestroyDamagedUnitsEffectConfig(options.surgeBonus) : undefined,
+    modifierEffectConfigs: createModifierEffectConfigs("surge", options.surgeBonus ? createDestroyDamagedUnitsEffectConfig(options.surgeBonus) : undefined),
   });
 }
 
@@ -278,7 +289,7 @@ function drawAndGainResourcesTacticPlay(
   return tacticPlay("draw_and_gain_resources", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createDrawAndGainResourcesEffectConfig(options),
-    surgeEffectConfig: options.surgeBonus ? createDrawAndGainResourcesEffectConfig(options.surgeBonus) : undefined,
+    modifierEffectConfigs: createModifierEffectConfigs("surge", options.surgeBonus ? createDrawAndGainResourcesEffectConfig(options.surgeBonus) : undefined),
   });
 }
 
@@ -294,7 +305,7 @@ function hexAreaDamageTacticPlay(
     isValidHexTarget: options.isValidHexTarget,
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createHexAreaDamageEffectConfig(options),
-    surgeEffectConfig: options.surgeBonus ? createHexAreaDamageEffectConfig(options.surgeBonus) : undefined,
+    modifierEffectConfigs: createModifierEffectConfigs("surge", options.surgeBonus ? createHexAreaDamageEffectConfig(options.surgeBonus) : undefined),
   });
 }
 
@@ -307,7 +318,7 @@ function resourcesByUnitCountTacticPlay(
   return tacticPlay("resources_by_unit_count", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createResourcesByUnitCountEffectConfig(options),
-    surgeEffectConfig: options.surgeBonus ? createResourcesByUnitCountEffectConfig(options.surgeBonus) : undefined,
+    modifierEffectConfigs: createModifierEffectConfigs("surge", options.surgeBonus ? createResourcesByUnitCountEffectConfig(options.surgeBonus) : undefined),
   });
 }
 
@@ -320,7 +331,7 @@ function resourcesByBloomCountTacticPlay(
   return tacticPlay("resources_by_bloom_count", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createResourcesByBloomCountEffectConfig(options),
-    surgeEffectConfig: options.surgeBonus ? createResourcesByBloomCountEffectConfig(options.surgeBonus) : undefined,
+    modifierEffectConfigs: createModifierEffectConfigs("surge", options.surgeBonus ? createResourcesByBloomCountEffectConfig(options.surgeBonus) : undefined),
   });
 }
 
@@ -333,7 +344,7 @@ function resourcesBySalvageCountTacticPlay(
   return tacticPlay("resources_by_salvage_count", {
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createResourcesBySalvageCountEffectConfig(options),
-    surgeEffectConfig: options.surgeBonus ? createResourcesBySalvageCountEffectConfig(options.surgeBonus) : undefined,
+    modifierEffectConfigs: createModifierEffectConfigs("surge", options.surgeBonus ? createResourcesBySalvageCountEffectConfig(options.surgeBonus) : undefined),
   });
 }
 

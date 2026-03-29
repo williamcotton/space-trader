@@ -4,7 +4,7 @@ export type StackEffectMagnitudeCalculator<K extends StackEffectBehavior["type"]
   behavior: Extract<StackEffectBehavior, { type: K }>,
   options: {
     sourceCardId?: string | null;
-    surgeActive?: boolean;
+    activeModifierIds?: string[];
   }
 ) => number;
 

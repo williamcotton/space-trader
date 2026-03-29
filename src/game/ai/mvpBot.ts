@@ -17,8 +17,8 @@ import { getOpponentPlayer } from "../turn/stack";
 import { getCascadeAffectedHexes } from "../systems/cascade";
 import { getLegalPlayCardTargetOptions } from "../rules/cardPlayOptions";
 import { getEffectiveUnitAttackDamage } from "../systems/unitStats";
+import { getActiveCardPlayModifierIds } from "../registries/cardPlayModifiers";
 import { getSpellScoringResolver, registerSpellScoringResolver } from "../registries/spellScoring";
-import { getMechanicApi, type SurgeMechanicApi } from "../registries/mechanicApis";
 import {
   applyUnitBuffScoreContributions,
   getCascadeScoreBonus,
@@ -30,14 +30,6 @@ const CURRENCY_RESOURCE_ID = "credits";
 function getResourceOrder(): ResourceType[] {
   const resourceIds = getRegisteredResourceIds();
   return resourceIds.length > 0 ? resourceIds : [CURRENCY_RESOURCE_ID];
-}
-
-function requireSurgeApi(): SurgeMechanicApi {
-  const api = getMechanicApi<SurgeMechanicApi>("surge");
-  if (!api) {
-    throw new Error("Missing registered surge mechanic API.");
-  }
-  return api;
 }
 
 const AI_WEIGHTS = {
@@ -924,7 +916,10 @@ registerSpellScoringResolver("mass_damage", ({ state, botPlayerId, targeting, ef
   return combineConfiguredSpellScores(
     effectConfigs
       .filter((effectConfig) => effectConfig.type === "mass_damage")
-      .map((effectConfig) => scoreMassDamageSpell(state, botPlayerId, effectConfig))
+      .map((effectConfig) => scoreMassDamageSpell(state, botPlayerId, {
+        amount: Number(effectConfig.amount ?? 0),
+        relation: effectConfig.relation === "ally" || effectConfig.relation === "enemy" ? effectConfig.relation : "any",
+      }))
   );
 });
 
@@ -935,7 +930,14 @@ registerSpellScoringResolver("global_unit_buff", ({ state, botPlayerId, targetin
   return combineConfiguredSpellScores(
     effectConfigs
       .filter((effectConfig) => effectConfig.type === "global_unit_buff")
-      .map((effectConfig) => scoreGlobalBuffSpell(state, botPlayerId, effectConfig))
+      .map((effectConfig) => scoreGlobalBuffSpell(state, botPlayerId, {
+        attackBonus: Number(effectConfig.attackBonus ?? 0),
+        armorBonus: Number(effectConfig.armorBonus ?? 0),
+        relation: effectConfig.relation === "ally" || effectConfig.relation === "enemy" ? effectConfig.relation : "any",
+        roleFilter: effectConfig.roleFilter === "combat" || effectConfig.roleFilter === "resource" || effectConfig.roleFilter === "utility"
+          ? effectConfig.roleFilter
+          : undefined,
+      }))
   );
 });
 
@@ -946,7 +948,13 @@ registerSpellScoringResolver("destroy_damaged_units", ({ state, botPlayerId, tar
   return combineConfiguredSpellScores(
     effectConfigs
       .filter((effectConfig) => effectConfig.type === "destroy_damaged_units")
-      .map((effectConfig) => scoreDestroyDamagedUnitsSpell(state, botPlayerId, effectConfig.relation))
+      .map((effectConfig) =>
+        scoreDestroyDamagedUnitsSpell(
+          state,
+          botPlayerId,
+          effectConfig.relation === "ally" || effectConfig.relation === "enemy" ? effectConfig.relation : "any"
+        )
+      )
   );
 });
 
@@ -957,7 +965,10 @@ registerSpellScoringResolver("draw_and_gain_resources", ({ state, botPlayerId, t
   return combineConfiguredSpellScores(
     effectConfigs
       .filter((effectConfig) => effectConfig.type === "draw_and_gain_resources")
-      .map((effectConfig) => scoreDrawAndGainResourcesSpell(state, botPlayerId, effectConfig))
+      .map((effectConfig) => scoreDrawAndGainResourcesSpell(state, botPlayerId, {
+        drawCount: Number(effectConfig.drawCount ?? 0),
+        resources: (effectConfig.resources as Partial<Record<ResourceType, number>> | undefined) ?? {},
+      }))
   );
 });
 
@@ -968,7 +979,15 @@ registerSpellScoringResolver("resources_by_unit_count", ({ state, botPlayerId, t
   return combineConfiguredSpellScores(
     effectConfigs
       .filter((effectConfig) => effectConfig.type === "resources_by_unit_count")
-      .map((effectConfig) => scoreResourcesByUnitCountSpell(state, botPlayerId, effectConfig))
+      .map((effectConfig) => scoreResourcesByUnitCountSpell(state, botPlayerId, {
+        relation: effectConfig.relation === "ally" || effectConfig.relation === "enemy" ? effectConfig.relation : "any",
+        threshold: Number(effectConfig.threshold ?? 1),
+        resourcesPerThreshold: (effectConfig.resourcesPerThreshold as Partial<Record<ResourceType, number>> | undefined) ?? {},
+        roleFilter: effectConfig.roleFilter === "combat" || effectConfig.roleFilter === "resource" || effectConfig.roleFilter === "utility"
+          ? effectConfig.roleFilter
+          : undefined,
+        maxThresholds: typeof effectConfig.maxThresholds === "number" ? effectConfig.maxThresholds : undefined,
+      }))
   );
 });
 
@@ -986,7 +1005,11 @@ registerSpellScoringResolver("hex_area_damage", ({ state, botPlayerId, targeting
   return combineConfiguredSpellScores(
     effectConfigs
       .filter((effectConfig) => effectConfig.type === "hex_area_damage")
-      .map((effectConfig) => scoreHexAreaDamageSpell(state, botPlayerId, targeting.targetHex as HexCoord, effectConfig))
+      .map((effectConfig) => scoreHexAreaDamageSpell(state, botPlayerId, targeting.targetHex as HexCoord, {
+        amount: Number(effectConfig.amount ?? 0),
+        radius: Number(effectConfig.radius ?? 0),
+        relation: effectConfig.relation === "ally" || effectConfig.relation === "enemy" ? effectConfig.relation : "any",
+      }))
   );
 });
 
@@ -999,12 +1022,17 @@ registerSpellScoringResolver("cascade_unit_buff", ({ state, botPlayerId, targeti
     effectConfigs
       .filter((effectConfig) => effectConfig.type === "cascade_unit_buff")
       .map((effectConfig) => scoreCascadeAttackBuffTarget(state, botPlayerId, targetHex, {
-        attackBonus: effectConfig.attackBonus,
-        armorBonus: effectConfig.armorBonus,
-        waves: effectConfig.waves,
-        roleFilter: effectConfig.roleFilter,
-        grantedKeywords: effectConfig.grantedKeywords,
-        reward: effectConfig.reward,
+        attackBonus: Number(effectConfig.attackBonus ?? 0),
+        armorBonus: Number(effectConfig.armorBonus ?? 0),
+        waves: Number(effectConfig.waves ?? 0),
+        roleFilter:
+          effectConfig.roleFilter === "combat" ||
+          effectConfig.roleFilter === "resource" ||
+          effectConfig.roleFilter === "utility"
+            ? effectConfig.roleFilter
+            : undefined,
+        grantedKeywords: Array.isArray(effectConfig.grantedKeywords) ? effectConfig.grantedKeywords : undefined,
+        reward: typeof effectConfig.reward === "object" && effectConfig.reward !== null ? effectConfig.reward as never : undefined,
       }))
   );
 });
@@ -1033,8 +1061,8 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
     if (!effect) {
       continue;
     }
-    const surgeActive = requireSurgeApi().getTacticsCastThisTurn(state, botPlayerId) > 0;
-    const effectConfigs = getResolvedCardPlayEffectConfigs(card, surgeActive);
+    const activeModifierIds = getActiveCardPlayModifierIds(state, botPlayerId, card);
+    const effectConfigs = getResolvedCardPlayEffectConfigs(card, activeModifierIds);
 
     const legalTargets = getLegalPlayCardTargetOptions(state, botPlayerId, cardInstance.instanceId, card);
     for (const targeting of legalTargets) {

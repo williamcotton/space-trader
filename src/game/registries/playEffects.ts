@@ -1,34 +1,32 @@
 import type { InstructionContext, GameInstruction } from "../actions/instructions";
 import type { CardPlayEffectConfig } from "../content/cards/catalog";
 
-export type PlayEffectResolver<K extends CardPlayEffectConfig["type"] = CardPlayEffectConfig["type"]> = (
+export type PlayEffectResolver = (
   context: InstructionContext,
-  effectConfig: Extract<CardPlayEffectConfig, { type: K }>
+  effectConfig: CardPlayEffectConfig
 ) => GameInstruction[];
 
-export type PlayEffectMagnitudeCalculator<K extends CardPlayEffectConfig["type"] = CardPlayEffectConfig["type"]> = (
-  effectConfig: Extract<CardPlayEffectConfig, { type: K }>
-) => number;
+export type PlayEffectMagnitudeCalculator = (effectConfig: CardPlayEffectConfig) => number;
 
 const playEffectResolvers = new Map<CardPlayEffectConfig["type"], PlayEffectResolver>();
 const playEffectMagnitudeCalculators = new Map<CardPlayEffectConfig["type"], PlayEffectMagnitudeCalculator>();
 
-export function registerPlayEffectResolver<K extends CardPlayEffectConfig["type"]>(
-  type: K,
-  resolver: PlayEffectResolver<K>
+export function registerPlayEffectResolver(
+  type: CardPlayEffectConfig["type"],
+  resolver: PlayEffectResolver
 ): void {
-  playEffectResolvers.set(type, resolver as unknown as PlayEffectResolver);
+  playEffectResolvers.set(type, resolver);
 }
 
 export function getPlayEffectResolver(type: CardPlayEffectConfig["type"]): PlayEffectResolver | undefined {
   return playEffectResolvers.get(type);
 }
 
-export function registerPlayEffectMagnitudeCalculator<K extends CardPlayEffectConfig["type"]>(
-  type: K,
-  calculator: PlayEffectMagnitudeCalculator<K>
+export function registerPlayEffectMagnitudeCalculator(
+  type: CardPlayEffectConfig["type"],
+  calculator: PlayEffectMagnitudeCalculator
 ): void {
-  playEffectMagnitudeCalculators.set(type, calculator as unknown as PlayEffectMagnitudeCalculator);
+  playEffectMagnitudeCalculators.set(type, calculator);
 }
 
 export function getPlayEffectMagnitudeCalculator(

@@ -3,10 +3,6 @@ import type { ResourceType, UnitRole, Faction } from "../../model/enums";
 import type { PlayerId } from "../../model/ids";
 import type { EntityState, GameState, HexCoord } from "../../model/state";
 import type { CardTrigger } from "../../systems/triggerEngine";
-import type {
-  CascadeUnitBuffReward,
-  EffectRelation,
-} from "./instructionFactories";
 
 export type TargetPredicate = (
   state: Readonly<GameState>,
@@ -45,81 +41,11 @@ export type CardAnimationProfile = {
   resolve?: CardResolveAnimationProfile;
 };
 
-export type MassDamagePlayEffectConfig = {
-  type: "mass_damage";
-  amount: number;
-  relation: EffectRelation;
-};
+export type CardPlayEffectConfig = {
+  type: string;
+} & Record<string, unknown>;
 
-export type GlobalUnitBuffPlayEffectConfig = {
-  type: "global_unit_buff";
-  attackBonus: number;
-  armorBonus: number;
-  relation: EffectRelation;
-  roleFilter?: UnitRole;
-};
-
-export type DestroyDamagedUnitsPlayEffectConfig = {
-  type: "destroy_damaged_units";
-  relation: EffectRelation;
-};
-
-export type DrawAndGainResourcesPlayEffectConfig = {
-  type: "draw_and_gain_resources";
-  drawCount: number;
-  resources: CardCost;
-};
-
-export type ResourcesByUnitCountPlayEffectConfig = {
-  type: "resources_by_unit_count";
-  relation: EffectRelation;
-  threshold: number;
-  resourcesPerThreshold: CardCost;
-  roleFilter?: UnitRole;
-  maxThresholds?: number;
-};
-
-export type ResourcesByBloomCountPlayEffectConfig = {
-  type: "resources_by_bloom_count";
-  threshold: number;
-  resourcesPerThreshold: CardCost;
-  maxThresholds?: number;
-};
-
-export type ResourcesBySalvageCountPlayEffectConfig = {
-  type: "resources_by_salvage_count";
-  threshold: number;
-  resourcesPerThreshold: CardCost;
-  maxThresholds?: number;
-};
-
-export type HexAreaDamagePlayEffectConfig = {
-  type: "hex_area_damage";
-  amount: number;
-  radius: number;
-  relation: EffectRelation;
-};
-
-export type CascadeUnitBuffPlayEffectConfig = {
-  type: "cascade_unit_buff";
-  attackBonus: number;
-  armorBonus: number;
-  waves: number;
-  roleFilter?: UnitRole;
-  grantedKeywords?: CardKeyword[];
-  reward?: CascadeUnitBuffReward;
-};
-
-export type CardPlayEffectConfig =
-  | MassDamagePlayEffectConfig
-  | GlobalUnitBuffPlayEffectConfig
-  | DestroyDamagedUnitsPlayEffectConfig
-  | DrawAndGainResourcesPlayEffectConfig
-  | ResourcesByUnitCountPlayEffectConfig
-  | ResourcesByBloomCountPlayEffectConfig
-  | ResourcesBySalvageCountPlayEffectConfig
-  | HexAreaDamagePlayEffectConfig
-  | CascadeUnitBuffPlayEffectConfig;
+export type CardPlayModifierEffectConfigs = Partial<Record<string, CardPlayEffectConfig>>;
 
 export type UnitAura = {
   type: "adjacent_ally_buff";
@@ -157,7 +83,7 @@ type CardBase = {
 type CardPlayBase = {
   stackEffectId: string;
   effectConfig?: CardPlayEffectConfig;
-  surgeEffectConfig?: CardPlayEffectConfig;
+  modifierEffectConfigs?: CardPlayModifierEffectConfigs;
   sourceDestinationOnResolve: CardSourceDestination;
   requiresOpenBaseAdjacentTile?: boolean;
   reserveEntityId?: boolean;
@@ -207,4 +133,3 @@ export type TacticCardDefinition = CardBase & {
 };
 
 export type CardDefinition = TacticCardDefinition | UnitCardDefinition;
-

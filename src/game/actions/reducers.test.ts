@@ -2379,7 +2379,7 @@ describe("dispatchCommand", () => {
     expect(firstPlay.ok).toBe(true);
     const firstStackItem = state.stack[state.stack.length - 1];
     expect(firstStackItem?.sourceCardId).toBe("static_insight");
-    expect(firstStackItem?.surgeActive).toBe(false);
+    expect(firstStackItem?.activeModifierIds).toEqual([]);
     expect(state.tacticsCastThisTurn.player_2).toBe(1);
 
     resolveStackByPassing(state);
@@ -2392,7 +2392,7 @@ describe("dispatchCommand", () => {
     expect(secondPlay.ok).toBe(true);
     const secondStackItem = state.stack[state.stack.length - 1];
     expect(secondStackItem?.sourceCardId).toBe("ion_surge_archive");
-    expect(secondStackItem?.surgeActive).toBe(true);
+    expect(secondStackItem?.activeModifierIds).toEqual(["surge"]);
     expect(state.tacticsCastThisTurn.player_2).toBe(2);
 
     resolveStackByPassing(state);

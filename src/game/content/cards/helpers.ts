@@ -1,10 +1,9 @@
-import { getPlayEffectMagnitudeCalculator, registerPlayEffectMagnitudeCalculator } from "../../registries/playEffects";
-import { getRegisteredCardDefinition, getRegisteredResourceIds } from "../registry";
+import { getPlayEffectMagnitudeCalculator } from "../../registries/playEffects";
+import { getRegisteredCardDefinition } from "../registry";
 import type {
   CardDefinition,
   CardKeyword,
   CardPlayEffectConfig,
-  CascadeUnitBuffPlayEffectConfig,
 } from "./types";
 
 function cloneKeywords(keywords?: readonly CardKeyword[]): CardKeyword[] {
@@ -15,74 +14,42 @@ export function getCardPlayEffectConfig(card: CardDefinition | undefined): CardP
   return card?.play.effectConfig;
 }
 
-export function getCardSurgeEffectConfig(card: CardDefinition | undefined): CardPlayEffectConfig | undefined {
-  return card?.play.surgeEffectConfig;
+export function getCardPlayModifierEffectConfig(
+  card: CardDefinition | undefined,
+  modifierId: string
+): CardPlayEffectConfig | undefined {
+  return card?.play.modifierEffectConfigs?.[modifierId];
 }
 
-export function getResolvedCardPlayEffectConfigs(card: CardDefinition | undefined, surgeActive = false): CardPlayEffectConfig[] {
+export function getResolvedCardPlayEffectConfigs(
+  card: CardDefinition | undefined,
+  activeModifierIds: readonly string[] = []
+): CardPlayEffectConfig[] {
   const baseEffectConfig = getCardPlayEffectConfig(card);
-  const surgeEffectConfig = surgeActive ? getCardSurgeEffectConfig(card) : undefined;
+  const modifierEffectConfigs = [...new Set(activeModifierIds)]
+    .map((modifierId) => getCardPlayModifierEffectConfig(card, modifierId))
+    .filter((effectConfig): effectConfig is CardPlayEffectConfig => Boolean(effectConfig));
 
-  return [baseEffectConfig, surgeEffectConfig].filter((effectConfig): effectConfig is CardPlayEffectConfig => Boolean(effectConfig));
+  return [baseEffectConfig, ...modifierEffectConfigs].filter(
+    (effectConfig): effectConfig is CardPlayEffectConfig => Boolean(effectConfig)
+  );
 }
 
-export function getCardCascadeUnitBuffConfig(card: CardDefinition | undefined): CascadeUnitBuffPlayEffectConfig | undefined {
-  const effectConfig = getCardPlayEffectConfig(card);
-  return effectConfig?.type === "cascade_unit_buff" ? effectConfig : undefined;
+export function getCardPlayEffectConfigsByType(
+  card: CardDefinition | undefined,
+  effectType: string,
+  activeModifierIds: readonly string[] = []
+): CardPlayEffectConfig[] {
+  return getResolvedCardPlayEffectConfigs(card, activeModifierIds).filter((effectConfig) => effectConfig.type === effectType);
 }
-
-registerPlayEffectMagnitudeCalculator("mass_damage", (effectConfig) => effectConfig.amount);
-registerPlayEffectMagnitudeCalculator("global_unit_buff", (effectConfig) =>
-  Math.max(Math.abs(effectConfig.attackBonus), Math.abs(effectConfig.armorBonus))
-);
-registerPlayEffectMagnitudeCalculator("destroy_damaged_units", () => 0);
-registerPlayEffectMagnitudeCalculator("draw_and_gain_resources", (effectConfig) =>
-  Math.max(
-    effectConfig.drawCount,
-    ...getRegisteredResourceIds().map((resource) => effectConfig.resources[resource] ?? 0),
-    0
-  )
-);
-registerPlayEffectMagnitudeCalculator("resources_by_unit_count", (effectConfig) =>
-  Math.max(
-    ...getRegisteredResourceIds().map(
-      (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
-    ),
-    0
-  )
-);
-registerPlayEffectMagnitudeCalculator("resources_by_bloom_count", (effectConfig) =>
-  Math.max(
-    ...getRegisteredResourceIds().map(
-      (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
-    ),
-    0
-  )
-);
-registerPlayEffectMagnitudeCalculator("resources_by_salvage_count", (effectConfig) =>
-  Math.max(
-    ...getRegisteredResourceIds().map(
-      (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
-    ),
-    0
-  )
-);
-registerPlayEffectMagnitudeCalculator("hex_area_damage", (effectConfig) => effectConfig.amount);
-registerPlayEffectMagnitudeCalculator("cascade_unit_buff", (effectConfig) =>
-  Math.max(
-    Math.abs(effectConfig.attackBonus),
-    Math.abs(effectConfig.armorBonus),
-    effectConfig.grantedKeywords && effectConfig.grantedKeywords.length > 0 ? 1 : 0
-  )
-);
 
 function getEffectConfigMagnitude(effectConfig: CardPlayEffectConfig): number {
   const calculator = getPlayEffectMagnitudeCalculator(effectConfig.type);
   return calculator ? calculator(effectConfig as never) : 0;
 }
 
-export function getCardPlayEffectMagnitude(card: CardDefinition | undefined, surgeActive = false): number {
-  const effectConfigs = getResolvedCardPlayEffectConfigs(card, surgeActive);
+export function getCardPlayEffectMagnitude(card: CardDefinition | undefined, activeModifierIds: readonly string[] = []): number {
+  const effectConfigs = getResolvedCardPlayEffectConfigs(card, activeModifierIds);
   if (effectConfigs.length === 0) {
     return 0;
   }
@@ -108,4 +75,3 @@ export function getUnitCardKeywords(cardId: string | null | undefined): CardKeyw
 export function cardHasKeyword(definition: CardDefinition, keyword: CardKeyword): boolean {
   return getCardKeywords(definition).includes(keyword);
 }
-

@@ -1,11 +1,11 @@
 import {
   cardHasKeyword,
-  getCardCascadeUnitBuffConfig,
   getCardDefinition,
   getCardKeywords,
   getCardPlayEffectMagnitude,
   getCardPlayEffectConfig,
-  getCardSurgeEffectConfig,
+  getCardPlayEffectConfigsByType,
+  getCardPlayModifierEffectConfig,
   getResolvedCardPlayEffectConfigs,
   getUnitCardKeywords,
 } from "./content/cards/catalog";
@@ -48,9 +48,9 @@ export const cardCatalogFacade = {
   getUnitCardKeywords,
   cardHasKeyword,
   getCardPlayEffectConfig,
-  getCardSurgeEffectConfig,
+  getCardPlayModifierEffectConfig,
   getResolvedCardPlayEffectConfigs,
-  getCardCascadeUnitBuffConfig,
+  getCardPlayEffectConfigsByType,
   getCardPlayEffectMagnitude,
 } as const;
 

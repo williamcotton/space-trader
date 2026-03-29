@@ -10,8 +10,12 @@ import {
   createResourcesByBloomCountInstructions,
   createResourcesBySalvageCountInstructions,
   createResourcesByUnitCountInstructions,
-} from "../../cards/instructionFactories";
-import { getPlayEffectResolver, registerPlayEffectResolver } from "../../../registries/playEffects";
+} from "./playEffects";
+import {
+  getPlayEffectResolver,
+  registerPlayEffectMagnitudeCalculator,
+  registerPlayEffectResolver,
+} from "../../../registries/playEffects";
 import { registerStackEffectMagnitudeCalculator } from "../../../registries/stackEffectMagnitudes";
 import { LAYER } from "../../../systems/continuousEffects";
 import type { ResourceType } from "../../../model/enums";
@@ -151,24 +155,77 @@ function createModifyUnitUntilEndOfTurnInstructions(attackBonus: number, armorBo
 
 function createCardOwnedCascadeUnitBuffInstructions(context: InstructionContext): GameInstruction[] {
   const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
-  const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, Boolean(context.item.surgeActive))
+  const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, context.item.activeModifierIds ?? [])
     .filter((effectConfig) => effectConfig.type === "cascade_unit_buff");
   if (effectConfigs.length === 0) {
     return [{ type: "LOG", text: `Resolved ${context.item.label}: missing cascade config on source card.` }];
   }
 
-  return effectConfigs.flatMap((effectConfig) => createCascadeUnitBuffInstructions(effectConfig)(context));
+  return effectConfigs.flatMap((effectConfig) => createCascadeUnitBuffInstructions(effectConfig as never)(context));
 }
 
-registerPlayEffectResolver("mass_damage", (context, effectConfig) => createMassDamageInstructions(effectConfig)(context));
-registerPlayEffectResolver("global_unit_buff", (context, effectConfig) => createGlobalUnitBuffInstructions(effectConfig)(context));
-registerPlayEffectResolver("destroy_damaged_units", (context, effectConfig) => createDestroyDamagedUnitsInstructions(effectConfig)(context));
-registerPlayEffectResolver("draw_and_gain_resources", (context, effectConfig) => createDrawAndGainResourcesInstructions(effectConfig)(context));
-registerPlayEffectResolver("resources_by_unit_count", (context, effectConfig) => createResourcesByUnitCountInstructions(effectConfig)(context));
-registerPlayEffectResolver("resources_by_bloom_count", (context, effectConfig) => createResourcesByBloomCountInstructions(effectConfig)(context));
-registerPlayEffectResolver("resources_by_salvage_count", (context, effectConfig) => createResourcesBySalvageCountInstructions(effectConfig)(context));
-registerPlayEffectResolver("hex_area_damage", (context, effectConfig) => createHexAreaDamageInstructions(effectConfig)(context));
-registerPlayEffectResolver("cascade_unit_buff", (context, effectConfig) => createCascadeUnitBuffInstructions(effectConfig)(context));
+registerPlayEffectResolver("mass_damage", (context, effectConfig) => createMassDamageInstructions(effectConfig as never)(context));
+registerPlayEffectResolver("global_unit_buff", (context, effectConfig) => createGlobalUnitBuffInstructions(effectConfig as never)(context));
+registerPlayEffectResolver("destroy_damaged_units", (context, effectConfig) => createDestroyDamagedUnitsInstructions(effectConfig as never)(context));
+registerPlayEffectResolver("draw_and_gain_resources", (context, effectConfig) => createDrawAndGainResourcesInstructions(effectConfig as never)(context));
+registerPlayEffectResolver("resources_by_unit_count", (context, effectConfig) => createResourcesByUnitCountInstructions(effectConfig as never)(context));
+registerPlayEffectResolver("resources_by_bloom_count", (context, effectConfig) => createResourcesByBloomCountInstructions(effectConfig as never)(context));
+registerPlayEffectResolver("resources_by_salvage_count", (context, effectConfig) => createResourcesBySalvageCountInstructions(effectConfig as never)(context));
+registerPlayEffectResolver("hex_area_damage", (context, effectConfig) => createHexAreaDamageInstructions(effectConfig as never)(context));
+registerPlayEffectResolver("cascade_unit_buff", (context, effectConfig) => createCascadeUnitBuffInstructions(effectConfig as never)(context));
+
+registerPlayEffectMagnitudeCalculator("mass_damage", (effectConfig) => Number(effectConfig.amount ?? 0));
+registerPlayEffectMagnitudeCalculator("global_unit_buff", (effectConfig) =>
+  Math.max(
+    Math.abs(Number(effectConfig.attackBonus ?? 0)),
+    Math.abs(Number(effectConfig.armorBonus ?? 0))
+  )
+);
+registerPlayEffectMagnitudeCalculator("destroy_damaged_units", () => 0);
+registerPlayEffectMagnitudeCalculator("draw_and_gain_resources", (effectConfig) =>
+  Math.max(
+    Number(effectConfig.drawCount ?? 0),
+    ...getRegisteredResourceIds().map((resource) =>
+      Number((effectConfig.resources as Record<string, number> | undefined)?.[resource] ?? 0)
+    ),
+    0
+  )
+);
+registerPlayEffectMagnitudeCalculator("resources_by_unit_count", (effectConfig) =>
+  Math.max(
+    ...getRegisteredResourceIds().map((resource) =>
+      Number((effectConfig.resourcesPerThreshold as Record<string, number> | undefined)?.[resource] ?? 0) *
+      Number(effectConfig.maxThresholds ?? 1)
+    ),
+    0
+  )
+);
+registerPlayEffectMagnitudeCalculator("resources_by_bloom_count", (effectConfig) =>
+  Math.max(
+    ...getRegisteredResourceIds().map((resource) =>
+      Number((effectConfig.resourcesPerThreshold as Record<string, number> | undefined)?.[resource] ?? 0) *
+      Number(effectConfig.maxThresholds ?? 1)
+    ),
+    0
+  )
+);
+registerPlayEffectMagnitudeCalculator("resources_by_salvage_count", (effectConfig) =>
+  Math.max(
+    ...getRegisteredResourceIds().map((resource) =>
+      Number((effectConfig.resourcesPerThreshold as Record<string, number> | undefined)?.[resource] ?? 0) *
+      Number(effectConfig.maxThresholds ?? 1)
+    ),
+    0
+  )
+);
+registerPlayEffectMagnitudeCalculator("hex_area_damage", (effectConfig) => Number(effectConfig.amount ?? 0));
+registerPlayEffectMagnitudeCalculator("cascade_unit_buff", (effectConfig) =>
+  Math.max(
+    Math.abs(Number(effectConfig.attackBonus ?? 0)),
+    Math.abs(Number(effectConfig.armorBonus ?? 0)),
+    Array.isArray(effectConfig.grantedKeywords) && effectConfig.grantedKeywords.length > 0 ? 1 : 0
+  )
+);
 
 function createInstructionsForPlayEffectConfig(
   context: InstructionContext,
@@ -184,7 +241,7 @@ function createCardOwnedConfiguredInstructions(
   missingMessage: string
 ): GameInstruction[] {
   const sourceCard = context.item.sourceCardId ? getCardDefinition(context.item.sourceCardId) : undefined;
-  const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, Boolean(context.item.surgeActive))
+  const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, context.item.activeModifierIds ?? [])
     .filter((effectConfig) => effectConfig.type === effectType);
   if (effectConfigs.length === 0) {
     return [{ type: "LOG", text: `Resolved ${context.item.label}: ${missingMessage}` }];
@@ -657,32 +714,32 @@ export const STACK_EFFECTS = BASE_STACK_EFFECTS;
 registerStackEffectMagnitudeCalculator("damage_enemy_base", (behavior) => behavior.amount);
 registerStackEffectMagnitudeCalculator("damage_entity", (behavior) => behavior.amount);
 registerStackEffectMagnitudeCalculator("mass_damage", (_behavior, options) =>
-  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), Boolean(options.surgeActive)) : 0
+  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
 );
 registerStackEffectMagnitudeCalculator("global_unit_buff", (_behavior, options) =>
-  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), Boolean(options.surgeActive)) : 0
+  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
 );
 registerStackEffectMagnitudeCalculator("destroy_damaged_units", (_behavior, options) =>
-  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), Boolean(options.surgeActive)) : 0
+  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
 );
 registerStackEffectMagnitudeCalculator("draw_and_gain_resources", (_behavior, options) =>
-  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), Boolean(options.surgeActive)) : 0
+  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
 );
 registerStackEffectMagnitudeCalculator("resources_by_unit_count", (_behavior, options) =>
-  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), Boolean(options.surgeActive)) : 0
+  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
 );
 registerStackEffectMagnitudeCalculator("resources_by_bloom_count", (_behavior, options) =>
-  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), Boolean(options.surgeActive)) : 0
+  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
 );
 registerStackEffectMagnitudeCalculator("resources_by_salvage_count", (_behavior, options) =>
-  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), Boolean(options.surgeActive)) : 0
+  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
 );
 registerStackEffectMagnitudeCalculator("hex_area_damage", (_behavior, options) =>
-  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), Boolean(options.surgeActive)) : 0
+  options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
 );
 registerStackEffectMagnitudeCalculator("cascade_unit_buff", (behavior, options) =>
   options.sourceCardId
-    ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), Boolean(options.surgeActive))
+    ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? [])
     : Math.max(Math.abs(behavior.attackBonus), Math.abs(behavior.armorBonus))
 );
 registerStackEffectMagnitudeCalculator("draw_cards", (behavior) => behavior.count);

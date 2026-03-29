@@ -116,12 +116,17 @@ export function migrateRuntimeState(state: GameState): void {
     if (typeof stackItem.effectId === "undefined") {
       stackItem.effectId = "noop_log";
     }
-    if (typeof stackItem.surgeActive !== "boolean") {
-      stackItem.surgeActive = false;
+    const legacySurgeActive = (stackItem as typeof stackItem & { surgeActive?: unknown }).surgeActive;
+    if (!Array.isArray(stackItem.activeModifierIds)) {
+      stackItem.activeModifierIds = legacySurgeActive === true ? ["surge"] : [];
     }
     const definition = getStackEffectDefinition(stackItem.effectId);
     if (typeof stackItem.effectMagnitude !== "number") {
-      stackItem.effectMagnitude = getStackEffectMagnitude(stackItem.effectId, stackItem.sourceCardId, stackItem.surgeActive);
+      stackItem.effectMagnitude = getStackEffectMagnitude(
+        stackItem.effectId,
+        stackItem.sourceCardId,
+        stackItem.activeModifierIds
+      );
     }
     if (typeof stackItem.targetStackItemId === "undefined") {
       stackItem.targetStackItemId = null;

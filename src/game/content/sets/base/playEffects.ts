@@ -1,11 +1,25 @@
-import type { GameInstruction, InstructionContext } from "../../actions/instructions";
-import { areSameHex, hexDistance } from "../../model/hex";
-import type { UnitEntity } from "../../model/state";
-import { LAYER } from "../../systems/continuousEffects";
-import { getCascadeAffectedHexes } from "../../systems/cascade";
-import type { ResourceType, UnitRole } from "../../model/enums";
-import type { CardCost, CardKeyword } from "./catalog";
-import { getMechanicApi, type BloomMechanicApi, type SalvageMechanicApi } from "../../registries/mechanicApis";
+import type { GameInstruction, InstructionContext } from "../../../actions/instructions";
+import type { ResourceType, UnitRole } from "../../../model/enums";
+import { areSameHex, hexDistance } from "../../../model/hex";
+import type { PlayerId } from "../../../model/ids";
+import type { GameState, UnitEntity } from "../../../model/state";
+import { getMechanicApi } from "../../../registries/mechanicApis";
+import { getCascadeAffectedHexes } from "../../../systems/cascade";
+import { LAYER } from "../../../systems/continuousEffects";
+import type { CardCost, CardKeyword, CardPlayEffectConfig } from "../../cards/catalog";
+
+type BloomMechanicApi = {
+  getBloomedUnitIdsThisTurn(state: Readonly<GameState>): string[];
+  getLastBloomSourceItemId(state: Readonly<GameState>): string | null;
+  setLastBloomSourceItemId(state: GameState, itemId: string | null): void;
+  getLastBloomedUnitIds(state: Readonly<GameState>): string[];
+  resetBloomResolutionState(state: GameState): void;
+};
+
+type SalvageMechanicApi = {
+  getSalvageTriggersThisTurn(state: Readonly<GameState>, playerId: PlayerId): number;
+  incrementSalvageTriggersThisTurn(state: GameState, playerId: PlayerId): void;
+};
 
 export type EffectRelation = "ally" | "enemy" | "any";
 
@@ -69,6 +83,71 @@ export type HexAreaDamageOptions = {
   amount: number;
   radius: number;
   relation: EffectRelation;
+};
+
+export type MassDamagePlayEffectConfig = CardPlayEffectConfig & {
+  type: "mass_damage";
+  amount: number;
+  relation: EffectRelation;
+};
+
+export type GlobalUnitBuffPlayEffectConfig = CardPlayEffectConfig & {
+  type: "global_unit_buff";
+  attackBonus: number;
+  armorBonus: number;
+  relation: EffectRelation;
+  roleFilter?: UnitRole;
+};
+
+export type DestroyDamagedUnitsPlayEffectConfig = CardPlayEffectConfig & {
+  type: "destroy_damaged_units";
+  relation: EffectRelation;
+};
+
+export type DrawAndGainResourcesPlayEffectConfig = CardPlayEffectConfig & {
+  type: "draw_and_gain_resources";
+  drawCount: number;
+  resources: CardCost;
+};
+
+export type ResourcesByUnitCountPlayEffectConfig = CardPlayEffectConfig & {
+  type: "resources_by_unit_count";
+  relation: EffectRelation;
+  threshold: number;
+  resourcesPerThreshold: CardCost;
+  roleFilter?: UnitRole;
+  maxThresholds?: number;
+};
+
+export type ResourcesByBloomCountPlayEffectConfig = CardPlayEffectConfig & {
+  type: "resources_by_bloom_count";
+  threshold: number;
+  resourcesPerThreshold: CardCost;
+  maxThresholds?: number;
+};
+
+export type ResourcesBySalvageCountPlayEffectConfig = CardPlayEffectConfig & {
+  type: "resources_by_salvage_count";
+  threshold: number;
+  resourcesPerThreshold: CardCost;
+  maxThresholds?: number;
+};
+
+export type HexAreaDamagePlayEffectConfig = CardPlayEffectConfig & {
+  type: "hex_area_damage";
+  amount: number;
+  radius: number;
+  relation: EffectRelation;
+};
+
+export type CascadeUnitBuffPlayEffectConfig = CardPlayEffectConfig & {
+  type: "cascade_unit_buff";
+  attackBonus: number;
+  armorBonus: number;
+  waves: number;
+  roleFilter?: UnitRole;
+  grantedKeywords?: CardKeyword[];
+  reward?: CascadeUnitBuffReward;
 };
 
 function requireBloomApi(): BloomMechanicApi {
@@ -260,13 +339,6 @@ export function createCascadeUnitBuffInstructions(options: CascadeUnitBuffOption
 
     return instructions;
   };
-}
-
-export function createCascadeAttackBuffInstructions(amount: number, waves: number) {
-  return createCascadeUnitBuffInstructions({
-    attackBonus: amount,
-    waves,
-  });
 }
 
 export function createMassDamageInstructions(options: MassDamageOptions) {

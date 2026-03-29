@@ -1,5 +1,5 @@
 import type { GameEvent, StackItemPushedEvent } from "../actions/events";
-import { getCardCascadeUnitBuffConfig, getCardDefinition } from "../content/cards/catalog";
+import { getCardDefinition, getCardPlayEffectConfigsByType } from "../content/cards/catalog";
 import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/stackEffects";
 import type { GamePhase } from "../model/enums";
 import type { PlayerId } from "../model/ids";
@@ -147,12 +147,13 @@ registerTriggerConditionEvaluator("on_cascaded", (state, event, _condition, unit
   }
 
   const sourceCard = getCardDefinition(event.sourceCardId);
-  const cascadeConfig = getCardCascadeUnitBuffConfig(sourceCard);
-  if (!cascadeConfig) {
+  const cascadeConfig = getCardPlayEffectConfigsByType(sourceCard, "cascade_unit_buff")[0];
+  const waves = Number(cascadeConfig?.waves ?? NaN);
+  if (!Number.isFinite(waves)) {
     return false;
   }
 
-  const affectedHexes = getCascadeAffectedHexes(state, event.controllerId, event.targetHex, cascadeConfig.waves, {
+  const affectedHexes = getCascadeAffectedHexes(state, event.controllerId, event.targetHex, waves, {
     excludeKeywordEffectIdPrefix: `ce_${event.itemId}_`,
   });
   return affectedHexes.some((coord) => coord.q === unit.coord.q && coord.r === unit.coord.r);
@@ -225,7 +226,7 @@ export function evaluateTriggersFromEvent(
         ownerId: unit.ownerId,
         effectId: trigger.effectId,
         effectMagnitude: getStackEffectMagnitude(trigger.effectId),
-        surgeActive: false,
+        activeModifierIds: [],
         targetStackItemId: null,
         targetEntityId,
         objectKind: effectDefinition.object.kind,

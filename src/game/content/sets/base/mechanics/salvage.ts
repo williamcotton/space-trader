@@ -127,9 +127,10 @@ export function installSalvageMechanic(): void {
       return -Infinity;
     }
 
-    const thresholdsMet = Math.floor(getSalvageTriggersThisTurn(state, botPlayerId) / effectConfig.threshold);
-    const payoutMultiplier = effectConfig.maxThresholds
-      ? Math.min(thresholdsMet, effectConfig.maxThresholds)
+    const thresholdsMet = Math.floor(getSalvageTriggersThisTurn(state, botPlayerId) / Number(effectConfig.threshold ?? 1));
+    const maxThresholds = typeof effectConfig.maxThresholds === "number" ? effectConfig.maxThresholds : undefined;
+    const payoutMultiplier = maxThresholds
+      ? Math.min(thresholdsMet, maxThresholds)
       : thresholdsMet;
 
     if (payoutMultiplier <= 0) {
@@ -138,7 +139,8 @@ export function installSalvageMechanic(): void {
 
     let score = 48 + payoutMultiplier * 18;
     for (const resource of getRegisteredResourceIds()) {
-      score += (effectConfig.resourcesPerThreshold[resource] ?? 0) * payoutMultiplier * 12;
+      const resourcesPerThreshold = effectConfig.resourcesPerThreshold as Record<string, number> | undefined;
+      score += (resourcesPerThreshold?.[resource] ?? 0) * payoutMultiplier * 12;
     }
 
     return score;

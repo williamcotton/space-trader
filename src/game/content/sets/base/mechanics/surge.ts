@@ -2,6 +2,7 @@ import type { PlayerId } from "../../../../model/ids";
 import type { GameState } from "../../../../model/state";
 import { registerTriggerConditionEvaluator } from "../../../../registries/triggerConditions";
 import { registerTriggerConditionScoreContributor } from "../../../../registries/aiMechanics";
+import { registerCardPlayModifier } from "../../../../registries/cardPlayModifiers";
 import { registerMechanicStateInitializer, registerMechanicStateMigrator, registerMechanicTurnResetHook } from "../../../../registries/mechanicState";
 import { getCardDefinition } from "../../../cards/catalog";
 import { ensureMechanicStateNamespace } from "../../../mechanics/stateAccess";
@@ -33,7 +34,7 @@ function getSurgeTurnState(state: GameState): SurgeTurnState {
   return ensureMechanicStateNamespace(state, "turn", SURGE_MECHANIC_ID, createSurgeTurnState);
 }
 
-export function getTacticsCastThisTurn(state: GameState, playerId: PlayerId): number {
+export function getTacticsCastThisTurn(state: Readonly<GameState>, playerId: PlayerId): number {
   return getSurgeTurnState(state).tacticsCastByPlayer[playerId];
 }
 
@@ -71,8 +72,16 @@ export function installSurgeMechanic(): void {
 
   registerMechanicApi(SURGE_MECHANIC_ID, {
     installCompatibilityShim: installSurgeCompatibilityShim,
-    getTacticsCastThisTurn,
-    incrementTacticsCastThisTurn,
+  });
+
+  registerCardPlayModifier(SURGE_MECHANIC_ID, {
+    label: "Surge",
+    isActive: (state, playerId, card) => card.kind === "tactic" && getTacticsCastThisTurn(state, playerId) > 0,
+    onCardPlayedToStack: (state, playerId, card) => {
+      if (card.kind === "tactic") {
+        incrementTacticsCastThisTurn(state, playerId);
+      }
+    },
   });
 
   registerMechanicStateMigrator(SURGE_MECHANIC_ID, (state) => {
@@ -85,7 +94,11 @@ export function installSurgeMechanic(): void {
   registerMechanicTurnResetHook(SURGE_MECHANIC_ID, resetSurgeTurnState);
 
   registerTriggerConditionEvaluator("on_owner_surged_tactic_played", (_state, event, _condition, unit) => {
-    if (event.type !== "CARD_PLAYED_TO_STACK" || event.playerId !== unit.ownerId || !event.surgeActive) {
+    if (
+      event.type !== "CARD_PLAYED_TO_STACK" ||
+      event.playerId !== unit.ownerId ||
+      !event.activeModifierIds?.includes(SURGE_MECHANIC_ID)
+    ) {
       return false;
     }
     return getCardDefinition(event.cardId)?.kind === "tactic";

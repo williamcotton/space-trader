@@ -1,5 +1,10 @@
 import type { GameEvent } from "../actions/events";
-import { getCardCascadeUnitBuffConfig, getCardDefinition, getResolvedCardPlayEffectConfigs, type CardAnimationAccent } from "../content/cards/catalog";
+import {
+  getCardDefinition,
+  getCardPlayEffectConfigsByType,
+  getResolvedCardPlayEffectConfigs,
+  type CardAnimationAccent,
+} from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import "../presentation";
 import type { PlayerId } from "../model/ids";
@@ -414,7 +419,7 @@ registerStackResolveAnimationBuilder("cascade_unit_buff", ({ event, state, baseI
     state,
     baseId,
     event.label,
-    getCardCascadeUnitBuffConfig(sourceCard)?.waves ?? behavior.waves,
+    Number(getCardPlayEffectConfigsByType(sourceCard, "cascade_unit_buff")[0]?.waves ?? behavior.waves),
     getCardAnimationAccent(event.sourceCardId)
   )
 );
@@ -424,7 +429,7 @@ registerStackResolveAnimationBuilder("hex_area_damage", ({ event, state, baseId,
     return null;
   }
 
-  const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, Boolean(event.surgeActive))
+  const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, event.activeModifierIds ?? [])
     .filter((effectConfig) => effectConfig.type === "hex_area_damage");
   if (effectConfigs.length === 0) {
     return null;
@@ -437,7 +442,11 @@ registerStackResolveAnimationBuilder("hex_area_damage", ({ event, state, baseId,
     ageSeconds: 0,
     durationSeconds: 1,
     origin: event.targetHex,
-    hexes: getUniqueHexes(effectConfigs.flatMap((effectConfig) => getRadiusAffectedHexes(state, event.targetHex as HexCoord, effectConfig.radius))),
+    hexes: getUniqueHexes(
+      effectConfigs.flatMap((effectConfig) =>
+        getRadiusAffectedHexes(state, event.targetHex as HexCoord, Number(effectConfig.radius ?? 0))
+      )
+    ),
     label: event.label,
     accent: getCardAnimationAccent(event.sourceCardId),
   };
@@ -483,23 +492,28 @@ function buildStackResolutionAnimation(
     }
   }
   if (cardResolveAnimation?.kind === "board_blast") {
-    const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, Boolean(event.surgeActive));
+    const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, event.activeModifierIds ?? []);
     const controllerBase = state.entities[state.players[event.controllerId].baseEntityId];
-    const affectedHexes = getUniqueHexes(effectConfigs.flatMap((effectConfig) =>
-      effectConfig.type === "mass_damage"
-        ? getAffectedUnitHexes(before, event.controllerId, effectConfig.relation)
+    const affectedHexes = getUniqueHexes(effectConfigs.flatMap((effectConfig) => {
+      const relation = effectConfig.relation === "ally" || effectConfig.relation === "enemy" ? effectConfig.relation : "any";
+      const roleFilter = effectConfig.roleFilter === "combat" || effectConfig.roleFilter === "resource" || effectConfig.roleFilter === "utility"
+        ? effectConfig.roleFilter
+        : undefined;
+
+      return effectConfig.type === "mass_damage"
+        ? getAffectedUnitHexes(before, event.controllerId, relation)
         : effectConfig.type === "global_unit_buff"
-          ? getLiveUnitHexes(state, event.controllerId, effectConfig.relation, effectConfig.roleFilter)
+          ? getLiveUnitHexes(state, event.controllerId, relation, roleFilter)
           : effectConfig.type === "destroy_damaged_units"
-            ? getDestroyedUnitHexes(before, state, event.controllerId, effectConfig.relation)
+            ? getDestroyedUnitHexes(before, state, event.controllerId, relation)
             : effectConfig.type === "draw_and_gain_resources"
               ? controllerBase && controllerBase.kind === "base"
                 ? [controllerBase.coord]
                 : []
               : effectConfig.type === "resources_by_unit_count"
-                ? getLiveUnitHexes(state, event.controllerId, effectConfig.relation, effectConfig.roleFilter)
-                : []
-    ));
+                ? getLiveUnitHexes(state, event.controllerId, relation, roleFilter)
+                : [];
+    }));
 
     if (affectedHexes.length > 0) {
       return {
