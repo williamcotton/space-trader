@@ -1,17 +1,16 @@
 import type { GameCommand } from "../actions/commands";
-import { getCardDefinition, type CardDefinition } from "../content/cards/catalog";
+import { getCardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
-import { MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord } from "../model/state";
-import type { PlayerId } from "../model/ids";
+import { MAX_HAND_SIZE, type EntityState, type GameState } from "../model/state";
 import { canUnitHarvestNode, getResourceNodeById } from "../systems/harvesting";
 import {
-  getAttackKeywordBlockReason,
-  getTargetingKeywordBlockReason,
-  isUnitBlockedFromAttackingBySummoningSickness,
-  isUnitBlockedFromMovingBySummoningSickness,
-} from "../systems/keywords";
-import { canAffordCardCost, getFirstOpenBaseAdjacentTile, hasEntityAtCoord } from "../model/queries";
+  canUnitAttack,
+  canUnitMove,
+  getDirectAttackBlockReason,
+} from "./directInteraction";
+import { canAffordCardCost, hasEntityAtCoord } from "../model/queries";
+import { validatePlayCardCommand } from "./cardPlayLegality";
 
 export type CommandValidationResult = {
   ok: boolean;
@@ -47,64 +46,6 @@ function requireNotDiscardPhase(state: GameState, action: string): CommandValida
 
 function requireDiscardPhase(state: GameState): CommandValidationResult | null {
   return state.phase !== "discard" ? { ok: false, reason: "Cards can only be discarded during discard phase." } : null;
-}
-
-// --- Entity Target Validation ---
-
-function validateEntityTargetForEffect(
-  state: GameState,
-  playerId: PlayerId,
-  targetEntityId: string | undefined,
-  card: CardDefinition
-): CommandValidationResult {
-  if (!targetEntityId) {
-    return { ok: false, reason: "This card requires a battlefield target." };
-  }
-
-  const target = getEntity(state, targetEntityId);
-  if (!target) {
-    return { ok: false, reason: "Target entity does not exist." };
-  }
-
-  if (card.play.targetMode !== "entity") {
-    return { ok: true };
-  }
-
-  if (!card.play.isValidTarget(state, target, playerId)) {
-    return { ok: false, reason: "Target does not meet card requirements." };
-  }
-
-  const keywordBlockReason = getTargetingKeywordBlockReason(state, playerId, target);
-  if (keywordBlockReason) {
-    return { ok: false, reason: keywordBlockReason };
-  }
-
-  return { ok: true };
-}
-
-function validateHexTargetForEffect(
-  state: GameState,
-  playerId: PlayerId,
-  targetHex: HexCoord | undefined,
-  card: CardDefinition
-): CommandValidationResult {
-  if (!targetHex) {
-    return { ok: false, reason: "This card requires a hex target." };
-  }
-
-  if (card.play.targetMode !== "hex") {
-    return { ok: true };
-  }
-
-  if (!isWithinMapBounds(targetHex, state.map)) {
-    return { ok: false, reason: "Target hex is outside map bounds." };
-  }
-
-  if (!card.play.isValidHexTarget(state, targetHex, playerId)) {
-    return { ok: false, reason: "Target hex does not meet card requirements." };
-  }
-
-  return { ok: true };
 }
 
 // --- Command Validators ---
@@ -210,7 +151,7 @@ function validateMoveUnit(state: GameState, command: Extract<GameCommand, { type
   if (entity.kind !== "unit") return { ok: false, reason: "Only units can move." };
   if (entity.ownerId !== command.playerId) return { ok: false, reason: "Cannot move opponent unit." };
   if (state.selectedEntityId !== command.entityId) return { ok: false, reason: "Unit must be selected before moving." };
-  if (isUnitBlockedFromMovingBySummoningSickness(entity)) return { ok: false, reason: "Unit has summoning sickness." };
+  if (!canUnitMove(entity)) return { ok: false, reason: "Unit has summoning sickness." };
 
   const distance = hexDistance(entity.coord, command.to);
   if (distance === 0) return { ok: false, reason: "Unit is already on target tile." };
@@ -233,14 +174,14 @@ function validateAttackUnit(state: GameState, command: Extract<GameCommand, { ty
   if (attacker.ownerId !== command.playerId) return { ok: false, reason: "Cannot attack with opponent unit." };
   if (attacker.role !== "combat") return { ok: false, reason: "Only combat units can attack." };
   if (state.selectedEntityId !== command.attackerId) return { ok: false, reason: "Attacker must be selected before attacking." };
-  if (isUnitBlockedFromAttackingBySummoningSickness(attacker)) return { ok: false, reason: "Unit has summoning sickness." };
+  if (!canUnitAttack(attacker)) return { ok: false, reason: "Unit has summoning sickness." };
   if (attacker.attacksRemaining <= 0) return { ok: false, reason: "Unit has no attacks remaining." };
 
   const target = getEntity(state, command.targetId);
   if (!target) return { ok: false, reason: "Target does not exist." };
   if (target.ownerId === command.playerId) return { ok: false, reason: "Cannot attack friendly entity." };
 
-  const keywordBlockReason = getAttackKeywordBlockReason(state, command.playerId, target);
+  const keywordBlockReason = getDirectAttackBlockReason(state, command.playerId, target);
   if (keywordBlockReason) return { ok: false, reason: keywordBlockReason };
 
   const distance = hexDistance(attacker.coord, target.coord);
@@ -275,64 +216,6 @@ function validateHarvestNode(state: GameState, command: Extract<GameCommand, { t
   return { ok: true };
 }
 
-// --- Card Validation Helpers ---
-
-function validateCardSpeed(
-  state: GameState,
-  command: Extract<GameCommand, { type: "PLAY_CARD" }>,
-  card: CardDefinition
-): CommandValidationResult {
-  if (card.speed !== "main") return { ok: true };
-  if (state.activePlayerId !== command.playerId) return { ok: false, reason: "Main-speed cards can only be played by the active player." };
-  if (state.phase !== "main") return { ok: false, reason: "Main-speed cards can only be played during main phase." };
-  if (state.stack.length > 0) return { ok: false, reason: "Main-speed cards require an empty stack." };
-  return { ok: true };
-}
-
-function validateCardTargeting(
-  state: GameState,
-  command: Extract<GameCommand, { type: "PLAY_CARD" }>,
-  card: CardDefinition
-): CommandValidationResult {
-  const effect = getStackEffectDefinition(card.play.stackEffectId);
-  if (!effect) return { ok: false, reason: `Unknown stack effect: ${card.play.stackEffectId}` };
-
-  const targetingType = card.play.targetMode;
-
-  if (targetingType === "stack_item") {
-    if (!command.targetStackItemId) return { ok: false, reason: "Counter cards require a target stack item." };
-    const topItem = state.stack[state.stack.length - 1];
-    if (!topItem) return { ok: false, reason: "No stack item available to counter." };
-    if (topItem.id !== command.targetStackItemId) return { ok: false, reason: "Counter target must be the current top stack item." };
-    if (!topItem.counterable) return { ok: false, reason: "Target stack item is uncounterable." };
-    if (command.targetEntityId) return { ok: false, reason: "This card does not accept a battlefield target." };
-    if (command.targetHex) return { ok: false, reason: "This card does not accept a hex target." };
-    return { ok: true };
-  }
-
-  if (targetingType === "entity") {
-    if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };
-    if (command.targetHex) return { ok: false, reason: "This card does not accept a hex target." };
-    return validateEntityTargetForEffect(state, command.playerId, command.targetEntityId, card);
-  }
-
-  if (targetingType === "hex") {
-    if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };
-    if (command.targetEntityId) return { ok: false, reason: "This card does not accept a battlefield target." };
-    return validateHexTargetForEffect(state, command.playerId, command.targetHex, card);
-  }
-
-  if (command.targetStackItemId) return { ok: false, reason: "This card does not accept a stack target." };
-  if (command.targetEntityId) return { ok: false, reason: "This card does not accept a battlefield target." };
-  if (command.targetHex) return { ok: false, reason: "This card does not accept a hex target." };
-
-  if (card.play.requiresOpenBaseAdjacentTile && !getFirstOpenBaseAdjacentTile(state, command.playerId)) {
-    return { ok: false, reason: "No open base-adjacent tile to deploy unit." };
-  }
-
-  return { ok: true };
-}
-
 function validatePlayCard(state: GameState, command: Extract<GameCommand, { type: "PLAY_CARD" }>): CommandValidationResult {
   const fail = requireNotDiscardPhase(state, "play cards")
     ?? requirePriority(state, command.playerId, "play a card");
@@ -344,11 +227,11 @@ function validatePlayCard(state: GameState, command: Extract<GameCommand, { type
   const card = getCardDefinition(handCard.cardId);
   if (!card) return { ok: false, reason: `Unknown card definition: ${handCard.cardId}` };
   if (!canAffordCardCost(state, command.playerId, card.cost)) return { ok: false, reason: "Insufficient resources for card cost." };
-
-  const speedResult = validateCardSpeed(state, command, card);
-  if (!speedResult.ok) return speedResult;
-
-  return validateCardTargeting(state, command, card);
+  return validatePlayCardCommand(state, command.playerId, command.cardInstanceId, card, {
+    targetStackItemId: command.targetStackItemId,
+    targetEntityId: command.targetEntityId,
+    targetHex: command.targetHex,
+  });
 }
 
 function validateDiscardCard(state: GameState, command: Extract<GameCommand, { type: "DISCARD_CARD" }>): CommandValidationResult {

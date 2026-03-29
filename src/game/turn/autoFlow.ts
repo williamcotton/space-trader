@@ -5,14 +5,14 @@ import type { PlayerId } from "../model/ids";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../systems/harvesting";
 import {
   canAttackEntityDirectly,
-  isUnitBlockedFromAttackingBySummoningSickness,
-  isUnitBlockedFromMovingBySummoningSickness,
-} from "../systems/keywords";
+  canUnitAttack,
+  canUnitMove,
+} from "../rules/directInteraction";
 import { hasEntityAtCoord } from "../model/queries";
 import { hasAnyPlayableCard } from "./playableCards";
 
 function hasAvailableMove(state: GameState, unit: UnitEntity): boolean {
-  if (isUnitBlockedFromMovingBySummoningSickness(unit) || unit.movesRemaining <= 0) {
+  if (!canUnitMove(unit) || unit.movesRemaining <= 0) {
     return false;
   }
 
@@ -36,7 +36,7 @@ function hasAvailableMove(state: GameState, unit: UnitEntity): boolean {
 }
 
 function hasAvailableAttack(state: GameState, unit: UnitEntity): boolean {
-  if (unit.role !== "combat" || isUnitBlockedFromAttackingBySummoningSickness(unit) || unit.attacksRemaining <= 0) {
+  if (unit.role !== "combat" || !canUnitAttack(unit) || unit.attacksRemaining <= 0) {
     return false;
   }
 

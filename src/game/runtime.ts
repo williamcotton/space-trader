@@ -13,7 +13,7 @@ import { buildMatchIntroAnimation, buildVictoryAnimation, captureAnimationSnapsh
 import { configurePlayerThemes } from "./presentation";
 import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
-import { canAttackEntityDirectly } from "./systems/keywords";
+import { canAttackEntityDirectly } from "./rules/directInteraction";
 import { getAutoFlowCommand } from "./turn/autoFlow";
 import {
   PRIORITY_STOP_LABELS,
@@ -27,6 +27,7 @@ import { createEmptyDerivedState, rebuildDerivedState, type DerivedState } from 
 import type { GameState } from "./model/state";
 import type { CanvasAnimation, GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
 import { removeEffectsForEntity } from "./systems/continuousEffects";
+import { getLegalPlayCardTargetOptions, getPlayCardTargetPrompt, getRequiredPlayCardTargetMode } from "./rules/cardPlayOptions";
 
 const INITIAL_VIEWPORT: GameViewport = {
   width: 1024,
@@ -519,28 +520,36 @@ export class GameRuntime {
     const handCard = this.state.zones[playerId].hand.find((card) => card.instanceId === cardInstanceId);
     const definition = handCard ? getCardDefinition(handCard.cardId) : undefined;
     const cardName = definition?.name ?? handCard?.cardId ?? cardInstanceId;
-    const pendingTargetMode =
-      definition?.play.targetMode === "entity"
-        ? "entity"
-        : definition?.play.targetMode === "hex"
-          ? "hex"
-          : null;
+    const pendingTargetMode = definition ? getRequiredPlayCardTargetMode(definition) : null;
     const hasExplicitTarget =
       (pendingTargetMode === "entity" && Boolean(targetEntityId)) ||
       (pendingTargetMode === "hex" && Boolean(targetHex));
 
     if (pendingTargetMode && !hasExplicitTarget) {
+      const legalTargets = definition
+        ? getLegalPlayCardTargetOptions(this.state, playerId, cardInstanceId, definition)
+        : [];
+      if (legalTargets.length === 0) {
+        return this.dispatch({
+          type: "PLAY_CARD",
+          playerId,
+          cardInstanceId,
+          targetStackItemId,
+        });
+      }
+
+      const prompt = getPlayCardTargetPrompt(cardName, definition!);
       this.pendingCardTargeting = {
         playerId,
         cardInstanceId,
         cardName,
         targetMode: pendingTargetMode,
         targetStackItemId,
-        prompt: `Select ${pendingTargetMode === "hex" ? "hex" : "target"} for ${cardName}.`,
+        prompt,
       };
       this.state.log.push({
         turn: this.state.turn,
-        text: `Select ${pendingTargetMode === "hex" ? "hex" : "target"} for ${cardName}.`,
+        text: prompt,
       });
       this.notifyListeners();
       return {
