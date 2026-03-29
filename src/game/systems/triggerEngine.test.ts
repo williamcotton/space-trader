@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { createInitialGameState } from "../model/state";
 import { evaluateTriggersFromEvent, resetTriggerDepth, incrementTriggerDepth } from "./triggerEngine";
 import type { CardPlayedToStackEvent, GameEvent } from "../actions/events";
 import { dispatchCommand } from "../actions/reducers";
 
 function createState() {
-  return createInitialGameState({ map: FRONTIER_BELT_MAP });
+  return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
 
 function moveCardFromDeckToHand(state: ReturnType<typeof createState>, playerId: "player_1" | "player_2", cardId: string) {
@@ -702,7 +702,7 @@ describe("triggerEngine", () => {
     });
 
     it("does not auto-target stealthed enemy units", () => {
-      const fluxRunnerCard = CARD_DEFINITIONS.flux_runner_card as UnitCardDefinition;
+      const fluxRunnerCard = getCardDefinition("flux_runner_card") as UnitCardDefinition;
       const original = fluxRunnerCard.unit.keywords;
       fluxRunnerCard.unit.keywords = ["stealth"];
 

@@ -6,6 +6,8 @@ import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog
 import {
   getRegisteredFactionIds,
   getRegisteredFactionModule,
+  getRegisteredMap,
+  getRegisteredMaps,
   getRegisteredPrimaryResourceIdForFaction,
   getRegisteredResourceIds,
 } from "../content/registry";
@@ -176,7 +178,8 @@ export function unitHasKeyword(unit: UnitEntity, keyword: string): boolean {
 }
 
 type CreateInitialGameStateOptions = {
-  map: MapState;
+  map?: MapState;
+  mapId?: string;
   matchId?: string;
   randomSource?: () => number;
   rules?: Partial<GameRules>;
@@ -243,6 +246,27 @@ function cloneMap(map: MapState): MapState {
   };
 }
 
+function resolveInitialMap(options: CreateInitialGameStateOptions): MapState {
+  if (options.map) {
+    return cloneMap(options.map);
+  }
+
+  if (options.mapId) {
+    const map = getRegisteredMap(options.mapId);
+    if (!map) {
+      throw new Error(`Unknown map id ${options.mapId}.`);
+    }
+    return cloneMap(map);
+  }
+
+  const fallbackMap = Object.values(getRegisteredMaps())
+    .sort((a, b) => a.id.localeCompare(b.id))[0];
+  if (!fallbackMap) {
+    throw new Error("No registered maps are available.");
+  }
+  return cloneMap(fallbackMap);
+}
+
 export function createInitialZonesForPlayer(
   playerId: PlayerId,
   faction: Faction,
@@ -283,7 +307,7 @@ export function syncPlayerZoneCounts(state: Pick<GameState, "players" | "zones">
 
 export function createInitialGameState(options: CreateInitialGameStateOptions): GameState {
   ensureBaseContentLoaded();
-  const map = cloneMap(options.map);
+  const map = resolveInitialMap(options);
   const registeredFactions = getRegisteredFactionIds();
   if (registeredFactions.length === 0) {
     throw new Error("No registered factions are available.");

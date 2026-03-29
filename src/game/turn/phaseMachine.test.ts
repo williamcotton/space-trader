@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { createInitialGameState } from "../model/state";
 import { advancePhase } from "./phaseMachine";
 
@@ -14,7 +14,7 @@ function moveTopCardFromDeckToHand(state: ReturnType<typeof createInitialGameSta
 
 describe("phaseMachine", () => {
   it("advances through all phases in order", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 
     expect(state.phase).toBe("start");
     advancePhase(state);
@@ -28,7 +28,7 @@ describe("phaseMachine", () => {
   });
 
   it("rolls to next turn and swaps active player after end phase", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 
     expect(state.turn).toBe(1);
     expect(state.activePlayerId).toBe("player_1");
@@ -46,7 +46,7 @@ describe("phaseMachine", () => {
   });
 
   it("enters discard phase after end when the active player is above the soft cap", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 
     moveTopCardFromDeckToHand(state, "player_1");
     moveTopCardFromDeckToHand(state, "player_1");
@@ -64,7 +64,7 @@ describe("phaseMachine", () => {
   });
 
   it("resets unit move/attack budgets for new active player on turn handoff", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const unitId = "unit_player_2_scout";
     const unit = state.entities[unitId];
     expect(unit?.kind).toBe("unit");
@@ -94,7 +94,7 @@ describe("phaseMachine", () => {
   });
 
   it("clears bloom tracking on turn handoff", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     state.bloomedUnitIdsThisTurn = ["unit_player_1_test_bloom"];
     state.lastBloomSourceItemId = "stack_test_bloom";
     state.lastBloomedUnitIds = ["unit_player_1_test_bloom"];

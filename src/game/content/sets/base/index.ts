@@ -1,7 +1,8 @@
-import { FRONTIER_BELT_MAP } from "../../maps/frontierBelt";
-import { BASE_CARD_DEFINITIONS } from "../../cards/catalog";
-import { BASE_STACK_EFFECTS } from "../../stackEffects";
-import { BASE_STARTER_DECKS } from "../../decks/starterDecks";
+import { FRONTIER_BELT_MAP } from "./maps/frontierBelt";
+import { BASE_CARD_DEFINITIONS } from "./cards";
+import { BASE_STACK_EFFECTS } from "./stackEffects";
+import { BASE_STARTER_DECKS } from "./decks";
+import { BASE_SET_MECHANICS } from "./mechanics";
 import type { CardSet, DeckRecipe } from "../types";
 import { BASE_SET_FACTIONS } from "./factions";
 import { BASE_SET_RESOURCES } from "./resources";
@@ -28,6 +29,7 @@ const BASE_SET_DECK_RECIPES: DeckRecipe[] = [
 export const BASE_SET: CardSet = {
   id: "base",
   name: "Base Set",
+  mechanics: BASE_SET_MECHANICS,
   cards: BASE_CARD_DEFINITIONS,
   stackEffects: BASE_STACK_EFFECTS,
   factions: BASE_SET_FACTIONS,

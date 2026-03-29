@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { createInitialGameState } from "../model/state";
 import { resolveCombatAttack } from "./combat";
 import { LAYER } from "./continuousEffects";
 
 describe("resolveCombatAttack", () => {
   it("applies attack, defense, and supply penalty in locked order", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const attacker = state.entities.unit_player_1_scout;
     const target = state.entities.unit_player_2_scout;
     expect(attacker?.kind).toBe("unit");
@@ -34,7 +34,7 @@ describe("resolveCombatAttack", () => {
   });
 
   it("enforces minimum damage of 1 after modifiers", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const attacker = state.entities.unit_player_1_scout;
     const target = state.entities.unit_player_2_scout;
     expect(attacker?.kind).toBe("unit");
@@ -59,7 +59,7 @@ describe("resolveCombatAttack", () => {
   });
 
   it("applies a siege bonus when attacking bases", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const attacker = state.entities.unit_player_1_scout;
     const target = state.entities.base_player_2;
     expect(attacker?.kind).toBe("unit");
@@ -79,7 +79,7 @@ describe("resolveCombatAttack", () => {
   });
 
   it("adds Forge Captain adjacency aura to allied combat attack damage", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const attacker = state.entities.unit_player_1_scout;
     const target = state.entities.unit_player_2_scout;
     const forgeCaptain = state.entities.unit_player_1_harvester;

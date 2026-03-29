@@ -1,4 +1,4 @@
-import type { MapState } from "../../model/state";
+import type { MapState } from "../../../../model/state";
 
 export const FRONTIER_BELT_MAP: MapState = {
   id: "frontier_belt",

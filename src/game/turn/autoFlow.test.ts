@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { MAX_HAND_SIZE, createInitialGameState } from "../model/state";
 import { SPROUT_KEYWORD } from "../systems/keywords";
 import { getAutoFlowCommand } from "./autoFlow";
 
 function setupState() {
-  return createInitialGameState({ map: FRONTIER_BELT_MAP });
+  return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
 
 function moveCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: "player_1" | "player_2", cardId: string): string {
@@ -202,7 +202,7 @@ describe("getAutoFlowCommand", () => {
   });
 
   it("auto-advances out of tactical when the only enemy in range is stealthed", () => {
-    const fluxRunnerCard = CARD_DEFINITIONS.flux_runner_card as UnitCardDefinition;
+    const fluxRunnerCard = getCardDefinition("flux_runner_card") as UnitCardDefinition;
     const original = fluxRunnerCard.unit.keywords;
     fluxRunnerCard.unit.keywords = ["stealth"];
 

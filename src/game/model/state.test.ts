@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { getStarterDeckCardIds } from "../content/decks/starterDecks";
 import {
   DEFAULT_GAME_RULES,
@@ -43,7 +43,7 @@ describe("createInitialZonesForPlayer", () => {
 
 describe("createInitialGameState", () => {
   it("uses the tuned asymmetric starting resources", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 
     expect(state.players.player_1.resources).toEqual({
       credits: PLAYER_ONE_STARTING_CREDITS,
@@ -71,12 +71,12 @@ describe("createInitialGameState", () => {
   });
 
   it("hydrates starting unit keywords from source card definitions", () => {
-    const scoutCard = CARD_DEFINITIONS.frontline_scout_card as UnitCardDefinition;
+    const scoutCard = getCardDefinition("frontline_scout_card") as UnitCardDefinition;
     const original = scoutCard.unit.keywords;
     scoutCard.unit.keywords = ["ambush"];
 
     try {
-      const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+      const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
       const scout = state.entities.unit_player_1_scout;
       expect(scout?.kind).toBe("unit");
       if (!scout || scout.kind !== "unit") {
@@ -89,7 +89,7 @@ describe("createInitialGameState", () => {
   });
 
   it("uses the live economy defaults for deposits and resource harvester movement", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 
     expect(state.rules).toEqual(DEFAULT_GAME_RULES);
     const harvester = state.entities.unit_player_1_harvester;
@@ -102,12 +102,12 @@ describe("createInitialGameState", () => {
   });
 
   it("hydrates starting harvester movement from the expedition harvester card definition", () => {
-    const harvesterCard = CARD_DEFINITIONS.expedition_harvester_card as UnitCardDefinition;
+    const harvesterCard = getCardDefinition("expedition_harvester_card") as UnitCardDefinition;
     const originalMoveRange = harvesterCard.unit.moveRange;
     harvesterCard.unit.moveRange = 4;
 
     try {
-      const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+      const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
       const harvester = state.entities.unit_player_1_harvester;
       expect(harvester?.kind).toBe("unit");
       if (!harvester || harvester.kind !== "unit") {

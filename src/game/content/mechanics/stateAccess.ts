@@ -1,4 +1,4 @@
-import type { GameState } from "../model/state";
+import type { GameState } from "../../model/state";
 
 export type MechanicStateScope = keyof GameState["mechanicState"];
 

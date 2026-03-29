@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { FRONTIER_BELT_MAP } from "./maps/frontierBelt";
 import { createInitialGameState } from "../model/state";
 import {
   getRegisteredCardSet,
@@ -44,7 +43,7 @@ describe("content loader", () => {
   it("rebuilds initial game state after a full content reset", () => {
     resetLoadedContent();
 
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ mapId: "frontier_belt" });
 
     expect(getLoadedContentSetIds()).toEqual(["base"]);
     expect(state.map.id).toBe("frontier_belt");

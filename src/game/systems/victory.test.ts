@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { createInitialGameState } from "../model/state";
 import { resolveBaseHpVictory } from "./victory";
 
 describe("resolveBaseHpVictory", () => {
   it("awards win when one base reaches zero HP", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const p2Base = state.entities.base_player_2;
     expect(p2Base?.kind).toBe("base");
     if (!p2Base || p2Base.kind !== "base") {
@@ -22,7 +22,7 @@ describe("resolveBaseHpVictory", () => {
   });
 
   it("uses active player as MVP tie-break on simultaneous base destruction", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     state.activePlayerId = "player_2";
 
     const p1Base = state.entities.base_player_1;
@@ -41,7 +41,7 @@ describe("resolveBaseHpVictory", () => {
   });
 
   it("does not duplicate win logs if called repeatedly after winner is set", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const p2Base = state.entities.base_player_2;
     expect(p2Base?.kind).toBe("base");
     if (!p2Base || p2Base.kind !== "base") {

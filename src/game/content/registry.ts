@@ -1,5 +1,5 @@
-import type { CardDefinition } from "./cards/catalog";
-import type { StackEffectDefinition } from "./stackEffects";
+import type { CardDefinition } from "./cards/types";
+import type { StackEffectDefinition } from "./stackEffects/types";
 import type { MapState } from "../model/state";
 import { FACTIONS, RESOURCE_TYPES, type Faction, type ResourceType } from "../model/enums";
 import type { CardSet, DeckRecipe, FactionModule, ResourceModule } from "./sets/types";
@@ -144,6 +144,10 @@ export function registerMap(setId: string, map: MapState): void {
 
 export function getRegisteredMap(mapId: string): MapState | undefined {
   return registeredMaps.get(mapId);
+}
+
+export function getRegisteredMaps(): Record<string, MapState> {
+  return Object.fromEntries(registeredMaps.entries());
 }
 
 export function registerFactionModule(faction: FactionModule): void {

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { createInitialGameState, type UnitEntity } from "../model/state";
 import { executeInstructions } from "./instructionHandlers";
 import { LAYER } from "../systems/continuousEffects";
 
 function createState() {
-  return createInitialGameState({ map: FRONTIER_BELT_MAP });
+  return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
 
 function getUnit(state: ReturnType<typeof createState>, id: string): UnitEntity {
@@ -148,7 +148,7 @@ describe("executeInstructions", () => {
     });
 
     it("copies unit keywords from the source card definition", () => {
-      const scoutCard = CARD_DEFINITIONS.frontline_scout_card as UnitCardDefinition;
+      const scoutCard = getCardDefinition("frontline_scout_card") as UnitCardDefinition;
       const original = scoutCard.unit.keywords;
       scoutCard.unit.keywords = ["stealth"];
 
@@ -173,13 +173,13 @@ describe("executeInstructions", () => {
     });
 
     it("uses the resource unit card move range when deploying a resource unit", () => {
-      const harvesterCard = CARD_DEFINITIONS.expedition_harvester_card as UnitCardDefinition;
+      const harvesterCard = getCardDefinition("expedition_harvester_card") as UnitCardDefinition;
       const originalMoveRange = harvesterCard.unit.moveRange;
       harvesterCard.unit.moveRange = 4;
 
       try {
         const state = createInitialGameState({
-          map: FRONTIER_BELT_MAP,
+          map: requireMapDefinition("frontier_belt"),
         });
 
         executeInstructions(state, [

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { createInitialGameState } from "../model/state";
 import { buildAnimationsFromEvents, captureAnimationSnapshot } from "./animations";
 
 describe("buildAnimationsFromEvents", () => {
   it("creates a spell-resolve animation for targeted damage effects", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const target = state.entities.unit_player_2_scout;
     if (!target || target.kind !== "unit") {
       throw new Error("Expected target unit for animation test.");
@@ -48,7 +48,7 @@ describe("buildAnimationsFromEvents", () => {
   });
 
   it("adds a death burst when a unit is removed by the command result", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const target = state.entities.unit_player_2_scout;
     if (!target || target.kind !== "unit") {
       throw new Error("Expected target unit for death animation test.");
@@ -78,7 +78,7 @@ describe("buildAnimationsFromEvents", () => {
   });
 
   it("adds a victory fanfare when the game gains a winner", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const before = captureAnimationSnapshot(state);
 
     state.winner = "player_1";
@@ -89,7 +89,7 @@ describe("buildAnimationsFromEvents", () => {
   });
 
   it("captures the countered stack object's visual when a unit spell is countered", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     state.stack.push({
       id: "stack_unit_1",
       label: "Frontline Scout",
@@ -145,7 +145,7 @@ describe("buildAnimationsFromEvents", () => {
   });
 
   it("uses a card-owned resolve animation profile for Ion Shower", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const before = captureAnimationSnapshot(state);
     const targetHex = { q: 0, r: 0 };
 
@@ -190,7 +190,7 @@ describe("buildAnimationsFromEvents", () => {
   });
 
   it("builds a hex-area animation for Meteor Chain from the card effect config", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const before = captureAnimationSnapshot(state);
     const targetHex = { q: 0, r: 0 };
 
@@ -235,7 +235,7 @@ describe("buildAnimationsFromEvents", () => {
   });
 
   it("uses a card-owned board-blast animation profile for Orbital Purge", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const before = captureAnimationSnapshot(state);
 
     const animations = buildAnimationsFromEvents(
@@ -277,7 +277,7 @@ describe("buildAnimationsFromEvents", () => {
   });
 
   it("uses a board-blast animation for Scorched Protocol when damaged units are destroyed", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const target = state.entities.unit_player_2_scout;
     if (!target || target.kind !== "unit") {
       throw new Error("Expected target unit for Scorched Protocol animation test.");
@@ -315,7 +315,7 @@ describe("buildAnimationsFromEvents", () => {
   });
 
   it("uses a board-blast animation for War Protocol on allied combat hexes", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const before = captureAnimationSnapshot(state);
 
     const animations = buildAnimationsFromEvents(
@@ -357,7 +357,7 @@ describe("buildAnimationsFromEvents", () => {
   });
 
   it("uses a board-blast animation for Spore Harvest on friendly unit hexes", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const before = captureAnimationSnapshot(state);
 
     const animations = buildAnimationsFromEvents(
@@ -395,7 +395,7 @@ describe("buildAnimationsFromEvents", () => {
   });
 
   it("uses a board-blast animation for Emergency War Chest centered on the caster base", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const before = captureAnimationSnapshot(state);
     const base = state.entities.base_player_2;
     if (!base || base.kind !== "base") {

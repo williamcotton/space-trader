@@ -1,32 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { CARD_DEFINITIONS } from "./catalog";
+import { getCardCatalog } from "./catalog";
 
 describe("card catalog balance guardrails", () => {
   it("keeps the neutral staple counter package distinct", () => {
-    expect(CARD_DEFINITIONS.null_intercept.cost).toEqual({ credits: 2 });
-    expect(CARD_DEFINITIONS.null_intercept.play.stackEffectId).toBe("counter_top_item");
+    const cards = getCardCatalog();
+    expect(cards.null_intercept.cost).toEqual({ credits: 2 });
+    expect(cards.null_intercept.play.stackEffectId).toBe("counter_top_item");
 
-    expect(CARD_DEFINITIONS.failsafe_redirect.cost).toEqual({ credits: 2 });
-    expect(CARD_DEFINITIONS.failsafe_redirect.play.stackEffectId).toBe("counter_to_hand");
+    expect(cards.failsafe_redirect.cost).toEqual({ credits: 2 });
+    expect(cards.failsafe_redirect.play.stackEffectId).toBe("counter_to_hand");
 
-    expect(CARD_DEFINITIONS.jammer_cloud.cost).toEqual({ credits: 2 });
-    expect(CARD_DEFINITIONS.jammer_cloud.play.stackEffectId).toBe("armor_ally_unit_2_eot");
+    expect(cards.jammer_cloud.cost).toEqual({ credits: 2 });
+    expect(cards.jammer_cloud.play.stackEffectId).toBe("armor_ally_unit_2_eot");
   });
 
   it("keeps neutral removal and reach cards differentiated with a visible tax", () => {
-    expect(CARD_DEFINITIONS.emergency_thrust.cost).toEqual({ credits: 2 });
-    expect(CARD_DEFINITIONS.emergency_thrust.play.stackEffectId).toBe("damage_enemy_base_2");
+    const cards = getCardCatalog();
+    expect(cards.emergency_thrust.cost).toEqual({ credits: 2 });
+    expect(cards.emergency_thrust.play.stackEffectId).toBe("damage_enemy_base_2");
 
-    expect(CARD_DEFINITIONS.scrap_burst.cost).toEqual({ credits: 3 });
-    expect(CARD_DEFINITIONS.scrap_burst.play.stackEffectId).toBe("damage_enemy_entity_2");
+    expect(cards.scrap_burst.cost).toEqual({ credits: 3 });
+    expect(cards.scrap_burst.play.stackEffectId).toBe("damage_enemy_entity_2");
 
-    expect(CARD_DEFINITIONS.holdfast_protocol.cost).toEqual({ credits: 3 });
-    expect(CARD_DEFINITIONS.holdfast_protocol.play.stackEffectId).toBe("destroy_damaged_enemy_unit");
+    expect(cards.holdfast_protocol.cost).toEqual({ credits: 3 });
+    expect(cards.holdfast_protocol.play.stackEffectId).toBe("destroy_damaged_enemy_unit");
   });
 
   it("keeps Support Drone on the same skirmisher baseline as Frontline Scout", () => {
-    const supportDrone = CARD_DEFINITIONS.support_drone_card;
-    const frontlineScout = CARD_DEFINITIONS.frontline_scout_card;
+    const cards = getCardCatalog();
+    const supportDrone = cards.support_drone_card;
+    const frontlineScout = cards.frontline_scout_card;
     if (supportDrone.kind !== "unit" || frontlineScout.kind !== "unit") {
       throw new Error("Expected unit cards for skirmisher baseline test.");
     }

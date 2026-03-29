@@ -107,6 +107,10 @@ function registerSetContent(set: CardSet): void {
   for (const mapModule of set.maps ?? []) {
     registerMap(set.id, mapModule.map);
   }
+
+  for (const mechanic of set.mechanics ?? []) {
+    mechanic.install();
+  }
 }
 
 export function resetLoadedContent(): void {

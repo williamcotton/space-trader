@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { createInitialGameState } from "../model/state";
 import {
   createDefaultPlayerPriorityStopSettings,
@@ -8,7 +8,7 @@ import {
 } from "./priorityStops";
 
 function createState() {
-  return createInitialGameState({ map: FRONTIER_BELT_MAP });
+  return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
 
 function setHand(state: ReturnType<typeof createState>, playerId: "player_1" | "player_2", cardIds: string[]) {

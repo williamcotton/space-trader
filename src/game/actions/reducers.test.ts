@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { GameCommand } from "./commands";
 import { dispatchCommand } from "./reducers";
-import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage, getEffectiveUnitSiegeDamageBonus } from "../systems/unitStats";
 import { RELAY_KEYWORD, SPROUT_KEYWORD } from "../systems/keywords";
 
 function setupState() {
-  return createInitialGameState({ map: FRONTIER_BELT_MAP });
+  return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
 
 function advanceToPhase(state: ReturnType<typeof setupState>, phase: ReturnType<typeof setupState>["phase"]): void {
@@ -462,7 +462,7 @@ describe("dispatchCommand", () => {
   });
 
   it("prevents attacks against stealthed enemy units", () => {
-    const fluxRunnerCard = CARD_DEFINITIONS.flux_runner_card as UnitCardDefinition;
+    const fluxRunnerCard = getCardDefinition("flux_runner_card") as UnitCardDefinition;
     const original = fluxRunnerCard.unit.keywords;
     fluxRunnerCard.unit.keywords = ["stealth"];
 
@@ -1165,7 +1165,7 @@ describe("dispatchCommand", () => {
   });
 
   it("prevents hostile targeted cards from choosing stealthed enemy units", () => {
-    const fluxRunnerCard = CARD_DEFINITIONS.flux_runner_card as UnitCardDefinition;
+    const fluxRunnerCard = getCardDefinition("flux_runner_card") as UnitCardDefinition;
     const original = fluxRunnerCard.unit.keywords;
     fluxRunnerCard.unit.keywords = ["stealth"];
 
@@ -1821,7 +1821,7 @@ describe("dispatchCommand", () => {
 
   it("Bloom generates biomass the first time bloom units are buffed each turn", () => {
     const state = createInitialGameState({
-      map: FRONTIER_BELT_MAP,
+      map: requireMapDefinition("frontier_belt"),
       factions: {
         player_1: "biomass_swarm",
         player_2: "flux_collective",
@@ -1904,7 +1904,7 @@ describe("dispatchCommand", () => {
 
   it("Bloom only pays out once per unit each turn", () => {
     const state = createInitialGameState({
-      map: FRONTIER_BELT_MAP,
+      map: requireMapDefinition("frontier_belt"),
       factions: {
         player_1: "biomass_swarm",
         player_2: "flux_collective",
@@ -1972,7 +1972,7 @@ describe("dispatchCommand", () => {
 
   it("Bloom Archivist draws when it blooms", () => {
     const state = createInitialGameState({
-      map: FRONTIER_BELT_MAP,
+      map: requireMapDefinition("frontier_belt"),
       factions: {
         player_1: "biomass_swarm",
         player_2: "flux_collective",
@@ -2031,7 +2031,7 @@ describe("dispatchCommand", () => {
 
   it("Compost Broker gains a credit when a friendly unit blooms", () => {
     const state = createInitialGameState({
-      map: FRONTIER_BELT_MAP,
+      map: requireMapDefinition("frontier_belt"),
       factions: {
         player_1: "biomass_swarm",
         player_2: "flux_collective",
@@ -2113,7 +2113,7 @@ describe("dispatchCommand", () => {
 
   it("Canopy Dividend pays out from units that bloomed earlier in the turn", () => {
     const state = createInitialGameState({
-      map: FRONTIER_BELT_MAP,
+      map: requireMapDefinition("frontier_belt"),
       factions: {
         player_1: "biomass_swarm",
         player_2: "flux_collective",
@@ -3252,7 +3252,11 @@ describe("dispatchCommand", () => {
   });
 
   it("treats uncounterable as a card keyword for played cards", () => {
-    const staticInsight = CARD_DEFINITIONS.static_insight;
+    const staticInsight = getCardDefinition("static_insight");
+    expect(staticInsight).toBeDefined();
+    if (!staticInsight) {
+      throw new Error("Expected static_insight definition.");
+    }
     const originalKeywords = staticInsight.keywords;
     staticInsight.keywords = [...(originalKeywords ?? []), "uncounterable"];
 

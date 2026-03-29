@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hexKey } from "./model/hex";
-import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
+import { requireMapDefinition } from "./content/maps/catalog";
 import { createInitialGameState } from "./model/state";
 import {
   buildSpatialIndex,
@@ -12,7 +12,7 @@ import {
 } from "./derived";
 
 function setupState() {
-  return createInitialGameState({ map: FRONTIER_BELT_MAP });
+  return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
 
 describe("hexKey", () => {

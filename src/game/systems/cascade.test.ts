@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { createInitialGameState, type UnitEntity } from "../model/state";
 import { getCascadeAffectedHexes } from "./cascade";
 import { RELAY_KEYWORD } from "./keywords";
@@ -37,7 +37,7 @@ function hasHex(hexes: readonly { q: number; r: number }[], target: { q: number;
 
 describe("cascade", () => {
   it("extends to farther hexes when a relayed unit repeats the cascade", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 
     for (const [entityId, entity] of Object.entries(state.entities)) {
       if (entity.kind === "unit") {
@@ -58,7 +58,7 @@ describe("cascade", () => {
   });
 
   it("deduplicates affected hexes across relay branches", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 
     for (const [entityId, entity] of Object.entries(state.entities)) {
       if (entity.kind === "unit") {

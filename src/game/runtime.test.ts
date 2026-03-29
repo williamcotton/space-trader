@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
+import { requireMapDefinition } from "./content/maps/catalog";
 import { createInitialGameState } from "./model/state";
 import { GameRuntime, getBoardClickCommand } from "./runtime";
 
 function setupState() {
-  return createInitialGameState({ map: FRONTIER_BELT_MAP });
+  return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
 
 describe("getBoardClickCommand", () => {
@@ -61,13 +61,13 @@ describe("getBoardClickCommand", () => {
 
 describe("GameRuntime", () => {
   it("queues a match intro animation on initial load", () => {
-    const runtime = new GameRuntime(createInitialGameState({ map: FRONTIER_BELT_MAP }));
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
 
     expect(runtime.getAnimations().some((animation) => animation.kind === "match_intro")).toBe(true);
   });
 
   it("adds test resources to a chosen player", () => {
-    const runtime = new GameRuntime(createInitialGameState({ map: FRONTIER_BELT_MAP }));
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
     const before = { ...runtime.state.players.player_1.resources };
 
     runtime.debugAddTestResources("player_1");
@@ -81,7 +81,7 @@ describe("GameRuntime", () => {
   });
 
   it("kills the selected test unit for the requested player", () => {
-    const runtime = new GameRuntime(createInitialGameState({ map: FRONTIER_BELT_MAP }));
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
     runtime.state.selectedEntityId = "unit_player_1_harvester";
 
     runtime.debugKillTestUnit("player_1");
@@ -91,7 +91,7 @@ describe("GameRuntime", () => {
   });
 
   it("declares a test winner and queues a victory animation", () => {
-    const runtime = new GameRuntime(createInitialGameState({ map: FRONTIER_BELT_MAP }));
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
 
     runtime.debugWinTestGame("player_2");
 

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { createInitialGameState, type UnitEntity } from "../model/state";
 import { executeInstructions } from "../actions/instructionHandlers";
 import { LAYER, nextEffectTimestamp } from "./continuousEffects";
 import type { ReplacementEffectPayload } from "./replacementEngine";
 
 function createState() {
-  return createInitialGameState({ map: FRONTIER_BELT_MAP });
+  return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
 
 function getUnit(state: ReturnType<typeof createState>, id: string): UnitEntity {

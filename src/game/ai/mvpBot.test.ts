@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { CARD_DEFINITIONS, type UnitCardDefinition } from "../content/cards/catalog";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { hexDistance } from "../model/hex";
 import { createInitialGameState } from "../model/state";
 import { SPROUT_KEYWORD } from "../systems/keywords";
 import { decideMvpBotCommand } from "./mvpBot";
 
 function setupState() {
-  return createInitialGameState({ map: FRONTIER_BELT_MAP });
+  return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
 
 function moveCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: "player_1" | "player_2", cardId: string): string {
@@ -182,7 +182,7 @@ describe("decideMvpBotCommand", () => {
   });
 
   it("does not spend a hostile targeted tactic on a stealthed enemy unit", () => {
-    const scoutCard = CARD_DEFINITIONS.frontline_scout_card as UnitCardDefinition;
+    const scoutCard = getCardDefinition("frontline_scout_card") as UnitCardDefinition;
     const original = scoutCard.unit.keywords;
     scoutCard.unit.keywords = ["stealth"];
 
@@ -456,7 +456,7 @@ describe("decideMvpBotCommand", () => {
 
   it("casts Overgrowth Wave when multiple Bloom units turn it into a biomass burst", () => {
     const state = createInitialGameState({
-      map: FRONTIER_BELT_MAP,
+      map: requireMapDefinition("frontier_belt"),
       factions: {
         player_1: "biomass_swarm",
         player_2: "flux_collective",
@@ -509,7 +509,7 @@ describe("decideMvpBotCommand", () => {
 
   it("casts Canopy Dividend when enough of its units bloomed this turn", () => {
     const state = createInitialGameState({
-      map: FRONTIER_BELT_MAP,
+      map: requireMapDefinition("frontier_belt"),
       factions: {
         player_1: "biomass_swarm",
         player_2: "flux_collective",

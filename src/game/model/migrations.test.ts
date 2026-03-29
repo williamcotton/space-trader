@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { FRONTIER_BELT_MAP } from "../content/maps/frontierBelt";
+import { requireMapDefinition } from "../content/maps/catalog";
 import { RELAY_KEYWORD } from "../systems/keywords";
 import { migrateRuntimeState } from "./migrations";
 import { createInitialGameState } from "./state";
 
 describe("migrateRuntimeState", () => {
   it("merges source-card keywords into existing unit keyword arrays", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     const relayCandidate = state.entities.unit_player_2_scout;
     expect(relayCandidate?.kind).toBe("unit");
     if (!relayCandidate || relayCandidate.kind !== "unit") {
@@ -22,7 +22,7 @@ describe("migrateRuntimeState", () => {
   });
 
   it("hydrates missing surge tracking fields", () => {
-    const state = createInitialGameState({ map: FRONTIER_BELT_MAP });
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     state.stack.push({
       id: "legacy_stack_item",
       label: "Legacy",

@@ -1,9 +1,9 @@
-import type { CardDefinition } from "../cards/catalog";
+import type { CardDefinition, CardAnimationAccent } from "../cards/types";
 import type { ResourceType, UnitRole } from "../../model/enums";
 import type { MapState } from "../../model/state";
 import type { PlayerTheme, ResourceTheme, RoleTheme } from "../../registries/presentation";
-import type { StackEffectDefinition } from "../stackEffects";
-import type { CardAnimationAccent } from "../cards/catalog";
+import type { StackEffectDefinition } from "../stackEffects/types";
+import type { SetMechanicModule } from "../mechanics/types";
 
 export type DeckRecipe = {
   id: string;
@@ -54,6 +54,7 @@ export type CardSet = {
   id: string;
   name: string;
   dependencies?: string[];
+  mechanics?: SetMechanicModule[];
   cards?: Record<string, CardDefinition>;
   stackEffects?: Record<string, StackEffectDefinition>;
   factions?: FactionModule[];
