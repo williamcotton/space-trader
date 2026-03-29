@@ -6,6 +6,7 @@ import type { GameInstruction, InstructionContext } from "../../actions/instruct
 import { hexDistance, isWithinMapBounds } from "../../model/hex";
 import { LAYER } from "../../systems/continuousEffects";
 import type { CardTrigger } from "../../systems/triggerEngine";
+import { getPlayEffectMagnitudeCalculator, registerPlayEffectMagnitudeCalculator } from "../../registries/playEffects";
 import type {
   CascadeUnitBuffOptions,
   CascadeUnitBuffReward,
@@ -543,46 +544,50 @@ export function getCardCascadeUnitBuffConfig(card: CardDefinition | undefined): 
   return effectConfig?.type === "cascade_unit_buff" ? effectConfig : undefined;
 }
 
+registerPlayEffectMagnitudeCalculator("mass_damage", (effectConfig) => effectConfig.amount);
+registerPlayEffectMagnitudeCalculator("global_unit_buff", (effectConfig) =>
+  Math.max(Math.abs(effectConfig.attackBonus), Math.abs(effectConfig.armorBonus))
+);
+registerPlayEffectMagnitudeCalculator("destroy_damaged_units", () => 0);
+registerPlayEffectMagnitudeCalculator("draw_and_gain_resources", (effectConfig) =>
+  Math.max(
+    effectConfig.drawCount,
+    ...(["credits", "alloy", "flux", "biomass"] as const).map((resource) => effectConfig.resources[resource] ?? 0)
+  )
+);
+registerPlayEffectMagnitudeCalculator("resources_by_unit_count", (effectConfig) =>
+  Math.max(
+    ...(["credits", "alloy", "flux", "biomass"] as const).map(
+      (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
+    )
+  )
+);
+registerPlayEffectMagnitudeCalculator("resources_by_bloom_count", (effectConfig) =>
+  Math.max(
+    ...(["credits", "alloy", "flux", "biomass"] as const).map(
+      (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
+    )
+  )
+);
+registerPlayEffectMagnitudeCalculator("resources_by_salvage_count", (effectConfig) =>
+  Math.max(
+    ...(["credits", "alloy", "flux", "biomass"] as const).map(
+      (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
+    )
+  )
+);
+registerPlayEffectMagnitudeCalculator("hex_area_damage", (effectConfig) => effectConfig.amount);
+registerPlayEffectMagnitudeCalculator("cascade_unit_buff", (effectConfig) =>
+  Math.max(
+    Math.abs(effectConfig.attackBonus),
+    Math.abs(effectConfig.armorBonus),
+    effectConfig.grantedKeywords && effectConfig.grantedKeywords.length > 0 ? 1 : 0
+  )
+);
+
 function getEffectConfigMagnitude(effectConfig: CardPlayEffectConfig): number {
-  switch (effectConfig.type) {
-    case "mass_damage":
-      return effectConfig.amount;
-    case "global_unit_buff":
-      return Math.max(Math.abs(effectConfig.attackBonus), Math.abs(effectConfig.armorBonus));
-    case "destroy_damaged_units":
-      return 0;
-    case "draw_and_gain_resources":
-      return Math.max(
-        effectConfig.drawCount,
-        ...(["credits", "alloy", "flux", "biomass"] as const).map((resource) => effectConfig.resources[resource] ?? 0)
-      );
-    case "resources_by_unit_count":
-      return Math.max(
-        ...(["credits", "alloy", "flux", "biomass"] as const).map(
-          (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
-        )
-      );
-    case "resources_by_bloom_count":
-      return Math.max(
-        ...(["credits", "alloy", "flux", "biomass"] as const).map(
-          (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
-        )
-      );
-    case "resources_by_salvage_count":
-      return Math.max(
-        ...(["credits", "alloy", "flux", "biomass"] as const).map(
-          (resource) => (effectConfig.resourcesPerThreshold[resource] ?? 0) * (effectConfig.maxThresholds ?? 1)
-        )
-      );
-    case "hex_area_damage":
-      return effectConfig.amount;
-    case "cascade_unit_buff":
-      return Math.max(
-        Math.abs(effectConfig.attackBonus),
-        Math.abs(effectConfig.armorBonus),
-        effectConfig.grantedKeywords && effectConfig.grantedKeywords.length > 0 ? 1 : 0
-      );
-  }
+  const calculator = getPlayEffectMagnitudeCalculator(effectConfig.type);
+  return calculator ? calculator(effectConfig as never) : 0;
 }
 
 export function getCardPlayEffectMagnitude(card: CardDefinition | undefined, surgeActive = false): number {

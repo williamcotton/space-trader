@@ -15,6 +15,7 @@ import type { GameInstruction } from "./instructions";
 import { drawCardForPlayer } from "./handlers/cards";
 import { applyReplacementEffects } from "../systems/replacementEngine";
 import { BLOOM_KEYWORD, hasSproutKeyword, unitHasActiveKeyword } from "../systems/keywords";
+import { getInstructionHandler, registerInstructionHandler } from "../registries/instructionHandlers";
 
 // --- Internal helpers (extracted from handlers/cards.ts) ---
 
@@ -289,38 +290,24 @@ function handleLog(state: GameState, instr: Extract<GameInstruction, { type: "LO
   state.log.push({ turn: state.turn, text: instr.text });
 }
 
+registerInstructionHandler("DEAL_DAMAGE", handleDealDamage);
+registerInstructionHandler("DESTROY_ENTITY", handleDestroyEntity);
+registerInstructionHandler("DEPLOY_UNIT", handleDeployUnit);
+registerInstructionHandler("TRIGGER_BLOOM", handleTriggerBloom);
+registerInstructionHandler("APPLY_CONTINUOUS_EFFECT", handleApplyContinuousEffect);
+registerInstructionHandler("DRAW_CARDS", handleDrawCards);
+registerInstructionHandler("GAIN_RESOURCES", handleGainResources);
+registerInstructionHandler("COUNTER_STACK_ITEM", handleCounterStackItem);
+registerInstructionHandler("LOG", handleLog);
+
 // --- Single instruction dispatcher ---
 
 function executeSingleInstruction(state: GameState, instr: GameInstruction): void {
-  switch (instr.type) {
-    case "DEAL_DAMAGE":
-      handleDealDamage(state, instr);
-      break;
-    case "DESTROY_ENTITY":
-      handleDestroyEntity(state, instr);
-      break;
-    case "DEPLOY_UNIT":
-      handleDeployUnit(state, instr);
-      break;
-    case "TRIGGER_BLOOM":
-      handleTriggerBloom(state, instr);
-      break;
-    case "APPLY_CONTINUOUS_EFFECT":
-      handleApplyContinuousEffect(state, instr);
-      break;
-    case "DRAW_CARDS":
-      handleDrawCards(state, instr);
-      break;
-    case "GAIN_RESOURCES":
-      handleGainResources(state, instr);
-      break;
-    case "COUNTER_STACK_ITEM":
-      handleCounterStackItem(state, instr);
-      break;
-    case "LOG":
-      handleLog(state, instr);
-      break;
+  const handler = getInstructionHandler(instr.type);
+  if (!handler) {
+    return;
   }
+  handler(state, instr as never);
 }
 
 // --- Executor with replacement effect interception ---

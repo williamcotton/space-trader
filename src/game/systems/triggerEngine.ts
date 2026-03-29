@@ -8,6 +8,8 @@ import { canTargetEntityDirectly, SALVAGE_KEYWORD, unitHasActiveKeyword } from "
 import { hexDistance } from "../model/hex";
 import { getCascadeAffectedHexes } from "./cascade";
 import { createStackItemId, getOpponentPlayer } from "../turn/stack";
+import { getAutoTargetResolver, registerAutoTargetResolver } from "../registries/autoTargets";
+import { getTriggerConditionEvaluator, registerTriggerConditionEvaluator } from "../registries/triggerConditions";
 
 // --- Trigger Condition Types ---
 
@@ -42,68 +44,68 @@ function resolveAutoTarget(
   preferredTargetId: string | null,
   sourceUnit?: UnitEntity
 ): string | null {
-  switch (strategy) {
-    case "weakest_enemy_unit": {
-      const preferredTarget = preferredTargetId ? state.entities[preferredTargetId] : null;
-      if (
-        preferredTarget &&
-        preferredTarget.kind === "unit" &&
-        preferredTarget.ownerId !== controllerId &&
-        canTargetEntityDirectly(state, controllerId, preferredTarget)
-      ) {
-        return preferredTarget.id;
-      }
-
-      const enemyUnits = Object.values(state.entities)
-        .filter((entity): entity is UnitEntity =>
-          entity.kind === "unit" &&
-          entity.ownerId !== controllerId &&
-          canTargetEntityDirectly(state, controllerId, entity)
-        )
-        .sort((a, b) => {
-          const damagedDelta = Number(a.hp < a.maxHp) - Number(b.hp < b.maxHp);
-          if (damagedDelta !== 0) return damagedDelta > 0 ? -1 : 1;
-          if (a.hp !== b.hp) return a.hp - b.hp;
-          return a.id.localeCompare(b.id);
-        });
-
-      return enemyUnits[0]?.id ?? null;
-    }
-
-    case "weakest_enemy_unit_in_range_2": {
-      if (!sourceUnit) {
-        return null;
-      }
-
-      const preferredTarget = preferredTargetId ? state.entities[preferredTargetId] : null;
-      if (
-        preferredTarget &&
-        preferredTarget.kind === "unit" &&
-        preferredTarget.ownerId !== controllerId &&
-        canTargetEntityDirectly(state, controllerId, preferredTarget) &&
-        hexDistance(sourceUnit.coord, preferredTarget.coord) <= 2
-      ) {
-        return preferredTarget.id;
-      }
-
-      const enemyUnits = Object.values(state.entities)
-        .filter((entity): entity is UnitEntity =>
-          entity.kind === "unit" &&
-          entity.ownerId !== controllerId &&
-          canTargetEntityDirectly(state, controllerId, entity) &&
-          hexDistance(sourceUnit.coord, entity.coord) <= 2
-        )
-        .sort((a, b) => {
-          const damagedDelta = Number(a.hp < a.maxHp) - Number(b.hp < b.maxHp);
-          if (damagedDelta !== 0) return damagedDelta > 0 ? -1 : 1;
-          if (a.hp !== b.hp) return a.hp - b.hp;
-          return a.id.localeCompare(b.id);
-        });
-
-      return enemyUnits[0]?.id ?? null;
-    }
-  }
+  const resolver = getAutoTargetResolver(strategy);
+  return resolver ? resolver(state, controllerId, preferredTargetId, sourceUnit) : null;
 }
+
+function sortWeakestEnemyUnits(units: UnitEntity[]): UnitEntity[] {
+  return [...units].sort((a, b) => {
+    const damagedDelta = Number(a.hp < a.maxHp) - Number(b.hp < b.maxHp);
+    if (damagedDelta !== 0) return damagedDelta > 0 ? -1 : 1;
+    if (a.hp !== b.hp) return a.hp - b.hp;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+registerAutoTargetResolver("weakest_enemy_unit", (state, controllerId, preferredTargetId) => {
+  const preferredTarget = preferredTargetId ? state.entities[preferredTargetId] : null;
+  if (
+    preferredTarget &&
+    preferredTarget.kind === "unit" &&
+    preferredTarget.ownerId !== controllerId &&
+    canTargetEntityDirectly(state, controllerId, preferredTarget)
+  ) {
+    return preferredTarget.id;
+  }
+
+  const enemyUnits = sortWeakestEnemyUnits(
+    Object.values(state.entities).filter((entity): entity is UnitEntity =>
+      entity.kind === "unit" &&
+      entity.ownerId !== controllerId &&
+      canTargetEntityDirectly(state, controllerId, entity)
+    )
+  );
+
+  return enemyUnits[0]?.id ?? null;
+});
+
+registerAutoTargetResolver("weakest_enemy_unit_in_range_2", (state, controllerId, preferredTargetId, sourceUnit) => {
+  if (!sourceUnit) {
+    return null;
+  }
+
+  const preferredTarget = preferredTargetId ? state.entities[preferredTargetId] : null;
+  if (
+    preferredTarget &&
+    preferredTarget.kind === "unit" &&
+    preferredTarget.ownerId !== controllerId &&
+    canTargetEntityDirectly(state, controllerId, preferredTarget) &&
+    hexDistance(sourceUnit.coord, preferredTarget.coord) <= 2
+  ) {
+    return preferredTarget.id;
+  }
+
+  const enemyUnits = sortWeakestEnemyUnits(
+    Object.values(state.entities).filter((entity): entity is UnitEntity =>
+      entity.kind === "unit" &&
+      entity.ownerId !== controllerId &&
+      canTargetEntityDirectly(state, controllerId, entity) &&
+      hexDistance(sourceUnit.coord, entity.coord) <= 2
+    )
+  );
+
+  return enemyUnits[0]?.id ?? null;
+});
 
 // --- Event matching ---
 
@@ -136,83 +138,77 @@ function doesEventMatchCondition(
   condition: TriggerCondition,
   unit: UnitEntity
 ): boolean {
-  switch (condition.type) {
-    case "on_owner_tactic_played":
-      if (event.type !== "CARD_PLAYED_TO_STACK" || event.playerId !== unit.ownerId) {
-        return false;
-      }
-      return getCardDefinition(event.cardId)?.kind === "tactic";
-
-    case "on_owner_surged_tactic_played":
-      if (event.type !== "CARD_PLAYED_TO_STACK" || event.playerId !== unit.ownerId || !event.surgeActive) {
-        return false;
-      }
-      return getCardDefinition(event.cardId)?.kind === "tactic";
-
-    case "on_owner_salvaged":
-      if (event.type !== "UNIT_ATTACK_DECLARED" || !event.targetDestroyed) {
-        return false;
-      }
-      {
-        const attacker = state.entities[event.attackerId];
-        return Boolean(
-          attacker &&
-          attacker.kind === "unit" &&
-          attacker.ownerId === unit.ownerId &&
-          unitHasActiveKeyword(state, attacker, SALVAGE_KEYWORD)
-        );
-      }
-
-    case "on_cascaded": {
-      if (event.type !== "STACK_ITEM_RESOLVED" || event.controllerId !== unit.ownerId || !event.targetHex || !event.sourceCardId) {
-        return false;
-      }
-
-      const sourceCard = getCardDefinition(event.sourceCardId);
-      const cascadeConfig = getCardCascadeUnitBuffConfig(sourceCard);
-      if (!cascadeConfig) {
-        return false;
-      }
-
-      const affectedHexes = getCascadeAffectedHexes(state, event.controllerId, event.targetHex, cascadeConfig.waves, {
-        excludeKeywordEffectIdPrefix: `ce_${event.itemId}_`,
-      });
-      return affectedHexes.some((coord) => coord.q === unit.coord.q && coord.r === unit.coord.r);
-    }
-
-    case "on_self_bloomed":
-      return event.type === "STACK_ITEM_RESOLVED" &&
-        state.lastBloomSourceItemId === event.itemId &&
-        state.lastBloomedUnitIds.includes(unit.id);
-
-    case "on_owner_unit_bloomed":
-      return event.type === "STACK_ITEM_RESOLVED" &&
-        state.lastBloomSourceItemId === event.itemId &&
-        state.lastBloomedUnitIds.some((unitId) => {
-          const bloomedUnit = state.entities[unitId];
-          return bloomedUnit?.kind === "unit" && bloomedUnit.ownerId === unit.ownerId;
-        });
-
-    case "on_enter_battlefield":
-      return event.type === "CARD_PLAYED_TO_BATTLEFIELD";
-
-    case "on_death":
-      // Will be triggered by future ENTITY_DESTROYED events
-      return false;
-
-    case "on_damage_dealt":
-      return false;
-
-    case "at_start_of_phase":
-      return event.type === "PHASE_ADVANCED" && event.phase === condition.phase;
-
-    case "at_end_of_turn":
-      return false;
-
-    default:
-      return false;
-  }
+  const evaluator = getTriggerConditionEvaluator(condition.type);
+  return evaluator ? evaluator(state, event, condition as never, unit) : false;
 }
+
+registerTriggerConditionEvaluator("on_owner_tactic_played", (_state, event, _condition, unit) => {
+  if (event.type !== "CARD_PLAYED_TO_STACK" || event.playerId !== unit.ownerId) {
+    return false;
+  }
+  return getCardDefinition(event.cardId)?.kind === "tactic";
+});
+
+registerTriggerConditionEvaluator("on_owner_surged_tactic_played", (_state, event, _condition, unit) => {
+  if (event.type !== "CARD_PLAYED_TO_STACK" || event.playerId !== unit.ownerId || !event.surgeActive) {
+    return false;
+  }
+  return getCardDefinition(event.cardId)?.kind === "tactic";
+});
+
+registerTriggerConditionEvaluator("on_owner_salvaged", (state, event, _condition, unit) => {
+  if (event.type !== "UNIT_ATTACK_DECLARED" || !event.targetDestroyed) {
+    return false;
+  }
+
+  const attacker = state.entities[event.attackerId];
+  return Boolean(
+    attacker &&
+    attacker.kind === "unit" &&
+    attacker.ownerId === unit.ownerId &&
+    unitHasActiveKeyword(state, attacker, SALVAGE_KEYWORD)
+  );
+});
+
+registerTriggerConditionEvaluator("on_cascaded", (state, event, _condition, unit) => {
+  if (event.type !== "STACK_ITEM_RESOLVED" || event.controllerId !== unit.ownerId || !event.targetHex || !event.sourceCardId) {
+    return false;
+  }
+
+  const sourceCard = getCardDefinition(event.sourceCardId);
+  const cascadeConfig = getCardCascadeUnitBuffConfig(sourceCard);
+  if (!cascadeConfig) {
+    return false;
+  }
+
+  const affectedHexes = getCascadeAffectedHexes(state, event.controllerId, event.targetHex, cascadeConfig.waves, {
+    excludeKeywordEffectIdPrefix: `ce_${event.itemId}_`,
+  });
+  return affectedHexes.some((coord) => coord.q === unit.coord.q && coord.r === unit.coord.r);
+});
+
+registerTriggerConditionEvaluator("on_self_bloomed", (state, event, _condition, unit) =>
+  event.type === "STACK_ITEM_RESOLVED" &&
+  state.lastBloomSourceItemId === event.itemId &&
+  state.lastBloomedUnitIds.includes(unit.id)
+);
+
+registerTriggerConditionEvaluator("on_owner_unit_bloomed", (state, event, _condition, unit) =>
+  event.type === "STACK_ITEM_RESOLVED" &&
+  state.lastBloomSourceItemId === event.itemId &&
+  state.lastBloomedUnitIds.some((unitId) => {
+    const bloomedUnit = state.entities[unitId];
+    return bloomedUnit?.kind === "unit" && bloomedUnit.ownerId === unit.ownerId;
+  })
+);
+
+registerTriggerConditionEvaluator("on_enter_battlefield", (_state, event) => event.type === "CARD_PLAYED_TO_BATTLEFIELD");
+registerTriggerConditionEvaluator("on_death", () => false);
+registerTriggerConditionEvaluator("on_damage_dealt", () => false);
+registerTriggerConditionEvaluator("at_start_of_phase", (_state, event, condition) =>
+  event.type === "PHASE_ADVANCED" && event.phase === condition.phase
+);
+registerTriggerConditionEvaluator("at_end_of_turn", () => false);
 
 function getPreferredTargetFromEvent(event: GameEvent): string | null {
   if (event.type === "CARD_PLAYED_TO_STACK") {

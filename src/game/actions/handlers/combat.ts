@@ -5,6 +5,7 @@ import { hexDistance } from "../../model/hex";
 import { resolveCombatAttack } from "../../systems/combat";
 import { getResourceNodeAtCoord, getResourceNodeById } from "../../systems/harvesting";
 import { SALVAGE_KEYWORD, unitHasActiveKeyword } from "../../systems/keywords";
+import { registerCombatHook, runUnitDestroyedByAttackHooks } from "../../registries/combatHooks";
 
 export function addUniqueTrackedUnit(target: string[], entityId: string): void {
   if (!target.includes(entityId)) {
@@ -135,14 +136,7 @@ export function reduceUnitAttackDeclared(
   }
 
   if (event.targetDestroyed && target?.kind === "unit") {
-    if (target.ownerId !== attacker.ownerId && unitHasActiveKeyword(state, attacker, SALVAGE_KEYWORD)) {
-      state.players[attacker.ownerId].resources.alloy += 1;
-      state.salvageTriggersThisTurn[attacker.ownerId] += 1;
-      state.log.push({
-        turn: state.turn,
-        text: `${attacker.id} salvaged wreckage and generated 1 alloy.`,
-      });
-    }
+    runUnitDestroyedByAttackHooks({ state, event, attacker, target });
 
     if (target.carries) {
       state.log.push({
@@ -167,6 +161,21 @@ export function reduceUnitAttackDeclared(
     });
   }
 }
+
+registerCombatHook("salvage_reward", {
+  onUnitDestroyedByAttack: ({ state, attacker, target }) => {
+    if (target.ownerId === attacker.ownerId || !unitHasActiveKeyword(state, attacker, SALVAGE_KEYWORD)) {
+      return;
+    }
+
+    state.players[attacker.ownerId].resources.alloy += 1;
+    state.salvageTriggersThisTurn[attacker.ownerId] += 1;
+    state.log.push({
+      turn: state.turn,
+      text: `${attacker.id} salvaged wreckage and generated 1 alloy.`,
+    });
+  },
+});
 
 export function reduceUnitHarvestedNode(
   state: GameState,
