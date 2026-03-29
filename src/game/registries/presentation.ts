@@ -35,6 +35,9 @@ const resourceThemes = new Map<ResourceType, ResourceTheme>();
 const unitRoleThemes = new Map<UnitRole, RoleTheme>();
 
 export function registerFactionPresentation(factionId: Faction, presentation: FactionPresentation): void {
+  if (factionPresentations.has(factionId)) {
+    throw new Error(`Duplicate faction presentation registration for ${factionId}.`);
+  }
   factionPresentations.set(factionId, presentation);
 }
 
@@ -58,6 +61,9 @@ export function getFactionAnimationAccent(factionId: Faction | "neutral" | null 
 }
 
 export function registerResourceTheme(resourceType: ResourceType, theme: ResourceTheme): void {
+  if (resourceThemes.has(resourceType)) {
+    throw new Error(`Duplicate resource theme registration for ${resourceType}.`);
+  }
   resourceThemes.set(resourceType, theme);
 }
 
@@ -74,6 +80,9 @@ export function tryGetRegisteredResourceTheme(resourceType: ResourceType): Resou
 }
 
 export function registerUnitRoleTheme(role: UnitRole, theme: RoleTheme): void {
+  if (unitRoleThemes.has(role)) {
+    throw new Error(`Duplicate role theme registration for ${role}.`);
+  }
   unitRoleThemes.set(role, theme);
 }
 
@@ -83,4 +92,10 @@ export function getRegisteredUnitRoleTheme(role: UnitRole): RoleTheme {
     throw new Error(`Missing unit role theme for ${role}.`);
   }
   return theme;
+}
+
+export function resetPresentationRegistry(): void {
+  factionPresentations.clear();
+  resourceThemes.clear();
+  unitRoleThemes.clear();
 }

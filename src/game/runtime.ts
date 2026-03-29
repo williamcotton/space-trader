@@ -1,9 +1,9 @@
 import type { GameCommand } from "./actions/commands";
 import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { decideMvpBotCommand } from "./ai/mvpBot";
-import { FRONTIER_BELT_MAP } from "./content/maps/frontierBelt";
+import { ensureBaseContentLoaded } from "./content/loader";
 import { getCardDefinition } from "./content/cards/catalog";
-import { getRegisteredResourceIds } from "./content/registry";
+import { getRegisteredMap, getRegisteredResourceIds } from "./content/registry";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
 import { findEntityAtHex } from "./model/queries";
 import { createInitialGameState } from "./model/state";
@@ -36,6 +36,7 @@ const INITIAL_VIEWPORT: GameViewport = {
 };
 
 const BOT_ACTION_INTERVAL_SECONDS = 0.16;
+const DEFAULT_RUNTIME_MAP_ID = "frontier_belt";
 
 type BotDecisionSystem = typeof decideMvpBotCommand;
 
@@ -52,6 +53,15 @@ function createRuntimeMatchId(): string {
   return `match_frontier_belt_${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffff)
     .toString(36)
     .padStart(4, "0")}`;
+}
+
+function getDefaultRuntimeMap() {
+  ensureBaseContentLoaded();
+  const map = getRegisteredMap(DEFAULT_RUNTIME_MAP_ID);
+  if (!map) {
+    throw new Error(`Missing default runtime map ${DEFAULT_RUNTIME_MAP_ID}.`);
+  }
+  return map;
 }
 
 function getSelectedActiveUnit(state: GameState) {
@@ -140,7 +150,7 @@ export class GameRuntime {
 
   constructor(
     state: GameState = createInitialGameState({
-      map: FRONTIER_BELT_MAP,
+      map: getDefaultRuntimeMap(),
       matchId: createRuntimeMatchId(),
       randomSource: () => Math.random(),
     })
@@ -157,7 +167,7 @@ export class GameRuntime {
 
   resetWithFactions(factions: { player_1: Faction; player_2: Faction }): void {
     const newState = createInitialGameState({
-      map: FRONTIER_BELT_MAP,
+      map: getDefaultRuntimeMap(),
       matchId: createRuntimeMatchId(),
       randomSource: () => Math.random(),
       factions,

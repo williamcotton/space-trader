@@ -15,7 +15,7 @@ import { getPlayEffectResolver, registerPlayEffectResolver } from "../registries
 import { getStackEffectMagnitudeCalculator, registerStackEffectMagnitudeCalculator } from "../registries/stackEffectMagnitudes";
 import { LAYER } from "../systems/continuousEffects";
 import type { ResourceType, UnitRole } from "../model/enums";
-import { getRegisteredResourceIds, getRegisteredStackEffectDefinition, registerStackEffectDefinitions } from "./registry";
+import { getRegisteredResourceIds, getRegisteredStackEffectDefinition } from "./registry";
 
 export type CounterDestination = "discard" | "hand" | "exile" | "none";
 export type StackObjectKind = "spell" | "ability";
@@ -762,8 +762,6 @@ export const BASE_STACK_EFFECTS: Record<string, StackEffectDefinition> = {
 };
 
 export const STACK_EFFECTS = BASE_STACK_EFFECTS;
-
-registerStackEffectDefinitions("base", BASE_STACK_EFFECTS);
 
 export function getStackEffectDefinition(effectId: string): StackEffectDefinition | undefined {
   return getRegisteredStackEffectDefinition(effectId);

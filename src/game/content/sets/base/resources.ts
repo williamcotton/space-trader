@@ -1,6 +1,4 @@
-import "../../../presentation";
 import type { ResourceModule } from "../types";
-import { registerResourceTheme } from "../../../registries/presentation";
 
 export const BASE_SET_RESOURCES: ResourceModule[] = [
   {
@@ -32,12 +30,3 @@ export const BASE_SET_RESOURCES: ResourceModule[] = [
     glow: "rgba(95, 227, 143, 0.24)",
   },
 ];
-
-for (const resource of BASE_SET_RESOURCES) {
-  registerResourceTheme(resource.id, {
-    label: resource.label,
-    shortLabel: resource.shortLabel,
-    color: resource.color,
-    glow: resource.glow,
-  });
-}

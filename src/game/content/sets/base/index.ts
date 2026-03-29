@@ -1,13 +1,11 @@
-import "../../../presentation";
 import { FRONTIER_BELT_MAP } from "../../maps/frontierBelt";
 import { BASE_CARD_DEFINITIONS } from "../../cards/catalog";
 import { BASE_STACK_EFFECTS } from "../../stackEffects";
 import { BASE_STARTER_DECKS } from "../../decks/starterDecks";
-import { getUnitRoleTheme } from "../../../presentation";
-import { registerCardSet, registerFactionModule, registerMap, registerResourceModule } from "../../registry";
 import type { CardSet, DeckRecipe } from "../types";
 import { BASE_SET_FACTIONS } from "./factions";
 import { BASE_SET_RESOURCES } from "./resources";
+import { BASE_SET_ROLE_THEMES } from "./presentation";
 
 const BASE_SET_DECK_RECIPES: DeckRecipe[] = [
   {
@@ -41,18 +39,5 @@ export const BASE_SET: CardSet = {
       map: FRONTIER_BELT_MAP,
     },
   ],
-  roleThemes: {
-    combat: getUnitRoleTheme("combat"),
-    resource: getUnitRoleTheme("resource"),
-    utility: getUnitRoleTheme("utility"),
-  },
+  roleThemes: BASE_SET_ROLE_THEMES,
 };
-
-registerCardSet(BASE_SET);
-for (const faction of BASE_SET_FACTIONS) {
-  registerFactionModule(faction);
-}
-for (const resource of BASE_SET_RESOURCES) {
-  registerResourceModule(resource);
-}
-registerMap("base", FRONTIER_BELT_MAP);

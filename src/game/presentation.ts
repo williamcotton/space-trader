@@ -1,4 +1,5 @@
 import { getCardDefinition } from "./content/cards/catalog";
+import { ensureBaseContentLoaded } from "./content/loader";
 import type { Faction, ResourceType, UnitRole } from "./model/enums";
 import type { PlayerId } from "./model/ids";
 import type { EntityState, GameState } from "./model/state";
@@ -9,7 +10,6 @@ import {
   getFactionPresentation,
   getRegisteredResourceTheme,
   getRegisteredUnitRoleTheme,
-  registerUnitRoleTheme,
 } from "./registries/presentation";
 
 const DEFAULT_PLAYER_THEME: PlayerTheme = {
@@ -28,6 +28,7 @@ let activePlayerThemes: Record<PlayerId, PlayerTheme> = {
 };
 
 export function configurePlayerThemes(factions: Record<PlayerId, Faction>): void {
+  ensureBaseContentLoaded();
   const sameFaction = factions.player_1 === factions.player_2;
   activePlayerThemes = {
     player_1: getFactionPresentation(factions.player_1).theme,
@@ -36,21 +37,6 @@ export function configurePlayerThemes(factions: Record<PlayerId, Faction>): void
       : getFactionPresentation(factions.player_2).theme,
   };
 }
-
-const ROLE_THEMES: Record<UnitRole, RoleTheme> = {
-  combat: {
-    label: "Combat",
-    accent: "#ff9680",
-  },
-  resource: {
-    label: "Resource",
-    accent: "#8ff2be",
-  },
-  utility: {
-    label: "Utility",
-    accent: "#d5b4ff",
-  },
-};
 
 const ROLE_FALLBACK_NAMES: Record<UnitRole, string> = {
   combat: "Combat Unit",
@@ -97,10 +83,12 @@ export function getPlayerLabel(playerId: PlayerId): string {
 }
 
 export function getResourceTheme(resourceType: ResourceType): ResourceTheme {
+  ensureBaseContentLoaded();
   return getRegisteredResourceTheme(resourceType);
 }
 
 export function getUnitRoleTheme(role: UnitRole): RoleTheme {
+  ensureBaseContentLoaded();
   return getRegisteredUnitRoleTheme(role);
 }
 
@@ -108,6 +96,7 @@ export function formatFactionName(faction: Faction | "neutral"): string {
   if (faction === "neutral") {
     return "Neutral";
   }
+  ensureBaseContentLoaded();
   return getFactionPresentation(faction).label ?? formatWords(faction);
 }
 
@@ -148,7 +137,3 @@ export function getEntityDisplayName(entity: EntityState, _state: Pick<GameState
 
   return ROLE_FALLBACK_NAMES[entity.role] ?? "Unit";
 }
-
-registerUnitRoleTheme("combat", ROLE_THEMES.combat);
-registerUnitRoleTheme("resource", ROLE_THEMES.resource);
-registerUnitRoleTheme("utility", ROLE_THEMES.utility);

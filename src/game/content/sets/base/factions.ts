@@ -1,6 +1,4 @@
-import "../../../presentation";
 import type { FactionModule } from "../types";
-import { registerFactionPresentation } from "../../../registries/presentation";
 
 const ALLOY_THEME = {
   label: "Alloy Clan",
@@ -70,6 +68,7 @@ export const BASE_SET_FACTIONS: FactionModule[] = [
     mechanics: ["salvage", "bastion"],
     theme: ALLOY_THEME,
     mirrorAltTheme: ALLOY_MIRROR_THEME,
+    animationAccent: "alloy_clan",
     startingCombatUnitCardId: "frontline_scout_card",
     startingResourceUnitCardId: "expedition_harvester_card",
     startingResourceUnitOverrides: {
@@ -83,6 +82,7 @@ export const BASE_SET_FACTIONS: FactionModule[] = [
     mechanics: ["relay", "surge"],
     theme: FLUX_THEME,
     mirrorAltTheme: FLUX_MIRROR_THEME,
+    animationAccent: "flux_collective",
     startingCombatUnitCardId: "flux_runner_card",
     startingResourceUnitCardId: "expedition_harvester_card",
     startingResourceUnitOverrides: {
@@ -96,6 +96,7 @@ export const BASE_SET_FACTIONS: FactionModule[] = [
     mechanics: ["sprout", "bloom"],
     theme: BIOMASS_THEME,
     mirrorAltTheme: BIOMASS_MIRROR_THEME,
+    animationAccent: "biomass_swarm",
     startingCombatUnitCardId: "pathfinder_buggy_card",
     startingResourceUnitCardId: "expedition_harvester_card",
     startingResourceUnitOverrides: {
@@ -103,24 +104,3 @@ export const BASE_SET_FACTIONS: FactionModule[] = [
     },
   },
 ];
-
-registerFactionPresentation("alloy_clan", {
-  label: "Alloy Clan",
-  theme: ALLOY_THEME,
-  mirrorAltTheme: ALLOY_MIRROR_THEME,
-  animationAccent: "alloy_clan",
-});
-
-registerFactionPresentation("flux_collective", {
-  label: "Flux Collective",
-  theme: FLUX_THEME,
-  mirrorAltTheme: FLUX_MIRROR_THEME,
-  animationAccent: "flux_collective",
-});
-
-registerFactionPresentation("biomass_swarm", {
-  label: "Biomass Swarm",
-  theme: BIOMASS_THEME,
-  mirrorAltTheme: BIOMASS_MIRROR_THEME,
-  animationAccent: "biomass_swarm",
-});

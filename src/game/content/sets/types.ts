@@ -3,6 +3,7 @@ import type { ResourceType, UnitRole } from "../../model/enums";
 import type { MapState } from "../../model/state";
 import type { PlayerTheme, ResourceTheme, RoleTheme } from "../../registries/presentation";
 import type { StackEffectDefinition } from "../stackEffects";
+import type { CardAnimationAccent } from "../cards/catalog";
 
 export type DeckRecipe = {
   id: string;
@@ -29,6 +30,7 @@ export type FactionModule = {
   mechanics: string[];
   theme: PlayerTheme;
   mirrorAltTheme?: PlayerTheme;
+  animationAccent?: CardAnimationAccent;
   startingCombatUnitCardId: string;
   startingResourceUnitCardId: string;
   startingCombatUnitOverrides?: StartingUnitOverrides;

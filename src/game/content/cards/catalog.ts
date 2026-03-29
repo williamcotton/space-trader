@@ -7,7 +7,7 @@ import { hexDistance, isWithinMapBounds } from "../../model/hex";
 import { LAYER } from "../../systems/continuousEffects";
 import type { CardTrigger } from "../../systems/triggerEngine";
 import { getPlayEffectMagnitudeCalculator, registerPlayEffectMagnitudeCalculator } from "../../registries/playEffects";
-import { getRegisteredCardDefinition, getRegisteredResourceIds, registerCardDefinitions } from "../registry";
+import { getRegisteredCardDefinition, getRegisteredResourceIds } from "../registry";
 import type {
   CascadeUnitBuffOptions,
   CascadeUnitBuffReward,
@@ -1868,8 +1868,6 @@ export const BASE_CARD_DEFINITIONS: Record<string, CardDefinition> = {
 };
 
 export const CARD_DEFINITIONS = BASE_CARD_DEFINITIONS;
-
-registerCardDefinitions("base", BASE_CARD_DEFINITIONS);
 
 export function getCardDefinition(cardId: string): CardDefinition | undefined {
   return getRegisteredCardDefinition(cardId);

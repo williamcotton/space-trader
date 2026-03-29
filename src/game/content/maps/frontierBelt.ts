@@ -1,5 +1,4 @@
 import type { MapState } from "../../model/state";
-import { registerMap } from "../registry";
 
 export const FRONTIER_BELT_MAP: MapState = {
   id: "frontier_belt",
@@ -76,5 +75,3 @@ export const FRONTIER_BELT_MAP: MapState = {
     },
   ],
 };
-
-registerMap("base", FRONTIER_BELT_MAP);

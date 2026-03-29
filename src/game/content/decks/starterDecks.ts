@@ -1,6 +1,6 @@
 import type { Faction } from "../../model/enums";
-import { getCardDefinition } from "../cards/catalog";
-import { getRegisteredStarterDeck, registerStarterDeckRecipes } from "../registry";
+import { CARD_DEFINITIONS, getCardDefinition } from "../cards/catalog";
+import { getRegisteredStarterDeck } from "../registry";
 
 type DeckEntry = readonly [cardId: string, copies: number];
 
@@ -98,8 +98,6 @@ export const BASE_STARTER_DECKS: Record<string, string[]> = {
 
 export const STARTER_DECKS = BASE_STARTER_DECKS;
 
-registerStarterDeckRecipes("base", BASE_STARTER_DECKS);
-
 export function getStarterDeckCardIds(faction: Faction): string[] {
   return getRegisteredStarterDeck(faction);
 }
@@ -113,7 +111,7 @@ export function validateDeckCardIds(cardIds: string[]): string[] {
 
   const copyCounts = new Map<string, number>();
   for (const cardId of cardIds) {
-    if (!getCardDefinition(cardId)) {
+    if (!(getCardDefinition(cardId) ?? CARD_DEFINITIONS[cardId])) {
       errors.push(`Deck contains unknown card id: ${cardId}`);
       continue;
     }

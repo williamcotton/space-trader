@@ -1,6 +1,6 @@
 import type { Faction, GamePhase, ResourceType, UnitRole } from "./enums";
 import { PLAYER_ONE, PLAYER_TWO, type EntityId, type NodeId, type PlayerId } from "./ids";
-import "../content/sets/base";
+import { ensureBaseContentLoaded } from "../content/loader";
 import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
 import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
 import {
@@ -199,10 +199,12 @@ export function getConfiguredDepositAmount(rules: GameRules, resourceType: Resou
 }
 
 export function getPrimaryResourceForFaction(faction: Faction): Exclude<ResourceType, "credits"> {
+  ensureBaseContentLoaded();
   return getRegisteredPrimaryResourceIdForFaction(faction) as Exclude<ResourceType, "credits">;
 }
 
 export function createEmptyResourcePool(initialValue = 0): ResourcePool {
+  ensureBaseContentLoaded();
   const pool = Object.fromEntries(getRegisteredResourceIds().map((resourceId) => [resourceId, initialValue])) as ResourcePool;
   if (!("credits" in pool)) {
     pool.credits = initialValue;
@@ -247,6 +249,7 @@ export function createInitialZonesForPlayer(
   openingHandSize = OPENING_HAND_SIZE,
   randomSource?: () => number
 ): PlayerZones {
+  ensureBaseContentLoaded();
   const deckCardIds = getStarterDeckCardIds(faction);
   const deckErrors = validateDeckCardIds(deckCardIds);
   if (deckErrors.length > 0) {
@@ -279,6 +282,7 @@ export function syncPlayerZoneCounts(state: Pick<GameState, "players" | "zones">
 }
 
 export function createInitialGameState(options: CreateInitialGameStateOptions): GameState {
+  ensureBaseContentLoaded();
   const map = cloneMap(options.map);
   const registeredFactions = getRegisteredFactionIds();
   if (registeredFactions.length === 0) {
