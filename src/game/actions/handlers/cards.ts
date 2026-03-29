@@ -9,6 +9,11 @@ import { createContinuousEffectId, LAYER, nextEffectTimestamp } from "../../syst
 import type { InstructionContext } from "../instructions";
 import { executeInstructions } from "../instructionHandlers";
 import { hasSproutKeyword, UNCOUNTERABLE_KEYWORD } from "../../systems/keywords";
+import {
+  getTacticsCastThisTurn,
+  incrementTacticsCastThisTurn,
+  resetBloomResolutionState,
+} from "../../mechanics";
 
 function applyCardCost(state: GameState, playerId: PlayerId, cost: CardCost): void {
   const pool = state.players[playerId].resources;
@@ -244,7 +249,7 @@ export function handlePlayCard(
     return [];
   }
 
-  const surgeActive = card.kind === "tactic" && state.tacticsCastThisTurn[command.playerId] > 0;
+  const surgeActive = card.kind === "tactic" && getTacticsCastThisTurn(state, command.playerId) > 0;
   const effectId = card.play.stackEffectId;
   const effectDefinition = getStackEffectDefinition(effectId);
   if (!effectDefinition) {
@@ -330,7 +335,7 @@ export function reduceCardPlayedToStack(
   state.priorityPlayerId = event.nextPriorityPlayerId;
   state.consecutivePriorityPasses = 0;
   if (cardDefinition.kind === "tactic") {
-    state.tacticsCastThisTurn[event.playerId] += 1;
+    incrementTacticsCastThisTurn(state, event.playerId);
   }
   state.log.push({
     turn: state.turn,
@@ -410,8 +415,7 @@ export function reduceStackItemResolved(
     return;
   }
 
-  state.lastBloomSourceItemId = null;
-  state.lastBloomedUnitIds = [];
+  resetBloomResolutionState(state);
   state.priorityPlayerId = state.activePlayerId;
   state.consecutivePriorityPasses = 0;
   const resolvedSourceDestination = applyResolvedStackEffect(state, resolvedItem);

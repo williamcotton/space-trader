@@ -2,6 +2,7 @@ import type { GamePhase } from "../model/enums";
 import { MAX_HAND_SIZE, type GameState } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { clearTemporaryUnitModifiers } from "../systems/unitStats";
+import { resetTurnMechanicState } from "../mechanics";
 
 const PHASE_SEQUENCE: GamePhase[] = ["start", "economy", "main", "tactical", "end", "discard"];
 
@@ -43,13 +44,7 @@ export function advancePhase(state: GameState): void {
     clearTemporaryUnitModifiers(state);
     state.turn += 1;
     state.activePlayerId = getNextActivePlayer(state.activePlayerId);
-    state.tacticsCastThisTurn.player_1 = 0;
-    state.tacticsCastThisTurn.player_2 = 0;
-    state.bloomedUnitIdsThisTurn = [];
-    state.lastBloomSourceItemId = null;
-    state.lastBloomedUnitIds = [];
-    state.salvageTriggersThisTurn.player_1 = 0;
-    state.salvageTriggersThisTurn.player_2 = 0;
+    resetTurnMechanicState(state);
     clearTemporaryUnitModifiers(state);
     resetUnitActionBudgetsForPlayer(state, state.activePlayerId);
   }

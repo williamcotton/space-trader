@@ -10,6 +10,7 @@ import { getCascadeAffectedHexes } from "./cascade";
 import { createStackItemId, getOpponentPlayer } from "../turn/stack";
 import { getAutoTargetResolver, registerAutoTargetResolver } from "../registries/autoTargets";
 import { getTriggerConditionEvaluator, registerTriggerConditionEvaluator } from "../registries/triggerConditions";
+import { getLastBloomSourceItemId, getLastBloomedUnitIds } from "../mechanics";
 
 // --- Trigger Condition Types ---
 
@@ -189,14 +190,14 @@ registerTriggerConditionEvaluator("on_cascaded", (state, event, _condition, unit
 
 registerTriggerConditionEvaluator("on_self_bloomed", (state, event, _condition, unit) =>
   event.type === "STACK_ITEM_RESOLVED" &&
-  state.lastBloomSourceItemId === event.itemId &&
-  state.lastBloomedUnitIds.includes(unit.id)
+  getLastBloomSourceItemId(state) === event.itemId &&
+  getLastBloomedUnitIds(state).includes(unit.id)
 );
 
 registerTriggerConditionEvaluator("on_owner_unit_bloomed", (state, event, _condition, unit) =>
   event.type === "STACK_ITEM_RESOLVED" &&
-  state.lastBloomSourceItemId === event.itemId &&
-  state.lastBloomedUnitIds.some((unitId) => {
+  getLastBloomSourceItemId(state) === event.itemId &&
+  getLastBloomedUnitIds(state).some((unitId) => {
     const bloomedUnit = state.entities[unitId];
     return bloomedUnit?.kind === "unit" && bloomedUnit.ownerId === unit.ownerId;
   })

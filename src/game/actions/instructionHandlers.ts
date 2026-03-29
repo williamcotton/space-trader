@@ -16,6 +16,12 @@ import { drawCardForPlayer } from "./handlers/cards";
 import { applyReplacementEffects } from "../systems/replacementEngine";
 import { BLOOM_KEYWORD, hasSproutKeyword, unitHasActiveKeyword } from "../systems/keywords";
 import { getInstructionHandler, registerInstructionHandler } from "../registries/instructionHandlers";
+import {
+  getBloomedUnitIdsThisTurn,
+  getLastBloomSourceItemId,
+  getLastBloomedUnitIds,
+  setLastBloomSourceItemId,
+} from "../mechanics";
 
 // --- Internal helpers (extracted from handlers/cards.ts) ---
 
@@ -196,9 +202,9 @@ function handleTriggerBloom(
   state: GameState,
   instr: Extract<GameInstruction, { type: "TRIGGER_BLOOM" }>
 ): void {
-  if (state.lastBloomSourceItemId !== instr.sourceItemId) {
-    state.lastBloomSourceItemId = instr.sourceItemId;
-    state.lastBloomedUnitIds = [];
+  if (getLastBloomSourceItemId(state) !== instr.sourceItemId) {
+    setLastBloomSourceItemId(state, instr.sourceItemId);
+    getLastBloomedUnitIds(state).length = 0;
   }
 
   const unitIds = [...new Set(instr.unitIds)].sort((a, b) => a.localeCompare(b));
@@ -210,7 +216,7 @@ function handleTriggerBloom(
       continue;
     }
 
-    if (state.bloomedUnitIdsThisTurn.includes(unitId)) {
+    if (getBloomedUnitIdsThisTurn(state).includes(unitId)) {
       continue;
     }
 
@@ -220,8 +226,8 @@ function handleTriggerBloom(
       continue;
     }
 
-    state.bloomedUnitIdsThisTurn.push(unitId);
-    state.lastBloomedUnitIds.push(unitId);
+    getBloomedUnitIdsThisTurn(state).push(unitId);
+    getLastBloomedUnitIds(state).push(unitId);
     state.players[entity.ownerId].resources.biomass += 1;
     bloomsTriggered += 1;
   }

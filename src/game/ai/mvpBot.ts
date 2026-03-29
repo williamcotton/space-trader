@@ -22,6 +22,11 @@ import { getCascadeAffectedHexes } from "../systems/cascade";
 import { getLegalPlayCardTargetOptions } from "../rules/cardPlayOptions";
 import { getEffectiveUnitAttackDamage } from "../systems/unitStats";
 import { getSpellScoringResolver, registerSpellScoringResolver } from "../registries/spellScoring";
+import {
+  getBloomedUnitIdsThisTurn,
+  getSalvageTriggersThisTurn,
+  getTacticsCastThisTurn,
+} from "../mechanics";
 
 const RESOURCE_ORDER: ResourceType[] = ["credits", "alloy", "flux", "biomass"];
 const PRIMARY_RESOURCE_BY_FACTION: Record<Faction, ResourceType> = {
@@ -530,7 +535,7 @@ function scoreUnitBuffOpportunity(
   let hasMeaningfulOpportunity = false;
 
   const freshBloomUnits = affectedUnits.filter((unit) =>
-    !state.bloomedUnitIdsThisTurn.includes(unit.id) &&
+    !getBloomedUnitIdsThisTurn(state).includes(unit.id) &&
     unitHasActiveKeyword(state, unit, BLOOM_KEYWORD)
   );
   if (freshBloomUnits.length > 0) {
@@ -821,7 +826,7 @@ function scoreResourcesByBloomCountSpell(
     maxThresholds?: number;
   }
 ): number {
-  const bloomedUnits = state.bloomedUnitIdsThisTurn
+  const bloomedUnits = getBloomedUnitIdsThisTurn(state)
     .map((unitId) => state.entities[unitId])
     .filter((entity): entity is UnitEntity => entity?.kind === "unit" && entity.ownerId === botPlayerId);
   const thresholdsMet = Math.floor(bloomedUnits.length / options.threshold);
@@ -850,7 +855,7 @@ function scoreResourcesBySalvageCountSpell(
     maxThresholds?: number;
   }
 ): number {
-  const thresholdsMet = Math.floor(state.salvageTriggersThisTurn[botPlayerId] / options.threshold);
+  const thresholdsMet = Math.floor(getSalvageTriggersThisTurn(state, botPlayerId) / options.threshold);
   const payoutMultiplier = options.maxThresholds
     ? Math.min(thresholdsMet, options.maxThresholds)
     : thresholdsMet;
@@ -1094,7 +1099,7 @@ function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameC
     if (!effect) {
       continue;
     }
-    const surgeActive = state.tacticsCastThisTurn[botPlayerId] > 0;
+    const surgeActive = getTacticsCastThisTurn(state, botPlayerId) > 0;
     const effectConfigs = getResolvedCardPlayEffectConfigs(card, surgeActive);
 
     const legalTargets = getLegalPlayCardTargetOptions(state, botPlayerId, cardInstance.instanceId, card);

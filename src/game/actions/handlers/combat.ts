@@ -6,6 +6,7 @@ import { resolveCombatAttack } from "../../systems/combat";
 import { getResourceNodeAtCoord, getResourceNodeById } from "../../systems/harvesting";
 import { SALVAGE_KEYWORD, unitHasActiveKeyword } from "../../systems/keywords";
 import { registerCombatHook, runUnitDestroyedByAttackHooks } from "../../registries/combatHooks";
+import { incrementSalvageTriggersThisTurn } from "../../mechanics";
 
 export function addUniqueTrackedUnit(target: string[], entityId: string): void {
   if (!target.includes(entityId)) {
@@ -169,7 +170,7 @@ registerCombatHook("salvage_reward", {
     }
 
     state.players[attacker.ownerId].resources.alloy += 1;
-    state.salvageTriggersThisTurn[attacker.ownerId] += 1;
+    incrementSalvageTriggersThisTurn(state, attacker.ownerId);
     state.log.push({
       turn: state.turn,
       text: `${attacker.id} salvaged wreckage and generated 1 alloy.`,

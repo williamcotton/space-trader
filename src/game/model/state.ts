@@ -3,6 +3,7 @@ import { PLAYER_ONE, PLAYER_TWO, type EntityId, type NodeId, type PlayerId } fro
 import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
 import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
 import type { ContinuousEffect } from "../systems/continuousEffects";
+import { initializeMechanicState } from "../mechanics";
 
 export const OPENING_HAND_SIZE = 5;
 export const MAX_HAND_SIZE = 7;
@@ -127,6 +128,12 @@ export type MatchLogEntry = {
   text: string;
 };
 
+export type MechanicStateBuckets = {
+  match: Record<string, unknown>;
+  turn: Record<string, unknown>;
+  resolution: Record<string, unknown>;
+};
+
 export type GameState = {
   stateVersion: number;
   matchId: string;
@@ -148,10 +155,16 @@ export type GameState = {
   log: MatchLogEntry[];
   winner: PlayerId | null;
   lastRejectedReason: string | null;
+  mechanicState: MechanicStateBuckets;
+  /** @deprecated Use surge mechanic helpers. */
   tacticsCastThisTurn: Record<PlayerId, number>;
+  /** @deprecated Use bloom mechanic helpers. */
   bloomedUnitIdsThisTurn: EntityId[];
+  /** @deprecated Use bloom mechanic helpers. */
   lastBloomSourceItemId: string | null;
+  /** @deprecated Use bloom mechanic helpers. */
   lastBloomedUnitIds: EntityId[];
+  /** @deprecated Use salvage mechanic helpers. */
   salvageTriggersThisTurn: Record<PlayerId, number>;
   tacticalHarvestEligibleUnitIds: EntityId[];
   tacticalHarvestedUnitIds: EntityId[];
@@ -420,8 +433,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     player_2: createInitialZonesForPlayer(PLAYER_TWO, factionTwo, OPENING_HAND_SIZE, options.randomSource),
   } satisfies Record<PlayerId, PlayerZones>;
 
-  return {
-    stateVersion: 21,
+  const state: GameState = {
+    stateVersion: 22,
     matchId: options.matchId ?? "match_frontier_belt",
     turn: 1,
     phase: "start",
@@ -465,6 +478,11 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     ],
     winner: null,
     lastRejectedReason: null,
+    mechanicState: {
+      match: {},
+      turn: {},
+      resolution: {},
+    },
     tacticsCastThisTurn: {
       player_1: 0,
       player_2: 0,
@@ -479,4 +497,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     tacticalHarvestEligibleUnitIds: [],
     tacticalHarvestedUnitIds: [],
   };
+
+  initializeMechanicState(state);
+  return state;
 }

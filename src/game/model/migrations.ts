@@ -1,10 +1,11 @@
 import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
 import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/stackEffects";
+import { migrateMechanicState } from "../mechanics";
 import { ensureEntityPresentation } from "../presentation";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createDefaultGameRules, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
 
-export const CURRENT_STATE_VERSION = 21;
+export const CURRENT_STATE_VERSION = 22;
 
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
@@ -109,45 +110,7 @@ export function migrateRuntimeState(state: GameState): void {
     state.tacticalHarvestedUnitIds = [];
   }
 
-  if (!state.tacticsCastThisTurn) {
-    state.tacticsCastThisTurn = {
-      player_1: 0,
-      player_2: 0,
-    };
-  } else {
-    if (typeof state.tacticsCastThisTurn.player_1 !== "number") {
-      state.tacticsCastThisTurn.player_1 = 0;
-    }
-    if (typeof state.tacticsCastThisTurn.player_2 !== "number") {
-      state.tacticsCastThisTurn.player_2 = 0;
-    }
-  }
-
-  if (!state.salvageTriggersThisTurn) {
-    state.salvageTriggersThisTurn = {
-      player_1: 0,
-      player_2: 0,
-    };
-  } else {
-    if (typeof state.salvageTriggersThisTurn.player_1 !== "number") {
-      state.salvageTriggersThisTurn.player_1 = 0;
-    }
-    if (typeof state.salvageTriggersThisTurn.player_2 !== "number") {
-      state.salvageTriggersThisTurn.player_2 = 0;
-    }
-  }
-
-  if (!Array.isArray(state.bloomedUnitIdsThisTurn)) {
-    state.bloomedUnitIdsThisTurn = [];
-  }
-
-  if (typeof state.lastBloomSourceItemId === "undefined") {
-    state.lastBloomSourceItemId = null;
-  }
-
-  if (!Array.isArray(state.lastBloomedUnitIds)) {
-    state.lastBloomedUnitIds = [];
-  }
+  migrateMechanicState(state);
 
   for (const stackItem of state.stack) {
     if (typeof stackItem.effectId === "undefined") {
