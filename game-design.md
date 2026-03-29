@@ -111,6 +111,11 @@ Current unit stat vocabulary is:
   - `sprout`
   - `stealth`
   - `relay`
+  - `surge`
+  - `bloom`
+  - `salvage`
+  - `bastion`
+  - `uncounterable`
 
 ## Core Pillars
 - Faction identity matters: each faction should have a distinct economic and tactical rhythm
@@ -138,6 +143,8 @@ Mechanical identity:
 - siege
 - durable combat units
 - damaged-matters finishers
+- salvage payoffs
+- positional bastion-style reinforcement
 
 What Alloy should be best at:
 - holding territory
@@ -157,6 +164,7 @@ Mechanical identity:
 - tempo
 - card flow and selection
 - combo turns built around cascade geometry and spell sequencing
+- Relay and Surge as real combo infrastructure
 
 What Flux should be best at:
 - punishing expensive plays with counters or tempo loss
@@ -175,6 +183,7 @@ Mechanical identity:
 - growth over time
 - board-based resource generation
 - recursion/regrowth themes
+- Bloom as a board-growth engine keyword
 
 Secondary identity, not the main axis:
 - death payoffs
@@ -278,13 +287,17 @@ What is already live:
 - support and synergy units
 - cascade/spatial tactics
 - haymaker tactics
-- an initial `Relay` combo shell
+- a real `Relay` shell
+- a real `Surge` shell
+- a real `Bloom` shell
+- Alloy `Salvage` and `Bastion` packages
 
 What still needs work:
 - tighter faction balance
 - stronger monofaction archetype depth
-- more combo payoffs beyond the first Relay package
-- a cleaner Biomass secondary identity package
+- more combo payoffs beyond the first live packages
+- a cleaner Biomass regrowth / death-value package
+- one louder Alloy signature payoff card
 
 ## New Content Direction: Make the Game More Exciting
 The next wave of design should focus on:
@@ -300,7 +313,11 @@ Build a small reusable vocabulary and make many cards out of it.
 
 ### Triggers
 - `on_owner_tactic_played`
+- `on_owner_surged_tactic_played`
+- `on_owner_salvaged`
 - `on_cascaded`
+- `on_self_bloomed`
+- `on_owner_unit_bloomed`
 - `on_enter_battlefield`
 - `on_death`
 - `on_damage_dealt`
@@ -312,6 +329,8 @@ Build a small reusable vocabulary and make many cards out of it.
 - `global_unit_buff`
 - `temporary_stat_buff`
 - `temporary_keyword_grant`
+- `resource_conversion_from_board_state`
+- `resource_conversion_from_turn_triggers`
 - `while_controlling_node` if needed later
 - `cascade_geometry`
 
@@ -325,6 +344,9 @@ Build a small reusable vocabulary and make many cards out of it.
 - `counter_stack_item`
 - `return_to_hand` later
 - `create_token` later
+
+Current note:
+- true graveyard / reanimation play still needs more than one payload; it likely needs a dedicated zone-move / graveyard-targeting feature pass
 
 ### Duration Buckets
 - `until_end_of_turn`
@@ -386,6 +408,11 @@ The game should support combos, but they should mostly be:
 Avoid building around true infinite loops or opaque combo trees for now.
 The target is satisfying linked plays and bounded loop-feeling engines, not rules-lawyer complexity.
 
+Current live combo vocabulary:
+- Flux: `relay` + `surge`
+- Biomass: `bloom`
+- Alloy: `salvage` + `bastion`
+
 ### Good Combo Shapes
 - Support unit + attacker + combat trick
 - Spell-matter unit + two tactics in one stack exchange
@@ -404,21 +431,21 @@ The target is satisfying linked plays and bounded loop-feeling engines, not rule
 ## Current Archetype Expansion Priorities
 ### Alloy Clan
 What Alloy should gain next:
-- one more formation or siege payoff
-- another damaged-matters finisher
+- one louder formation / siege / salvage payoff
+- another damaged-matters finisher or artillery-style spell
 - more incentives for disciplined board shape instead of isolated stats
 
 ### Flux Collective
 What Flux should gain next:
-- a full spell-chain package
-- more `Relay` payoffs and support cards
-- `Surge` or another sequencing keyword to deepen mono-flux archetypes
+- a top-end `Relay` payoff
+- `Resonance` or another next-layer spatial payoff
+- more reasons to assemble full spellchain turns rather than just efficient tactics
 
 ### Biomass Swarm
 What Biomass should gain next:
-- a real growth-engine package
-- more board-based resource conversion
-- a cleaner bridge between sprout/go-wide play and regrowth/death-value as a secondary module
+- a regrowth / recursion package
+- more death-value support
+- a cleaner bridge between sprout/go-wide play and a true recovery engine
 
 ## Economy Design Principles
 - Resource gathering should continue to feel StarCraft-like, not abstract
@@ -472,6 +499,8 @@ Readable feedback is part of the fun. If a combo happens, the player should feel
 - Should spell damage continue to bypass armor, or should some spell families respect it?
 - How much of Biomass should lean into growth/board engines versus regrowth/death-value?
 - When do we support true infinite combos, if ever, versus staying with bounded loop-feeling mechanics?
+- When do we support true graveyard/reanimation gameplay, if ever, as a major feature wave?
+- Do tokens and multi-target choice cards deserve dedicated engine work, or should they remain postponed?
 
 ## Decision Log
 - 2026-03-18: Direction set to CCG + army tactics + turn-based hex grid.
@@ -503,11 +532,16 @@ Readable feedback is part of the fun. If a combo happens, the player should feel
 - 2026-03-28: Biomass primary identity clarified toward sprout, go-wide growth, and board-based resource engines; death/regrowth remains a secondary axis.
 - 2026-03-28: Neutral cards are now intentionally governed by a neutral-tax philosophy rather than being generic best-rate glue.
 - 2026-03-28: Cascade and Relay are now part of the live combo vocabulary.
+- 2026-03-29: Surge is now part of the live Flux combo package.
+- 2026-03-29: Bloom is now a live Biomass engine keyword with payoff units and a payoff tactic.
+- 2026-03-29: Alloy now has live `Salvage` and `Bastion` identity hooks.
 
 ## Backlog Seeds
-- Add `Surge` as the next combo keyword after `Relay`
-- Add a `Bloom`-style Biomass engine package
-- Add more Alloy formation/siege payoffs
+- Add a top-end Flux `Relay` / `Resonance` payoff
+- Add more Alloy formation / siege / salvage payoffs
+- Add Biomass regrowth / death-value support
+- Decide whether graveyard / reanimation deserves a dedicated feature wave
+- Decide whether tokens and multi-target choice cards deserve dedicated engine support
 - Decide whether spell damage families should ever respect armor
 - Continue tightening neutral rates so faction cards remain the best synergy homes
 - Define terrain/tile rules only after support and spell interaction are interesting
