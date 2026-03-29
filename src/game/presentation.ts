@@ -2,28 +2,17 @@ import { getCardDefinition } from "./content/cards/catalog";
 import type { Faction, ResourceType, UnitRole } from "./model/enums";
 import type { PlayerId } from "./model/ids";
 import type { EntityState, GameState } from "./model/state";
-
-type PlayerTheme = {
-  label: string;
-  primary: string;
-  secondary: string;
-  glow: string;
-  shadow: string;
-  fillDark: string;
-  line: string;
-};
-
-type ResourceTheme = {
-  label: string;
-  shortLabel: string;
-  color: string;
-  glow: string;
-};
-
-type RoleTheme = {
-  label: string;
-  accent: string;
-};
+import {
+  type PlayerTheme,
+  type ResourceTheme,
+  type RoleTheme,
+  getFactionPresentation,
+  getRegisteredResourceTheme,
+  getRegisteredUnitRoleTheme,
+  registerFactionPresentation,
+  registerResourceTheme,
+  registerUnitRoleTheme,
+} from "./registries/presentation";
 
 const FACTION_THEMES: Record<Faction, PlayerTheme> = {
   alloy_clan: {
@@ -93,10 +82,10 @@ let activePlayerThemes: Record<PlayerId, PlayerTheme> = {
 export function configurePlayerThemes(factions: Record<PlayerId, Faction>): void {
   const sameFaction = factions.player_1 === factions.player_2;
   activePlayerThemes = {
-    player_1: FACTION_THEMES[factions.player_1],
+    player_1: getFactionPresentation(factions.player_1).theme,
     player_2: sameFaction
-      ? FACTION_ALT_THEMES[factions.player_2]
-      : FACTION_THEMES[factions.player_2],
+      ? (getFactionPresentation(factions.player_2).mirrorAltTheme ?? getFactionPresentation(factions.player_2).theme)
+      : getFactionPresentation(factions.player_2).theme,
   };
 }
 
@@ -187,18 +176,18 @@ export function getPlayerLabel(playerId: PlayerId): string {
 }
 
 export function getResourceTheme(resourceType: ResourceType): ResourceTheme {
-  return RESOURCE_THEMES[resourceType];
+  return getRegisteredResourceTheme(resourceType);
 }
 
 export function getUnitRoleTheme(role: UnitRole): RoleTheme {
-  return ROLE_THEMES[role];
+  return getRegisteredUnitRoleTheme(role);
 }
 
 export function formatFactionName(faction: Faction | "neutral"): string {
   if (faction === "neutral") {
     return "Neutral";
   }
-  return formatWords(faction);
+  return getFactionPresentation(faction).label ?? formatWords(faction);
 }
 
 export function ensureEntityPresentation(entity: EntityState, _state: Pick<GameState, "players">): void {
@@ -238,3 +227,33 @@ export function getEntityDisplayName(entity: EntityState, _state: Pick<GameState
 
   return ROLE_FALLBACK_NAMES[entity.role] ?? "Unit";
 }
+
+registerFactionPresentation("alloy_clan", {
+  label: "Alloy Clan",
+  theme: FACTION_THEMES.alloy_clan,
+  mirrorAltTheme: FACTION_ALT_THEMES.alloy_clan,
+  animationAccent: "alloy",
+});
+
+registerFactionPresentation("flux_collective", {
+  label: "Flux Collective",
+  theme: FACTION_THEMES.flux_collective,
+  mirrorAltTheme: FACTION_ALT_THEMES.flux_collective,
+  animationAccent: "flux",
+});
+
+registerFactionPresentation("biomass_swarm", {
+  label: "Biomass Swarm",
+  theme: FACTION_THEMES.biomass_swarm,
+  mirrorAltTheme: FACTION_ALT_THEMES.biomass_swarm,
+  animationAccent: "biomass",
+});
+
+registerResourceTheme("credits", RESOURCE_THEMES.credits);
+registerResourceTheme("alloy", RESOURCE_THEMES.alloy);
+registerResourceTheme("flux", RESOURCE_THEMES.flux);
+registerResourceTheme("biomass", RESOURCE_THEMES.biomass);
+
+registerUnitRoleTheme("combat", ROLE_THEMES.combat);
+registerUnitRoleTheme("resource", ROLE_THEMES.resource);
+registerUnitRoleTheme("utility", ROLE_THEMES.utility);
