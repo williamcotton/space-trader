@@ -32,7 +32,7 @@ import {
   type PriorityStopSettings,
 } from "./turn/priorityStops";
 import { createEmptyDerivedState, rebuildDerivedState, type DerivedState } from "./derived";
-import type { GameState } from "./model/state";
+import type { GameState, HexCoord } from "./model/state";
 import type { CanvasAnimation, GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
 import { removeEffectsForEntity } from "./systems/continuousEffects";
 import { getLegalPlayCardTargetOptions, getPlayCardTargetPrompt, getRequiredPlayCardTargetMode } from "./rules/cardPlayOptions";
@@ -240,9 +240,12 @@ export class GameRuntime {
   private consumedPriorityStopKeys: Set<string> = new Set();
   private pendingCardTargeting: PendingCardTargeting | null = null;
   private listeners: Set<() => void> = new Set();
+  private transientListeners: Set<() => void> = new Set();
   private stateVersion = 0;
+  private transientVersion = 0;
   private derivedState: DerivedState = createEmptyDerivedState();
   private runtimeProfileId: string | null = null;
+  private hoveredHex: HexCoord | null = null;
   private contentSelection: RuntimeContentOptions = {
     builtInSetIds: ["base"],
   };
@@ -302,6 +305,7 @@ export class GameRuntime {
     this.elapsedSeconds = 0;
     this.botActionReadyAtMs = 0;
     this.pendingCardTargeting = null;
+    this.hoveredHex = null;
     this.consumedPriorityStopKeys = new Set();
     this.derivedState = createEmptyDerivedState();
     configurePlayerThemes({
@@ -360,8 +364,17 @@ export class GameRuntime {
     if (!this.listeners) {
       this.listeners = new Set();
     }
+    if (!this.transientListeners) {
+      this.transientListeners = new Set();
+    }
     if (typeof this.stateVersion !== "number") {
       this.stateVersion = 0;
+    }
+    if (typeof this.transientVersion !== "number") {
+      this.transientVersion = 0;
+    }
+    if (typeof this.hoveredHex === "undefined") {
+      this.hoveredHex = null;
     }
     if (!this.derivedState || typeof this.derivedState.sourceVersion !== "number") {
       this.derivedState = createEmptyDerivedState();
@@ -373,8 +386,21 @@ export class GameRuntime {
     return () => this.listeners.delete(listener);
   }
 
+  subscribeTransient(listener: () => void): () => void {
+    this.transientListeners.add(listener);
+    return () => this.transientListeners.delete(listener);
+  }
+
   getStateVersion(): number {
     return this.stateVersion;
+  }
+
+  getTransientVersion(): number {
+    return this.transientVersion;
+  }
+
+  getHoveredHex(): HexCoord | null {
+    return this.hoveredHex ? { ...this.hoveredHex } : null;
   }
 
   private notifyListeners(): void {
@@ -382,6 +408,22 @@ export class GameRuntime {
     for (const listener of this.listeners) {
       listener();
     }
+  }
+
+  private notifyTransientListeners(): void {
+    this.transientVersion++;
+    for (const listener of this.transientListeners) {
+      listener();
+    }
+  }
+
+  private setHoveredHex(next: HexCoord | null): boolean {
+    if (next?.q === this.hoveredHex?.q && next?.r === this.hoveredHex?.r) {
+      return false;
+    }
+    this.hoveredHex = next ? { ...next } : null;
+    this.notifyTransientListeners();
+    return true;
   }
 
   private pushAnimations(animations: CanvasAnimation[]): void {
@@ -490,24 +532,16 @@ export class GameRuntime {
 
   setHoveredHexFromScreenPoint(pixelX: number, pixelY: number): void {
     const next = this.getHexAtScreenPoint(pixelX, pixelY);
-    if (next?.q === this.state.hoveredHex?.q && next?.r === this.state.hoveredHex?.r) {
-      return;
-    }
-    this.state.hoveredHex = next;
-    this.notifyListeners();
+    this.setHoveredHex(next);
   }
 
   clearHoveredHex(): void {
-    if (!this.state.hoveredHex) {
-      return;
-    }
-    this.state.hoveredHex = null;
-    this.notifyListeners();
+    this.setHoveredHex(null);
   }
 
   selectUnitFromScreenPoint(pixelX: number, pixelY: number): void {
     const hoveredHex = this.getHexAtScreenPoint(pixelX, pixelY);
-    this.state.hoveredHex = hoveredHex;
+    this.setHoveredHex(hoveredHex);
     if (this.pendingCardTargeting) {
       if (!hoveredHex) {
         this.clearPendingCardTargeting(`Cancelled targeting for ${this.pendingCardTargeting.cardName}.`);
@@ -1003,6 +1037,7 @@ export class GameRuntime {
       transients: {
         animations: this.animations,
         timeSeconds: this.elapsedSeconds,
+        hoveredHex: this.hoveredHex,
       },
       derived: this.derivedState,
     };

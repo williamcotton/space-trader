@@ -80,10 +80,6 @@ export function migrateRuntimeState(state: GameState): void {
     state.consecutivePriorityPasses = 0;
   }
 
-  if (typeof state.hoveredHex === "undefined") {
-    state.hoveredHex = null;
-  }
-
   if (!state.rules) {
     state.rules = createDefaultGameRules();
   } else {

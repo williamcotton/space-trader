@@ -138,6 +138,7 @@ export type CanvasAnimation =
 export type FrameTransients = {
   animations: CanvasAnimation[];
   timeSeconds: number;
+  hoveredHex: HexCoord | null;
 };
 
 export type GameViewport = {

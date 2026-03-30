@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { requireMapDefinition } from "./content/maps/catalog";
+import { axialToPixel } from "./model/hex";
 import { createInitialGameState } from "./model/state";
 import { createConfiguredRuntime, GameRuntime, getBoardClickCommand } from "./runtime";
+import { getHexMetrics } from "./render/layout";
 import { TEST_EXPANSION_SET } from "../test/testExpansion";
 
 function setupState() {
@@ -102,6 +104,22 @@ describe("GameRuntime", () => {
 
     expect(runtime.state.winner).toBe("player_2");
     expect(runtime.getAnimations().some((animation) => animation.kind === "victory_fanfare" && animation.playerId === "player_2")).toBe(true);
+  });
+
+  it("tracks hover as transient runtime state without bumping the main state version", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    runtime.setViewport(1024, 768);
+    const hoverTarget = runtime.state.entities.unit_player_1_scout.coord;
+    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
+    const point = axialToPixel(hoverTarget, metrics.origin, metrics.size);
+    const stateVersionBefore = runtime.getStateVersion();
+    const transientVersionBefore = runtime.getTransientVersion();
+
+    runtime.setHoveredHexFromScreenPoint(point.x, point.y);
+
+    expect(runtime.getHoveredHex()).toEqual(hoverTarget);
+    expect(runtime.getStateVersion()).toBe(stateVersionBefore);
+    expect(runtime.getTransientVersion()).toBeGreaterThan(transientVersionBefore);
   });
 
   it("can create a runtime from an explicit content bundle", () => {

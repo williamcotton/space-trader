@@ -156,7 +156,6 @@ export interface GameState {
   activePlayerId: PlayerId;
   priorityPlayerId: PlayerId | null;
   consecutivePriorityPasses: number;
-  hoveredHex: HexCoord | null;
   selectedEntityId: EntityId | null;
   rules: GameRules;
   map: MapState;
@@ -482,7 +481,6 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     activePlayerId: PLAYER_ONE,
     priorityPlayerId: PLAYER_ONE,
     consecutivePriorityPasses: 0,
-    hoveredHex: null,
     selectedEntityId: null,
     rules,
     map,

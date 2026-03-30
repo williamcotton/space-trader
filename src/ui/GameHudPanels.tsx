@@ -1,13 +1,13 @@
 import type { GamePhase } from "../game/model/enums";
 import { hexDistance, isWithinMapBounds } from "../game/model/hex";
-import type { EntityState, GameState, UnitEntity } from "../game/model/state";
+import type { EntityState, HexCoord, UnitEntity } from "../game/model/state";
 import { getEntityAtCoord, getSelectedUnit } from "../game/model/queries";
 import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleTheme } from "../game/presentation";
 import { getCardDefinition } from "../game/content/cards/catalog";
 import { getGameRuntime } from "../game/runtime";
 import { resolveCombatAttack } from "../game/systems/combat";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "../game/systems/unitStats";
-import { useGameSnapshot } from "./useGameSnapshot";
+import { useRuntimeViewSnapshot } from "./useRuntimeViewSnapshot";
 
 type SelectedUnitSnapshot = {
   id: string;
@@ -50,18 +50,19 @@ type HoverCombatSnapshot = {
 type TacticalHudSnapshot = {
   phase: GamePhase;
   selectedUnit: SelectedUnitSnapshot | null;
-  hoveredHex: GameState["hoveredHex"];
+  hoveredHex: HexCoord | null;
   hoverCombat: HoverCombatSnapshot | null;
 };
 
 function readSnapshot(): TacticalHudSnapshot {
   const runtime = getGameRuntime();
   const state = runtime.state;
+  const hoveredHex = runtime.getHoveredHex();
   const selected = getSelectedUnit(state);
 
   let hoverCombat: HoverCombatSnapshot | null = null;
-  if (selected && state.hoveredHex && isWithinMapBounds(state.hoveredHex, state.map)) {
-    const hoveredEntity = getEntityAtCoord(state, state.hoveredHex, selected.id);
+  if (selected && hoveredHex && isWithinMapBounds(hoveredHex, state.map)) {
+    const hoveredEntity = getEntityAtCoord(state, hoveredHex, selected.id);
     if (hoveredEntity && hoveredEntity.ownerId !== selected.ownerId) {
       const distance = hexDistance(selected.coord, hoveredEntity.coord);
       const canAttackNow = state.phase === "tactical" && selected.attacksRemaining > 0 && distance <= selected.attackRange;
@@ -109,13 +110,13 @@ function readSnapshot(): TacticalHudSnapshot {
           rulesText: selected.sourceCardId ? getCardDefinition(selected.sourceCardId)?.text ?? null : null,
         }
       : null,
-    hoveredHex: state.hoveredHex ? { ...state.hoveredHex } : null,
+    hoveredHex,
     hoverCombat,
   };
 }
 
 export function GameHudPanels() {
-  const snapshot = useGameSnapshot(readSnapshot);
+  const snapshot = useRuntimeViewSnapshot(readSnapshot);
 
   const roleAccent = snapshot.selectedUnit ? getUnitRoleTheme(snapshot.selectedUnit.role).accent : undefined;
   const roleLabel = snapshot.selectedUnit ? getUnitRoleTheme(snapshot.selectedUnit.role).label : null;

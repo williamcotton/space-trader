@@ -64,18 +64,19 @@ export function drawStackAnchor(context: CanvasRenderingContext2D, frame: GameFr
 }
 
 export function drawHoverHexAndTargetPreview(state: GameState, frame: GameFrame, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
-  if (!state.hoveredHex || !isWithinMapBounds(state.hoveredHex, state.map)) {
+  const hoveredHex = frame.transients.hoveredHex;
+  if (!hoveredHex || !isWithinMapBounds(hoveredHex, state.map)) {
     return;
   }
 
-  const hoverPos = toPixel(state.hoveredHex, originX, originY, hexSize);
+  const hoverPos = toPixel(hoveredHex, originX, originY, hexSize);
   drawHexOutline(context, hoverPos.x, hoverPos.y, hexSize - 3);
   context.strokeStyle = "rgba(246, 229, 108, 0.72)";
   context.lineWidth = 2;
   context.stroke();
 
   const selected = getSelectedUnit(state);
-  const hoveredEntity = spatialGetEntity(frame.derived.spatialIndex, state.entities, state.hoveredHex, selected?.id);
+  const hoveredEntity = spatialGetEntity(frame.derived.spatialIndex, state.entities, hoveredHex, selected?.id);
   if (!selected || !hoveredEntity || hoveredEntity.ownerId === selected.ownerId) {
     return;
   }
