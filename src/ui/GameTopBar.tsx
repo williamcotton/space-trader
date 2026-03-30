@@ -39,7 +39,7 @@ function readSnapshot(): TopBarSnapshot {
     players: (["player_1", "player_2"] as const).map((playerId) => ({
       id: playerId,
       faction: state.players[playerId].faction,
-      resources: state.players[playerId].resources,
+      resources: { ...state.players[playerId].resources },
       hand: state.zones[playerId].hand.length,
       deck: state.zones[playerId].deck.length,
       botAutoplay: runtime.isBotAutoplayEnabled(playerId),
