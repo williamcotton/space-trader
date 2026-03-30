@@ -1,7 +1,7 @@
 import type { GameCommand } from "./actions/commands";
 import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { decideMvpBotCommand } from "./ai/mvpBot";
-import { ensureBaseContentLoaded } from "./content/loader";
+import { ensureBaseContentLoaded, getLoadedContentSetIds, loadConfiguredContentSets, type ContentLoadSelection } from "./content/loader";
 import { getCardDefinition } from "./content/cards/catalog";
 import {
   findRegisteredRuntimeProfileForMap,
@@ -56,6 +56,12 @@ type PendingCardTargeting = {
   prompt: string;
 };
 
+export type RuntimeContentOptions = Omit<ContentLoadSelection, "reset"> & {
+  runtimeProfileId?: string;
+  mapId?: string;
+  factions?: { player_1: Faction; player_2: Faction };
+};
+
 function createRuntimeMatchId(matchPrefix: string): string {
   return `match_${matchPrefix}_${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffff)
     .toString(36)
@@ -81,15 +87,75 @@ function getDefaultRuntimeMap() {
   return fallbackMap;
 }
 
-function createDefaultRuntimeState(): GameState {
-  const map = getDefaultRuntimeMap();
-  const runtimeProfile = getDefaultRuntimeProfile();
-  return createInitialGameState({
-    map,
-    runtimeProfileId: runtimeProfile?.id,
-    matchId: createRuntimeMatchId(runtimeProfile?.matchIdPrefix ?? map.id),
-    randomSource: () => Math.random(),
+function requireRuntimeMap(mapId: string) {
+  const map = getRegisteredMap(mapId);
+  if (!map) {
+    throw new Error(`Missing registered map ${mapId}.`);
+  }
+  return map;
+}
+
+function resolveRuntimeProfileId(selection?: RuntimeContentOptions, fallbackRuntimeProfileId?: string | null, fallbackMapId?: string): string | null {
+  if (selection?.runtimeProfileId) {
+    const explicitProfile = getRegisteredRuntimeProfile(selection.runtimeProfileId);
+    if (!explicitProfile) {
+      throw new Error(`Missing registered runtime profile ${selection.runtimeProfileId}.`);
+    }
+    return explicitProfile.id;
+  }
+
+  if (selection?.mapId) {
+    return findRegisteredRuntimeProfileForMap(selection.mapId)?.id ?? getDefaultRuntimeProfile()?.id ?? null;
+  }
+
+  if (fallbackRuntimeProfileId) {
+    return getRegisteredRuntimeProfile(fallbackRuntimeProfileId)?.id ?? null;
+  }
+
+  if (fallbackMapId) {
+    return findRegisteredRuntimeProfileForMap(fallbackMapId)?.id ?? getDefaultRuntimeProfile()?.id ?? null;
+  }
+
+  return getDefaultRuntimeProfile()?.id ?? null;
+}
+
+function createRuntimeStateFromContent(
+  selection?: RuntimeContentOptions,
+  fallbackRuntimeProfileId?: string | null,
+  fallbackMapId?: string
+): { state: GameState; runtimeProfileId: string | null; loadedSetIds: string[] } {
+  loadConfiguredContentSets({
+    builtInSetIds: selection?.builtInSetIds,
+    extraSets: selection?.extraSets,
+    reset: true,
   });
+
+  const runtimeProfileId = resolveRuntimeProfileId(selection, fallbackRuntimeProfileId, fallbackMapId);
+  const runtimeProfile = runtimeProfileId ? getRegisteredRuntimeProfile(runtimeProfileId) : null;
+  const map =
+    selection?.mapId
+      ? requireRuntimeMap(selection.mapId)
+      : runtimeProfile
+        ? requireRuntimeMap(runtimeProfile.defaultMapId)
+        : fallbackMapId
+          ? requireRuntimeMap(fallbackMapId)
+          : getDefaultRuntimeMap();
+
+  return {
+    state: createInitialGameState({
+      map,
+      runtimeProfileId: runtimeProfile?.id ?? undefined,
+      matchId: createRuntimeMatchId(runtimeProfile?.matchIdPrefix ?? map.id),
+      randomSource: () => Math.random(),
+      factions: selection?.factions,
+    }),
+    runtimeProfileId: runtimeProfile?.id ?? findRegisteredRuntimeProfileForMap(map.id)?.id ?? null,
+    loadedSetIds: getLoadedContentSetIds(),
+  };
+}
+
+function createDefaultRuntimeState(): GameState {
+  return createRuntimeStateFromContent().state;
 }
 
 function getSelectedActiveUnit(state: GameState) {
@@ -175,15 +241,22 @@ export class GameRuntime {
   private stateVersion = 0;
   private derivedState: DerivedState = createEmptyDerivedState();
   private runtimeProfileId: string | null = null;
+  private contentSelection: RuntimeContentOptions = {
+    builtInSetIds: ["base"],
+  };
   readonly state: GameState;
 
   constructor(
     state: GameState = createDefaultRuntimeState(),
-    runtimeProfileId?: string
+    runtimeProfileId?: string,
+    contentSelection?: RuntimeContentOptions
   ) {
     this.state = state;
     migrateRuntimeState(this.state);
     this.runtimeProfileId = runtimeProfileId ?? findRegisteredRuntimeProfileForMap(this.state.map.id)?.id ?? getDefaultRuntimeProfile()?.id ?? null;
+    this.contentSelection = contentSelection ?? {
+      builtInSetIds: getLoadedContentSetIds(),
+    };
     this.rehydrateHotState();
     configurePlayerThemes({
       player_1: this.state.players.player_1.faction,
@@ -193,17 +266,33 @@ export class GameRuntime {
   }
 
   resetWithFactions(factions: { player_1: Faction; player_2: Faction }): void {
-    const runtimeProfile =
-      (this.runtimeProfileId ? getRegisteredRuntimeProfile(this.runtimeProfileId) : null) ??
-      findRegisteredRuntimeProfileForMap(this.state.map.id) ??
-      getDefaultRuntimeProfile();
-    const newState = createInitialGameState({
-      map: this.state.map,
-      runtimeProfileId: runtimeProfile?.id ?? this.runtimeProfileId ?? undefined,
-      matchId: createRuntimeMatchId(runtimeProfile?.matchIdPrefix ?? this.state.map.id),
-      randomSource: () => Math.random(),
+    this.resetWithContent({
+      builtInSetIds: this.contentSelection.builtInSetIds,
+      extraSets: this.contentSelection.extraSets,
+      runtimeProfileId: this.runtimeProfileId ?? undefined,
+      mapId: this.state.map.id,
       factions,
     });
+  }
+
+  resetWithContent(options?: RuntimeContentOptions): void {
+    const { state: newState, runtimeProfileId, loadedSetIds } = createRuntimeStateFromContent(
+      {
+        builtInSetIds: options?.builtInSetIds ?? this.contentSelection.builtInSetIds,
+        extraSets: options?.extraSets ?? this.contentSelection.extraSets,
+        runtimeProfileId: options?.runtimeProfileId,
+        mapId: options?.mapId,
+        factions: options?.factions,
+      },
+      this.runtimeProfileId,
+      this.state.map.id
+    );
+
+    this.runtimeProfileId = runtimeProfileId;
+    this.contentSelection = {
+      builtInSetIds: options?.builtInSetIds ?? this.contentSelection.builtInSetIds ?? loadedSetIds,
+      extraSets: options?.extraSets ?? this.contentSelection.extraSets,
+    };
     Object.assign(this.state, newState);
     this.animations = [];
     this.elapsedSeconds = 0;
@@ -211,7 +300,10 @@ export class GameRuntime {
     this.pendingCardTargeting = null;
     this.consumedPriorityStopKeys = new Set();
     this.derivedState = createEmptyDerivedState();
-    configurePlayerThemes(factions);
+    configurePlayerThemes({
+      player_1: this.state.players.player_1.faction,
+      player_2: this.state.players.player_2.faction,
+    });
     this.pushAnimations([buildMatchIntroAnimation(this.state)]);
     this.notifyListeners();
   }
@@ -844,6 +936,11 @@ export class GameRuntime {
     this.updateSystem(this.state, frame);
     this.renderSystem(this.state, frame);
   }
+}
+
+export function createConfiguredRuntime(options?: RuntimeContentOptions): GameRuntime {
+  const { state, runtimeProfileId } = createRuntimeStateFromContent(options);
+  return new GameRuntime(state, runtimeProfileId ?? undefined, options);
 }
 
 type RuntimeHotData = {

@@ -1,6 +1,6 @@
 import type { UnitRole } from "../model/enums";
 import type { CardSet } from "./sets/types";
-import { BASE_SET } from "./sets/base";
+import { getBuiltInCardSetManifest, getDefaultBuiltInSetIds, requireBuiltInCardSetManifest } from "./sets/catalog";
 import {
   registerCardDefinitions,
   registerCardSet,
@@ -41,9 +41,13 @@ import { resetTriggerConditionRegistry } from "../registries/triggerConditions";
 import { resetUnitDeploymentRegistry } from "../registries/unitDeployment";
 import { resetUnitStatHookRegistry } from "../registries/unitStatHooks";
 
-const DEFAULT_CONTENT_SETS: readonly CardSet[] = [BASE_SET];
-
 let loadedSetIds = new Set<string>();
+
+export type ContentLoadSelection = {
+  builtInSetIds?: readonly string[];
+  extraSets?: readonly CardSet[];
+  reset?: boolean;
+};
 
 function resolveLoadOrder(inputSets: readonly CardSet[]): CardSet[] {
   const pending = new Map<string, CardSet>();
@@ -188,11 +192,56 @@ export function loadContentSets(sets: readonly CardSet[], options?: { reset?: bo
   }
 }
 
+function resolveSelectedSetManifests(selection?: Omit<ContentLoadSelection, "reset">): CardSet[] {
+  const builtInSetIds = selection?.builtInSetIds ?? getDefaultBuiltInSetIds();
+  const selectedSets = new Map<string, CardSet>();
+
+  function includeBuiltInSet(setId: string): void {
+    if (selectedSets.has(setId)) {
+      return;
+    }
+
+    const manifest = requireBuiltInCardSetManifest(setId);
+    selectedSets.set(manifest.id, manifest);
+
+    for (const dependencyId of manifest.dependencies ?? []) {
+      if (getBuiltInCardSetManifest(dependencyId)) {
+        includeBuiltInSet(dependencyId);
+      }
+    }
+  }
+
+  for (const setId of builtInSetIds) {
+    includeBuiltInSet(setId);
+  }
+
+  for (const set of selection?.extraSets ?? []) {
+    selectedSets.set(set.id, set);
+  }
+
+  return [...selectedSets.values()];
+}
+
+export function loadConfiguredContentSets(selection?: ContentLoadSelection): void {
+  const sets = resolveSelectedSetManifests(selection);
+  loadContentSets(sets, { reset: selection?.reset ?? true });
+}
+
+export function loadBuiltInContentSets(setIds: readonly string[], options?: { reset?: boolean }): void {
+  loadConfiguredContentSets({
+    builtInSetIds: setIds,
+    reset: options?.reset,
+  });
+}
+
 export function initializeBaseContent(): void {
-  if (loadedSetIds.has(BASE_SET.id)) {
+  if (loadedSetIds.has("base")) {
     return;
   }
-  loadContentSets(DEFAULT_CONTENT_SETS, { reset: true });
+  loadConfiguredContentSets({
+    builtInSetIds: ["base"],
+    reset: true,
+  });
 }
 
 export function ensureBaseContentLoaded(): void {
@@ -201,7 +250,7 @@ export function ensureBaseContentLoaded(): void {
     return;
   }
 
-  if (!loadedSetIds.has(BASE_SET.id)) {
+  if (!loadedSetIds.has("base")) {
     throw new Error("Base content is not loaded. Explicitly load compatible content sets before using base gameplay facades.");
   }
 }

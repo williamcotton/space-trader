@@ -12,8 +12,9 @@ import {
   getRegisteredStackEffectDefinitions,
   getRegisteredResourceIds,
 } from "./registry";
-import { initializeBaseContent, getLoadedContentSetIds, resetLoadedContent } from "./loader";
+import { initializeBaseContent, getLoadedContentSetIds, loadConfiguredContentSets, resetLoadedContent } from "./loader";
 import { getFactionPresentation, getRegisteredResourceTheme, getRegisteredUnitRoleTheme } from "../registries/presentation";
+import { TEST_EXPANSION_SET } from "../../test/testExpansion";
 
 describe("content loader", () => {
   afterEach(() => {
@@ -55,5 +56,19 @@ describe("content loader", () => {
     expect(state.map.id).toBe("frontier_belt");
     expect(state.players.player_1.faction).toBe("alloy_clan");
     expect(state.players.player_2.faction).toBe("flux_collective");
+  });
+
+  it("loads base plus an expansion set through the configured content selection API", () => {
+    loadConfiguredContentSets({
+      extraSets: [TEST_EXPANSION_SET],
+      reset: true,
+    });
+
+    expect(getLoadedContentSetIds()).toEqual(["base", "test_expansion"]);
+    expect(getRegisteredCardSet("test_expansion")?.name).toBe("Test Expansion");
+    expect(getRegisteredFactionIds()).toContain("crystal_clan");
+    expect(getRegisteredResourceIds()).toContain("crystal");
+    expect(getRegisteredMap("test_expansion_frontier")?.name).toBe("Test Expansion Frontier");
+    expect(getFactionPresentation("crystal_clan").animationAccent).toBe("crystal_clan");
   });
 });

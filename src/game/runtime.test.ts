@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { requireMapDefinition } from "./content/maps/catalog";
 import { createInitialGameState } from "./model/state";
-import { GameRuntime, getBoardClickCommand } from "./runtime";
+import { createConfiguredRuntime, GameRuntime, getBoardClickCommand } from "./runtime";
+import { TEST_EXPANSION_SET } from "../test/testExpansion";
 
 function setupState() {
   return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
@@ -97,5 +98,21 @@ describe("GameRuntime", () => {
 
     expect(runtime.state.winner).toBe("player_2");
     expect(runtime.getAnimations().some((animation) => animation.kind === "victory_fanfare" && animation.playerId === "player_2")).toBe(true);
+  });
+
+  it("can create a runtime from an explicit content bundle", () => {
+    const runtime = createConfiguredRuntime({
+      extraSets: [TEST_EXPANSION_SET],
+      runtimeProfileId: "test_expansion_profile",
+      factions: {
+        player_1: "crystal_clan",
+        player_2: "flux_collective",
+      },
+    });
+
+    expect(runtime.state.map.id).toBe("test_expansion_frontier");
+    expect(runtime.state.players.player_1.faction).toBe("crystal_clan");
+    expect(runtime.state.players.player_2.faction).toBe("flux_collective");
+    expect(runtime.state.matchId.startsWith("match_test_expansion_")).toBe(true);
   });
 });
