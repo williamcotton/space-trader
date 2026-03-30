@@ -1,12 +1,12 @@
 import { getGameRuntime } from "../game/runtime";
 import { useGameSnapshot } from "./useGameSnapshot";
-import { FACTIONS, type Faction, type ResourceType } from "../game/model/enums";
+import { type Faction, type ResourceType } from "../game/model/enums";
 import type { PlayerId } from "../game/model/ids";
+import { getRegisteredFactionIds, getOrderedRegisteredResourceModules } from "../game/content/registry";
 import { formatFactionName, getPlayerLabel, getResourceTheme } from "../game/presentation";
 import { PRIORITY_STOP_LABELS, type PriorityStopKey, type PriorityStopSettings } from "../game/turn/priorityStops";
 import { ResourceIcon } from "./ResourceIcon";
 
-const RESOURCE_ORDER: ResourceType[] = ["credits", "alloy", "flux", "biomass"];
 const PRIORITY_STOP_ORDER: PriorityStopKey[] = ["opponentMain", "opponentTactical", "opponentStack"];
 
 type PlayerTopBarSnapshot = {
@@ -51,6 +51,8 @@ function readSnapshot(): TopBarSnapshot {
 export function GameTopBar() {
   const runtime = getGameRuntime();
   const snapshot = useGameSnapshot(readSnapshot);
+  const factionIds = getRegisteredFactionIds();
+  const resourceOrder = getOrderedRegisteredResourceModules().map((resource) => resource.id);
 
   return (
     <header className="game-top-bar" aria-label="Match controls and status">
@@ -88,13 +90,13 @@ export function GameTopBar() {
                     } as { player_1: Faction; player_2: Faction });
                   }}
                 >
-                  {FACTIONS.map((f) => (
+                  {factionIds.map((f) => (
                     <option key={f} value={f}>{formatFactionName(f)}</option>
                   ))}
                 </select>
               </div>
               <div className="top-bar-player-resources">
-                {RESOURCE_ORDER.map((resource) => (
+                {resourceOrder.map((resource) => (
                   <span key={resource} className={`top-bar-resource-pill ${resource}`} title={getResourceTheme(resource).label}>
                     <ResourceIcon resource={resource} size={12} />
                     <strong>{player.resources[resource]}</strong>

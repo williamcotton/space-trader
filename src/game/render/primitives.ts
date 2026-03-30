@@ -1,6 +1,8 @@
 import { axialToPixel } from "../model/hex";
 import type { ResourceType } from "../model/enums";
 import type { HexCoord } from "../model/state";
+import { getRegisteredCurrencyResourceId, getRegisteredResourceModule } from "../content/registry";
+import type { ResourceGlyphShape } from "../content/sets/types";
 import { getRegisteredResourceTheme, tryGetRegisteredResourceTheme } from "../registries/presentation";
 
 export function toPixel(coord: HexCoord, originX: number, originY: number, hexSize: number): { x: number; y: number } {
@@ -65,6 +67,81 @@ export function drawRoundedRect(context: CanvasRenderingContext2D, x: number, y:
   context.closePath();
 }
 
+const DEFAULT_RESOURCE_GLYPH_VIEWBOX = {
+  width: 24,
+  height: 24,
+};
+
+function resolveGlyphPaint(paint: string | undefined, currentColor: string): string {
+  return !paint || paint === "currentColor" ? currentColor : paint;
+}
+
+function drawCanvasGlyphShape(context: CanvasRenderingContext2D, shape: ResourceGlyphShape, currentColor: string): void {
+  context.beginPath();
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  switch (shape.type) {
+    case "polygon": {
+      const points = shape.points
+        .trim()
+        .split(/\s+/)
+        .map((point) => point.split(",").map((value) => Number(value)));
+      points.forEach(([pointX, pointY], index) => {
+        if (index === 0) {
+          context.moveTo(pointX, pointY);
+        } else {
+          context.lineTo(pointX, pointY);
+        }
+      });
+      context.closePath();
+      break;
+    }
+    case "circle":
+      context.arc(shape.cx, shape.cy, shape.r, 0, Math.PI * 2);
+      break;
+    case "rect":
+      drawRoundedRect(context, shape.x, shape.y, shape.width, shape.height, shape.rx ?? 0);
+      break;
+    case "path": {
+      if (typeof Path2D === "undefined") {
+        return;
+      }
+      const path = new Path2D(shape.d);
+      if (shape.fill && shape.fill !== "none") {
+        context.fillStyle = resolveGlyphPaint(shape.fill, currentColor);
+        context.fill(path);
+      }
+      if (shape.stroke && shape.stroke !== "none") {
+        context.strokeStyle = resolveGlyphPaint(shape.stroke, currentColor);
+        context.lineWidth = shape.strokeWidth ?? context.lineWidth;
+        context.lineCap = shape.strokeLinecap ?? context.lineCap;
+        context.lineJoin = shape.strokeLinejoin ?? context.lineJoin;
+        context.stroke(path);
+      }
+      return;
+    }
+    case "line":
+      context.moveTo(shape.x1, shape.y1);
+      context.lineTo(shape.x2, shape.y2);
+      break;
+  }
+
+  if ("fill" in shape && shape.fill && shape.fill !== "none") {
+    context.fillStyle = resolveGlyphPaint(shape.fill, currentColor);
+    context.fill();
+  }
+
+  if ("stroke" in shape && shape.stroke && shape.stroke !== "none") {
+    context.strokeStyle = resolveGlyphPaint(shape.stroke, currentColor);
+    context.lineWidth = shape.strokeWidth ?? context.lineWidth;
+    if ("strokeLinecap" in shape && shape.strokeLinecap) {
+      context.lineCap = shape.strokeLinecap;
+    }
+    context.stroke();
+  }
+}
+
 export function drawResourceGlyph(
   context: CanvasRenderingContext2D,
   x: number,
@@ -72,59 +149,27 @@ export function drawResourceGlyph(
   resourceType: ResourceType,
   size: number
 ): void {
+  const module = getRegisteredResourceModule(resourceType);
   context.save();
   context.translate(x, y);
-  context.lineWidth = Math.max(1, size * 0.16);
-  context.lineCap = "round";
-  context.lineJoin = "round";
-
-  switch (resourceType) {
-    case "credits":
-      drawRegularPolygon(context, 0, 0, size, 6, -Math.PI / 6);
-      context.stroke();
-      context.beginPath();
-      context.arc(0, 0, size * 0.32, 0, Math.PI * 2);
-      context.stroke();
-      break;
-    case "alloy":
-      drawRoundedRect(context, -size * 0.72, -size * 0.46, size * 1.44, size * 0.38, size * 0.12);
-      context.stroke();
-      drawRoundedRect(context, -size * 0.54, size * 0.08, size * 1.08, size * 0.34, size * 0.12);
-      context.stroke();
-      break;
-    case "flux":
-      context.beginPath();
-      context.moveTo(-size * 0.18, -size);
-      context.lineTo(size * 0.12, -size * 0.2);
-      context.lineTo(-size * 0.04, -size * 0.2);
-      context.lineTo(size * 0.24, size);
-      context.lineTo(-size * 0.1, size * 0.12);
-      context.lineTo(size * 0.04, size * 0.12);
-      context.closePath();
-      context.fill();
-      break;
-    case "biomass":
-      context.beginPath();
-      context.moveTo(0, size);
-      context.quadraticCurveTo(size * 0.08, size * 0.12, size * 0.54, -size * 0.4);
-      context.quadraticCurveTo(size * 0.08, -size * 0.76, 0, -size * 0.14);
-      context.quadraticCurveTo(-size * 0.08, -size * 0.76, -size * 0.54, -size * 0.4);
-      context.quadraticCurveTo(-size * 0.08, size * 0.12, 0, size);
-      context.fill();
-      context.beginPath();
-      context.moveTo(0, size * 0.78);
-      context.lineTo(0, -size * 0.42);
-      context.stroke();
-      break;
-    default: {
-      const theme = tryGetRegisteredResourceTheme(resourceType) ?? getRegisteredResourceTheme("credits");
-      context.font = `${Math.max(8, size * 1.4)}px "Avenir Next", "Trebuchet MS", sans-serif`;
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-      context.fillStyle = theme.color;
-      context.fillText(theme.shortLabel.toUpperCase().slice(0, 2), 0, 0);
-      break;
+  if (module?.glyph) {
+    const viewBox = module.glyph.viewBox ?? DEFAULT_RESOURCE_GLYPH_VIEWBOX;
+    const scale = size / Math.max(viewBox.width, viewBox.height) * 2;
+    const currentColor = typeof context.fillStyle === "string" ? context.fillStyle : (typeof context.strokeStyle === "string" ? context.strokeStyle : "#ffffff");
+    context.scale(scale, scale);
+    context.translate(-viewBox.width / 2, -viewBox.height / 2);
+    context.lineWidth = Math.max(1, (size * 0.16) / Math.max(scale, 0.001));
+    for (const shape of module.glyph.shapes) {
+      drawCanvasGlyphShape(context, shape, currentColor);
     }
+  } else {
+    const fallbackId = getRegisteredCurrencyResourceId();
+    const theme = tryGetRegisteredResourceTheme(resourceType) ?? getRegisteredResourceTheme(fallbackId);
+    context.font = `${Math.max(8, size * 1.4)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = theme.color;
+    context.fillText(theme.shortLabel.toUpperCase().slice(0, 2), 0, 0);
   }
 
   context.restore();

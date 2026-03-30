@@ -5,7 +5,7 @@ import { ensureEntityPresentation } from "../presentation";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createDefaultGameRules, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
 
-export const CURRENT_STATE_VERSION = 22;
+export const CURRENT_STATE_VERSION = 23;
 
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
@@ -88,14 +88,18 @@ export function migrateRuntimeState(state: GameState): void {
     state.rules = createDefaultGameRules();
   } else {
     const defaultRules = createDefaultGameRules();
-    if (typeof state.rules.creditDepositAmount !== "number") {
-      state.rules.creditDepositAmount = defaultRules.creditDepositAmount;
+    if (typeof (state.rules as typeof state.rules & { currencyDepositAmount?: unknown }).currencyDepositAmount !== "number") {
+      const legacyCreditDepositAmount = (state.rules as typeof state.rules & { creditDepositAmount?: unknown }).creditDepositAmount;
+      state.rules.currencyDepositAmount =
+        typeof legacyCreditDepositAmount === "number" ? legacyCreditDepositAmount : defaultRules.currencyDepositAmount;
     }
     if (typeof state.rules.primaryDepositAmount !== "number") {
       state.rules.primaryDepositAmount = defaultRules.primaryDepositAmount;
     }
-    if (typeof state.rules.economyCreditsIncome !== "number") {
-      state.rules.economyCreditsIncome = defaultRules.economyCreditsIncome;
+    if (typeof (state.rules as typeof state.rules & { economyCurrencyIncome?: unknown }).economyCurrencyIncome !== "number") {
+      const legacyEconomyCreditsIncome = (state.rules as typeof state.rules & { economyCreditsIncome?: unknown }).economyCreditsIncome;
+      state.rules.economyCurrencyIncome =
+        typeof legacyEconomyCreditsIncome === "number" ? legacyEconomyCreditsIncome : defaultRules.economyCurrencyIncome;
     }
     if (typeof state.rules.economyPrimaryIncome !== "number") {
       state.rules.economyPrimaryIncome = defaultRules.economyPrimaryIncome;

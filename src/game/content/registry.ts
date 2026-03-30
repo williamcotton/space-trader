@@ -2,7 +2,7 @@ import type { CardDefinition } from "./cards/types";
 import type { StackEffectDefinition } from "./stackEffects/types";
 import type { MapState } from "../model/state";
 import { FACTIONS, RESOURCE_TYPES, type Faction, type ResourceType } from "../model/enums";
-import type { CardSet, DeckRecipe, FactionModule, ResourceModule } from "./sets/types";
+import type { CardSet, DeckRecipe, FactionModule, ResourceModule, RuntimeProfile } from "./sets/types";
 
 const registeredCards = new Map<string, CardDefinition>();
 const registeredStackEffects = new Map<string, StackEffectDefinition>();
@@ -12,6 +12,9 @@ const registeredMaps = new Map<string, MapState>();
 const registeredSets = new Map<string, CardSet>();
 const registeredFactions = new Map<string, FactionModule>();
 const registeredResources = new Map<string, ResourceModule>();
+const registeredRuntimeProfiles = new Map<string, RuntimeProfile>();
+let defaultRuntimeProfileId: string | null = null;
+let currencyResourceId: ResourceType | null = null;
 
 function syncRegisteredId(target: string[], id: string): void {
   if (!target.includes(id)) {
@@ -44,6 +47,9 @@ export function resetRegisteredContent(): void {
   registeredSets.clear();
   registeredFactions.clear();
   registeredResources.clear();
+  registeredRuntimeProfiles.clear();
+  defaultRuntimeProfileId = null;
+  currencyResourceId = null;
   clearRegisteredIds(FACTIONS);
   clearRegisteredIds(RESOURCE_TYPES);
 }
@@ -150,6 +156,33 @@ export function getRegisteredMaps(): Record<string, MapState> {
   return Object.fromEntries(registeredMaps.entries());
 }
 
+export function registerRuntimeProfile(setId: string, profile: RuntimeProfile): void {
+  assertRegisteredSet(setId);
+  assertUniqueRegistration("runtime profile", profile.id, registeredRuntimeProfiles.has(profile.id));
+  registeredRuntimeProfiles.set(profile.id, profile);
+  if (profile.default) {
+    if (defaultRuntimeProfileId) {
+      throw new Error(`Duplicate default runtime profile registration for ${profile.id}; ${defaultRuntimeProfileId} is already default.`);
+    }
+    defaultRuntimeProfileId = profile.id;
+  }
+}
+
+export function getRegisteredRuntimeProfile(profileId: string): RuntimeProfile | undefined {
+  return registeredRuntimeProfiles.get(profileId);
+}
+
+export function getRegisteredRuntimeProfiles(): RuntimeProfile[] {
+  return [...registeredRuntimeProfiles.values()];
+}
+
+export function getDefaultRuntimeProfile(): RuntimeProfile | null {
+  if (defaultRuntimeProfileId) {
+    return registeredRuntimeProfiles.get(defaultRuntimeProfileId) ?? null;
+  }
+  return getRegisteredRuntimeProfiles()[0] ?? null;
+}
+
 export function registerFactionModule(faction: FactionModule): void {
   assertUniqueRegistration("faction", faction.id, registeredFactions.has(faction.id));
   registeredFactions.set(faction.id, faction);
@@ -178,6 +211,12 @@ export function getRegisteredPrimaryResourceIdForFaction(factionId: Faction): Re
 
 export function registerResourceModule(resource: ResourceModule): void {
   assertUniqueRegistration("resource", resource.id, registeredResources.has(resource.id));
+  if (resource.kind === "currency") {
+    if (currencyResourceId) {
+      throw new Error(`Duplicate currency resource registration for ${resource.id}; ${currencyResourceId} is already currency.`);
+    }
+    currencyResourceId = resource.id;
+  }
   registeredResources.set(resource.id, resource);
   syncRegisteredId(RESOURCE_TYPES, resource.id);
 }
@@ -192,4 +231,27 @@ export function getRegisteredResourceIds(): ResourceType[] {
 
 export function getRegisteredResourceModules(): ResourceModule[] {
   return [...registeredResources.values()];
+}
+
+export function getOrderedRegisteredResourceModules(): ResourceModule[] {
+  return getRegisteredResourceModules().sort((a, b) => {
+    const orderA = a.displayOrder ?? Number.MAX_SAFE_INTEGER;
+    const orderB = b.displayOrder ?? Number.MAX_SAFE_INTEGER;
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+    return a.id.localeCompare(b.id);
+  });
+}
+
+export function getRegisteredCurrencyResourceId(): ResourceType {
+  const registeredId = currencyResourceId ?? getOrderedRegisteredResourceModules()[0]?.id;
+  if (!registeredId) {
+    throw new Error("No registered currency resource is available.");
+  }
+  return registeredId;
+}
+
+export function isRegisteredCurrencyResource(resourceId: ResourceType): boolean {
+  return resourceId === getRegisteredCurrencyResourceId();
 }

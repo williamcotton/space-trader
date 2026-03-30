@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createInitialGameState } from "../model/state";
 import {
   getRegisteredCardSet,
+  getDefaultRuntimeProfile,
+  getOrderedRegisteredResourceModules,
   getRegisteredFactionIds,
+  getRegisteredCurrencyResourceId,
   getRegisteredMap,
   getRegisteredStarterDeck,
   getRegisteredCardDefinitions,
@@ -33,7 +36,10 @@ describe("content loader", () => {
     expect(getRegisteredCardSet("base")?.name).toBe("Base Set");
     expect(getRegisteredFactionIds()).toEqual(["alloy_clan", "flux_collective", "biomass_swarm"]);
     expect(getRegisteredResourceIds()).toEqual(["credits", "alloy", "flux", "biomass"]);
+    expect(getOrderedRegisteredResourceModules().map((resource) => resource.id)).toEqual(["credits", "alloy", "flux", "biomass"]);
+    expect(getRegisteredCurrencyResourceId()).toBe("credits");
     expect(getRegisteredMap("frontier_belt")?.name).toBe("Frontier Belt");
+    expect(getDefaultRuntimeProfile()?.defaultMapId).toBe("frontier_belt");
     expect(getRegisteredStarterDeck("alloy_clan")).toHaveLength(60);
     expect(getFactionPresentation("alloy_clan").animationAccent).toBe("alloy_clan");
     expect(getRegisteredResourceTheme("credits").label).toBe("Credits");

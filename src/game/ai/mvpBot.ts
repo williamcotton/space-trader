@@ -1,6 +1,6 @@
 import type { GameCommand } from "../actions/commands";
 import { getCardDefinition, getResolvedCardPlayEffectConfigs, type CardDefinition } from "../content/cards/catalog";
-import { getRegisteredResourceIds } from "../content/registry";
+import { getRegisteredCurrencyResourceId, getRegisteredResourceIds } from "../content/registry";
 import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
 import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import type { ResourceType } from "../model/enums";
@@ -25,11 +25,9 @@ import {
   getTriggerConditionScoreBonus,
 } from "../registries/aiMechanics";
 
-const CURRENCY_RESOURCE_ID = "credits";
-
 function getResourceOrder(): ResourceType[] {
   const resourceIds = getRegisteredResourceIds();
-  return resourceIds.length > 0 ? resourceIds : [CURRENCY_RESOURCE_ID];
+  return resourceIds.length > 0 ? resourceIds : [getRegisteredCurrencyResourceId()];
 }
 
 const AI_WEIGHTS = {
@@ -167,20 +165,21 @@ function getUnitRoleCounts(state: GameState, playerId: PlayerId): Record<"combat
   return counts;
 }
 
-function getPriorityOrderForResourceSet(resources: Set<ResourceType>, primaryResource: ResourceType, creditsFirst: boolean): ResourceType[] {
+function getPriorityOrderForResourceSet(resources: Set<ResourceType>, primaryResource: ResourceType, currencyFirst: boolean): ResourceType[] {
   const ordered: ResourceType[] = [];
   const resourceOrder = getResourceOrder();
+  const currencyResourceId = getRegisteredCurrencyResourceId();
 
-  if (creditsFirst && resources.has(CURRENCY_RESOURCE_ID)) {
-    ordered.push(CURRENCY_RESOURCE_ID);
+  if (currencyFirst && resources.has(currencyResourceId)) {
+    ordered.push(currencyResourceId);
   }
 
   if (resources.has(primaryResource) && !ordered.includes(primaryResource)) {
     ordered.push(primaryResource);
   }
 
-  if (!creditsFirst && resources.has(CURRENCY_RESOURCE_ID) && !ordered.includes(CURRENCY_RESOURCE_ID)) {
-    ordered.push(CURRENCY_RESOURCE_ID);
+  if (!currencyFirst && resources.has(currencyResourceId) && !ordered.includes(currencyResourceId)) {
+    ordered.push(currencyResourceId);
   }
 
   for (const resource of resourceOrder) {
@@ -604,7 +603,7 @@ function scoreUnitBuffOpportunity(
 
   if (options.reward && affectedUnits.length >= options.reward.minUnits) {
     hasMeaningfulOpportunity = true;
-    const rewardBase = options.reward.resource === CURRENCY_RESOURCE_ID ? 18 : 14;
+    const rewardBase = options.reward.resource === getRegisteredCurrencyResourceId() ? 18 : 14;
     score += rewardBase * options.reward.amount;
   }
 

@@ -1,3 +1,4 @@
+import { getRegisteredCurrencyResourceId, getRegisteredResourceIds } from "../content/registry";
 import { areSameHex, hexDistance } from "../model/hex";
 import type { ResourceType } from "../model/enums";
 import { getConfiguredDepositAmount, getPrimaryResourceForFaction, type HexCoord, type GameState, type UnitEntity } from "../model/state";
@@ -7,12 +8,7 @@ import { getPlayerBase } from "../model/queries";
 type ResourceTally = Record<ResourceType, number>;
 
 function createEmptyResourceTally(): ResourceTally {
-  return {
-    credits: 0,
-    alloy: 0,
-    flux: 0,
-    biomass: 0,
-  };
+  return Object.fromEntries(getRegisteredResourceIds().map((resourceId) => [resourceId, 0])) as ResourceTally;
 }
 
 export function isBaseAdjacentDropoffTile(state: GameState, playerId: PlayerId, coord: HexCoord): boolean {
@@ -64,13 +60,14 @@ export function resolveEconomyIncome(state: GameState, playerId: PlayerId): { gr
   const byResource = createEmptyResourceTally();
   const player = state.players[playerId];
   const primary = getPrimaryResourceForFaction(player.faction);
+  const currency = getRegisteredCurrencyResourceId();
   let granted = 0;
 
-  const creditAmount = state.rules.economyCreditsIncome;
-  if (creditAmount > 0) {
-    state.players[playerId].resources.credits += creditAmount;
-    byResource.credits += creditAmount;
-    granted += creditAmount;
+  const currencyAmount = state.rules.economyCurrencyIncome;
+  if (currencyAmount > 0) {
+    state.players[playerId].resources[currency] += currencyAmount;
+    byResource[currency] += currencyAmount;
+    granted += currencyAmount;
   }
 
   const primaryAmount = state.rules.economyPrimaryIncome;
@@ -81,9 +78,16 @@ export function resolveEconomyIncome(state: GameState, playerId: PlayerId): { gr
   }
 
   if (granted > 0) {
+    const segments: string[] = [];
+    if (currencyAmount > 0) {
+      segments.push(`${currencyAmount} ${currency}`);
+    }
+    if (primaryAmount > 0) {
+      segments.push(`${primaryAmount} ${primary}`);
+    }
     state.log.push({
       turn: state.turn,
-      text: `${playerId} gained passive economy: ${creditAmount} credits and ${primaryAmount} ${primary}.`,
+      text: `${playerId} gained passive economy: ${segments.join(" and ")}.`,
     });
   }
 

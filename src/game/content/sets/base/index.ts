@@ -8,6 +8,7 @@ import { BASE_SET_FACTIONS } from "./factions";
 import { BASE_SET_RESOURCES } from "./resources";
 import { BASE_SET_ROLE_THEMES } from "./presentation";
 import { BASE_RUNTIME_INSTALLER } from "./installers/runtime";
+import { BASE_RUNTIME_PROFILES } from "./runtimeProfiles";
 
 const BASE_SET_DECK_RECIPES: DeckRecipe[] = [
   {
@@ -36,6 +37,7 @@ export const BASE_SET: CardSet = {
   stackEffects: BASE_STACK_EFFECTS,
   factions: BASE_SET_FACTIONS,
   resources: BASE_SET_RESOURCES,
+  runtimeProfiles: BASE_RUNTIME_PROFILES,
   deckRecipes: BASE_SET_DECK_RECIPES,
   maps: [
     {

@@ -4,12 +4,15 @@ import { ensureBaseContentLoaded } from "../content/loader";
 import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
 import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
 import {
+  getDefaultRuntimeProfile,
   getRegisteredFactionIds,
   getRegisteredFactionModule,
+  getRegisteredCurrencyResourceId,
   getRegisteredMap,
   getRegisteredMaps,
   getRegisteredPrimaryResourceIdForFaction,
   getRegisteredResourceIds,
+  isRegisteredCurrencyResource,
 } from "../content/registry";
 import type { ContinuousEffect } from "../systems/continuousEffects";
 import { initializeMechanicState } from "../mechanics";
@@ -17,8 +20,8 @@ import { initializeMechanicState } from "../mechanics";
 export const OPENING_HAND_SIZE = 5;
 export const MAX_HAND_SIZE = 7;
 export const BASE_STARTING_HP = 20;
-export const PLAYER_ONE_STARTING_CREDITS = 2;
-export const PLAYER_TWO_STARTING_CREDITS = 5;
+export const PLAYER_ONE_STARTING_CURRENCY = 2;
+export const PLAYER_TWO_STARTING_CURRENCY = 5;
 export const STARTING_PRIMARY_RESOURCE = 2;
 
 export type HexCoord = {
@@ -59,9 +62,9 @@ export type MapState = {
 };
 
 export type GameRules = {
-  creditDepositAmount: number;
+  currencyDepositAmount: number;
   primaryDepositAmount: number;
-  economyCreditsIncome: number;
+  economyCurrencyIncome: number;
   economyPrimaryIncome: number;
 };
 
@@ -187,9 +190,9 @@ type CreateInitialGameStateOptions = {
 };
 
 export const DEFAULT_GAME_RULES: GameRules = {
-  creditDepositAmount: 2,
+  currencyDepositAmount: 2,
   primaryDepositAmount: 2,
-  economyCreditsIncome: 1,
+  economyCurrencyIncome: 1,
   economyPrimaryIncome: 0,
 };
 
@@ -198,21 +201,22 @@ export function createDefaultGameRules(): GameRules {
 }
 
 export function getConfiguredDepositAmount(rules: GameRules, resourceType: ResourceType): number {
-  return resourceType === "credits" ? rules.creditDepositAmount : rules.primaryDepositAmount;
+  return isRegisteredCurrencyResource(resourceType) ? rules.currencyDepositAmount : rules.primaryDepositAmount;
 }
 
-export function getPrimaryResourceForFaction(faction: Faction): Exclude<ResourceType, "credits"> {
+export function getCurrencyResourceId(): ResourceType {
   ensureBaseContentLoaded();
-  return getRegisteredPrimaryResourceIdForFaction(faction) as Exclude<ResourceType, "credits">;
+  return getRegisteredCurrencyResourceId();
+}
+
+export function getPrimaryResourceForFaction(faction: Faction): ResourceType {
+  ensureBaseContentLoaded();
+  return getRegisteredPrimaryResourceIdForFaction(faction);
 }
 
 export function createEmptyResourcePool(initialValue = 0): ResourcePool {
   ensureBaseContentLoaded();
-  const pool = Object.fromEntries(getRegisteredResourceIds().map((resourceId) => [resourceId, initialValue])) as ResourcePool;
-  if (!("credits" in pool)) {
-    pool.credits = initialValue;
-  }
-  return pool;
+  return Object.fromEntries(getRegisteredResourceIds().map((resourceId) => [resourceId, initialValue])) as ResourcePool;
 }
 
 function shuffleCards<T>(cards: T[], randomSource: () => number): T[] {
@@ -226,8 +230,9 @@ function shuffleCards<T>(cards: T[], randomSource: () => number): T[] {
 
 function createStartingResources(playerId: PlayerId, faction: Faction): ResourcePool {
   const primary = getPrimaryResourceForFaction(faction);
+  const currency = getCurrencyResourceId();
   const resources = createEmptyResourcePool();
-  resources.credits = playerId === PLAYER_ONE ? PLAYER_ONE_STARTING_CREDITS : PLAYER_TWO_STARTING_CREDITS;
+  resources[currency] = playerId === PLAYER_ONE ? PLAYER_ONE_STARTING_CURRENCY : PLAYER_TWO_STARTING_CURRENCY;
   resources[primary] = STARTING_PRIMARY_RESOURCE;
   return resources;
 }
@@ -257,6 +262,15 @@ function resolveInitialMap(options: CreateInitialGameStateOptions): MapState {
       throw new Error(`Unknown map id ${options.mapId}.`);
     }
     return cloneMap(map);
+  }
+
+  const runtimeProfile = getDefaultRuntimeProfile();
+  if (runtimeProfile) {
+    const runtimeMap = getRegisteredMap(runtimeProfile.defaultMapId);
+    if (!runtimeMap) {
+      throw new Error(`Runtime profile ${runtimeProfile.id} references unknown default map ${runtimeProfile.defaultMapId}.`);
+    }
+    return cloneMap(runtimeMap);
   }
 
   const fallbackMap = Object.values(getRegisteredMaps())
@@ -312,8 +326,17 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   if (registeredFactions.length === 0) {
     throw new Error("No registered factions are available.");
   }
-  const factionOne = options.factions?.player_1 ?? registeredFactions[0] ?? "alloy_clan";
-  const factionTwo = options.factions?.player_2 ?? registeredFactions[1] ?? registeredFactions[0] ?? factionOne;
+  const runtimeProfile = getDefaultRuntimeProfile();
+  const factionOne =
+    options.factions?.player_1 ??
+    runtimeProfile?.defaultFactions?.player_1 ??
+    registeredFactions[0];
+  const factionTwo =
+    options.factions?.player_2 ??
+    runtimeProfile?.defaultFactions?.player_2 ??
+    registeredFactions[1] ??
+    registeredFactions[0] ??
+    factionOne;
   const factionOneModule = getRegisteredFactionModule(factionOne);
   const factionTwoModule = getRegisteredFactionModule(factionTwo);
   if (!factionOneModule || !factionTwoModule) {
@@ -422,10 +445,12 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     player_1: createInitialZonesForPlayer(PLAYER_ONE, factionOne, OPENING_HAND_SIZE, options.randomSource),
     player_2: createInitialZonesForPlayer(PLAYER_TWO, factionTwo, OPENING_HAND_SIZE, options.randomSource),
   } satisfies Record<PlayerId, PlayerZones>;
+  const matchIdPrefix = runtimeProfile?.matchIdPrefix ?? map.id;
+  const initialMatchId = options.matchId ?? `match_${matchIdPrefix}`;
 
   const state = {
-    stateVersion: 22,
-    matchId: options.matchId ?? "match_frontier_belt",
+    stateVersion: 23,
+    matchId: initialMatchId,
     turn: 1,
     phase: "start",
     activePlayerId: PLAYER_ONE,
@@ -463,7 +488,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     log: [
       {
         turn: 1,
-        text: "Match initialized on Frontier Belt.",
+        text: `Match initialized on ${map.name}.`,
       },
     ],
     winner: null,

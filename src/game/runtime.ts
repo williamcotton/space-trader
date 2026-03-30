@@ -3,7 +3,7 @@ import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { decideMvpBotCommand } from "./ai/mvpBot";
 import { ensureBaseContentLoaded } from "./content/loader";
 import { getCardDefinition } from "./content/cards/catalog";
-import { getRegisteredMap, getRegisteredResourceIds } from "./content/registry";
+import { getDefaultRuntimeProfile, getRegisteredMap, getRegisteredMaps, getRegisteredResourceIds } from "./content/registry";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
 import { findEntityAtHex } from "./model/queries";
 import { createInitialGameState } from "./model/state";
@@ -37,7 +37,6 @@ const INITIAL_VIEWPORT: GameViewport = {
 };
 
 const BOT_ACTION_INTERVAL_SECONDS = 0.16;
-const DEFAULT_RUNTIME_MAP_ID = "frontier_belt";
 
 type BotDecisionSystem = typeof decideMvpBotCommand;
 
@@ -50,19 +49,39 @@ type PendingCardTargeting = {
   prompt: string;
 };
 
-function createRuntimeMatchId(): string {
-  return `match_frontier_belt_${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffff)
+function createRuntimeMatchId(matchPrefix: string): string {
+  return `match_${matchPrefix}_${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffff)
     .toString(36)
     .padStart(4, "0")}`;
 }
 
 function getDefaultRuntimeMap() {
   ensureBaseContentLoaded();
-  const map = getRegisteredMap(DEFAULT_RUNTIME_MAP_ID);
-  if (!map) {
-    throw new Error(`Missing default runtime map ${DEFAULT_RUNTIME_MAP_ID}.`);
+  const runtimeProfile = getDefaultRuntimeProfile();
+  if (runtimeProfile) {
+    const runtimeMap = getRegisteredMap(runtimeProfile.defaultMapId);
+    if (!runtimeMap) {
+      throw new Error(`Missing default runtime map ${runtimeProfile.defaultMapId} for runtime profile ${runtimeProfile.id}.`);
+    }
+    return runtimeMap;
   }
-  return map;
+
+  const fallbackMap = Object.values(getRegisteredMaps())
+    .sort((a, b) => a.id.localeCompare(b.id))[0];
+  if (!fallbackMap) {
+    throw new Error("Missing registered runtime maps.");
+  }
+  return fallbackMap;
+}
+
+function createDefaultRuntimeState(): GameState {
+  const map = getDefaultRuntimeMap();
+  const runtimeProfile = getDefaultRuntimeProfile();
+  return createInitialGameState({
+    map,
+    matchId: createRuntimeMatchId(runtimeProfile?.matchIdPrefix ?? map.id),
+    randomSource: () => Math.random(),
+  });
 }
 
 function getSelectedActiveUnit(state: GameState) {
@@ -150,11 +169,7 @@ export class GameRuntime {
   readonly state: GameState;
 
   constructor(
-    state: GameState = createInitialGameState({
-      map: getDefaultRuntimeMap(),
-      matchId: createRuntimeMatchId(),
-      randomSource: () => Math.random(),
-    })
+    state: GameState = createDefaultRuntimeState()
   ) {
     this.state = state;
     migrateRuntimeState(this.state);
@@ -168,8 +183,8 @@ export class GameRuntime {
 
   resetWithFactions(factions: { player_1: Faction; player_2: Faction }): void {
     const newState = createInitialGameState({
-      map: getDefaultRuntimeMap(),
-      matchId: createRuntimeMatchId(),
+      map: this.state.map,
+      matchId: createRuntimeMatchId(this.state.map.id),
       randomSource: () => Math.random(),
       factions,
     });

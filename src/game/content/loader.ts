@@ -8,6 +8,7 @@ import {
   registerFactionModule,
   registerMap,
   registerResourceModule,
+  registerRuntimeProfile,
   registerStackEffectDefinitions,
   resetRegisteredContent,
 } from "./registry";
@@ -127,6 +128,10 @@ function registerSetContent(set: CardSet): void {
 
   for (const mapModule of set.maps ?? []) {
     registerMap(set.id, mapModule.map);
+  }
+
+  for (const runtimeProfile of set.runtimeProfiles ?? []) {
+    registerRuntimeProfile(set.id, runtimeProfile);
   }
 
   for (const mechanic of set.mechanics ?? []) {

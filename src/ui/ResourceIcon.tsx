@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 import type { ResourceType } from "../game/model/enums";
+import { getRegisteredCurrencyResourceId, getRegisteredResourceModule } from "../game/content/registry";
+import type { ResourceGlyphShape } from "../game/content/sets/types";
 import { getResourceTheme } from "../game/presentation";
 
 type ResourceIconProps = {
@@ -8,39 +10,72 @@ type ResourceIconProps = {
   className?: string;
 };
 
+function renderGlyphShape(shape: ResourceGlyphShape, index: number) {
+  switch (shape.type) {
+    case "polygon":
+      return <polygon key={index} points={shape.points} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} />;
+    case "circle":
+      return <circle key={index} cx={shape.cx} cy={shape.cy} r={shape.r} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} />;
+    case "rect":
+      return (
+        <rect
+          key={index}
+          x={shape.x}
+          y={shape.y}
+          width={shape.width}
+          height={shape.height}
+          rx={shape.rx}
+          fill={shape.fill}
+          stroke={shape.stroke}
+          strokeWidth={shape.strokeWidth}
+        />
+      );
+    case "path":
+      return (
+        <path
+          key={index}
+          d={shape.d}
+          fill={shape.fill}
+          stroke={shape.stroke}
+          strokeWidth={shape.strokeWidth}
+          strokeLinecap={shape.strokeLinecap}
+          strokeLinejoin={shape.strokeLinejoin}
+        />
+      );
+    case "line":
+      return (
+        <line
+          key={index}
+          x1={shape.x1}
+          y1={shape.y1}
+          x2={shape.x2}
+          y2={shape.y2}
+          stroke={shape.stroke}
+          strokeWidth={shape.strokeWidth}
+          strokeLinecap={shape.strokeLinecap}
+        />
+      );
+  }
+}
+
 function ResourceGlyph({ resource }: { resource: ResourceType }) {
-  if (resource === "credits") {
+  const module = getRegisteredResourceModule(resource);
+  if (!module?.glyph) {
     return (
-      <>
-        <polygon points="12,3 19,7 19,17 12,21 5,17 5,7" fill="none" stroke="currentColor" strokeWidth="1.8" />
-        <circle cx="12" cy="12" r="2.7" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      </>
+      <text x="12" y="12" textAnchor="middle" dominantBaseline="central" fill="currentColor" fontSize="11" fontWeight="700">
+        {getResourceTheme(resource).shortLabel.toUpperCase().slice(0, 2)}
+      </text>
     );
   }
 
-  if (resource === "alloy") {
-    return (
-      <>
-        <rect x="5" y="6" width="14" height="4" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
-        <rect x="7" y="13" width="10" height="3.6" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      </>
-    );
-  }
-
-  if (resource === "flux") {
-    return <path d="M11.2 3 14.5 9.2 11.9 9.2 15.4 21 10.1 13.1 12.5 13.1 8.8 3Z" fill="currentColor" />;
-  }
-
-  return (
-    <>
-      <path d="M12 20c.7-3.4.4-8.6 5.4-12.8C13.1 6 11.2 8.4 12 12.5 12.8 8.4 10.9 6 6.6 7.2 11.6 11.4 11.3 16.6 12 20Z" fill="currentColor" />
-      <path d="M12 18.2V8.5" stroke="rgba(5,10,25,0.75)" strokeWidth="1.2" strokeLinecap="round" />
-    </>
-  );
+  return <>{module.glyph.shapes.map(renderGlyphShape)}</>;
 }
 
 export function ResourceIcon({ resource, size = 14, className }: ResourceIconProps) {
   const theme = getResourceTheme(resource);
+  const module = getRegisteredResourceModule(resource);
+  const fallbackModule = getRegisteredResourceModule(getRegisteredCurrencyResourceId());
+  const viewBox = module?.glyph?.viewBox ?? fallbackModule?.glyph?.viewBox ?? { width: 24, height: 24 };
   return (
     <span
       className={["resource-icon", className ?? ""].join(" ").trim()}
@@ -54,7 +89,7 @@ export function ResourceIcon({ resource, size = 14, className }: ResourceIconPro
       aria-label={theme.label}
       title={theme.label}
     >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
+      <svg viewBox={`0 0 ${viewBox.width} ${viewBox.height}`} aria-hidden="true">
         <ResourceGlyph resource={resource} />
       </svg>
     </span>

@@ -5,8 +5,8 @@ import { getStarterDeckCardIds } from "../content/decks/starterDecks";
 import {
   DEFAULT_GAME_RULES,
   OPENING_HAND_SIZE,
-  PLAYER_ONE_STARTING_CREDITS,
-  PLAYER_TWO_STARTING_CREDITS,
+  PLAYER_ONE_STARTING_CURRENCY,
+  PLAYER_TWO_STARTING_CURRENCY,
   STARTING_PRIMARY_RESOURCE,
   createInitialGameState,
   createInitialZonesForPlayer,
@@ -46,13 +46,13 @@ describe("createInitialGameState", () => {
     const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 
     expect(state.players.player_1.resources).toEqual({
-      credits: PLAYER_ONE_STARTING_CREDITS,
+      credits: PLAYER_ONE_STARTING_CURRENCY,
       alloy: STARTING_PRIMARY_RESOURCE,
       flux: 0,
       biomass: 0,
     });
     expect(state.players.player_2.resources).toEqual({
-      credits: PLAYER_TWO_STARTING_CREDITS,
+      credits: PLAYER_TWO_STARTING_CURRENCY,
       alloy: 0,
       flux: STARTING_PRIMARY_RESOURCE,
       biomass: 0,
@@ -68,6 +68,14 @@ describe("createInitialGameState", () => {
       player_1: 0,
       player_2: 0,
     });
+  });
+
+  it("derives match metadata from registered content instead of hardcoded map strings", () => {
+    const state = createInitialGameState({});
+
+    expect(state.map.id).toBe("frontier_belt");
+    expect(state.matchId).toBe("match_base");
+    expect(state.log[0]?.text).toBe(`Match initialized on ${state.map.name}.`);
   });
 
   it("hydrates starting unit keywords from source card definitions", () => {
