@@ -8,7 +8,6 @@ import { registerMechanicInstructionHandler } from "../../../../registries/mecha
 import {
   registerMechanicResolutionResetHook,
   registerMechanicStateInitializer,
-  registerMechanicStateMigrator,
   registerMechanicTurnResetHook,
 } from "../../../../registries/mechanicState";
 import { unitHasActiveKeyword } from "../../../../systems/keywords";
@@ -17,17 +16,6 @@ import { registerMechanicApi } from "../../../../registries/mechanicApis";
 import { BLOOM_KEYWORD } from "./keywordIds";
 
 const BLOOM_MECHANIC_ID = "bloom";
-
-declare module "../../../../model/state" {
-  interface GameState {
-    /** @deprecated Use bloom mechanic helpers. */
-    bloomedUnitIdsThisTurn: EntityId[];
-    /** @deprecated Use bloom mechanic helpers. */
-    lastBloomSourceItemId: string | null;
-    /** @deprecated Use bloom mechanic helpers. */
-    lastBloomedUnitIds: EntityId[];
-  }
-}
 
 type BloomTurnState = {
   bloomedUnitIdsThisTurn: EntityId[];
@@ -77,33 +65,6 @@ export function resetBloomTurnState(state: GameState): void {
   resetBloomResolutionState(state);
 }
 
-export function installBloomCompatibilityShims(state: GameState): void {
-  Object.defineProperty(state, "bloomedUnitIdsThisTurn", {
-    configurable: true,
-    enumerable: true,
-    get: () => getBloomedUnitIdsThisTurn(state),
-    set: (value: EntityId[]) => {
-      getBloomTurnState(state).bloomedUnitIdsThisTurn = value;
-    },
-  });
-  Object.defineProperty(state, "lastBloomSourceItemId", {
-    configurable: true,
-    enumerable: true,
-    get: () => getLastBloomSourceItemId(state),
-    set: (value: string | null) => {
-      setLastBloomSourceItemId(state, value);
-    },
-  });
-  Object.defineProperty(state, "lastBloomedUnitIds", {
-    configurable: true,
-    enumerable: true,
-    get: () => getLastBloomedUnitIds(state),
-    set: (value: EntityId[]) => {
-      getBloomResolutionState(state).lastBloomedUnitIds = value;
-    },
-  });
-}
-
 export function installBloomMechanic(): void {
   registerMechanicStateInitializer(BLOOM_MECHANIC_ID, (state) => {
     getBloomTurnState(state);
@@ -111,29 +72,12 @@ export function installBloomMechanic(): void {
   });
 
   registerMechanicApi(BLOOM_MECHANIC_ID, {
-    installCompatibilityShim: installBloomCompatibilityShims,
     getBloomedUnitIdsThisTurn,
     getLastBloomSourceItemId,
     setLastBloomSourceItemId,
     getLastBloomedUnitIds,
     resetBloomResolutionState,
-  });
-
-  registerMechanicStateMigrator(BLOOM_MECHANIC_ID, (state) => {
-    const legacyState = state as GameState & {
-      bloomedUnitIdsThisTurn?: EntityId[];
-      lastBloomSourceItemId?: string | null;
-      lastBloomedUnitIds?: EntityId[];
-    };
-
-    getBloomTurnState(state).bloomedUnitIdsThisTurn = Array.isArray(legacyState.bloomedUnitIdsThisTurn)
-      ? legacyState.bloomedUnitIdsThisTurn
-      : [];
-    getBloomResolutionState(state).lastSourceItemId =
-      typeof legacyState.lastBloomSourceItemId === "undefined" ? null : legacyState.lastBloomSourceItemId;
-    getBloomResolutionState(state).lastBloomedUnitIds = Array.isArray(legacyState.lastBloomedUnitIds)
-      ? legacyState.lastBloomedUnitIds
-      : [];
+    resetBloomTurnState,
   });
 
   registerMechanicTurnResetHook(BLOOM_MECHANIC_ID, resetBloomTurnState);

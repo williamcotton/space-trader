@@ -6,7 +6,6 @@ import {
   resetRegisteredResolutionMechanicState,
   resetRegisteredTurnMechanicState,
 } from "../registries/mechanicState";
-import { getRegisteredMechanicApis, type MechanicCompatibilityApi } from "../registries/mechanicApis";
 
 function ensureMechanicStateRoot(state: GameState): void {
   if (!state.mechanicState) {
@@ -18,27 +17,16 @@ function ensureMechanicStateRoot(state: GameState): void {
   }
 }
 
-function installMechanicCompatibilityShims(state: GameState): void {
-  for (const [, api] of getRegisteredMechanicApis()) {
-    const compatibilityApi = api as MechanicCompatibilityApi;
-    if (typeof compatibilityApi.installCompatibilityShim === "function") {
-      compatibilityApi.installCompatibilityShim(state);
-    }
-  }
-}
-
 export function initializeMechanicState(state: GameState): void {
   ensureBaseContentLoaded();
   ensureMechanicStateRoot(state);
   initializeRegisteredMechanicState(state);
-  installMechanicCompatibilityShims(state);
 }
 
 export function migrateMechanicState(state: GameState): void {
   ensureBaseContentLoaded();
   ensureMechanicStateRoot(state);
   migrateRegisteredMechanicState(state);
-  installMechanicCompatibilityShims(state);
 }
 
 export function resetTurnMechanicState(state: GameState): void {

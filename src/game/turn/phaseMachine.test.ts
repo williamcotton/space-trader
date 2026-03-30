@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { requireMapDefinition } from "../content/maps/catalog";
+import { getBloomedUnitIdsThisTurn, getLastBloomedUnitIds, setLastBloomSourceItemId } from "../content/sets/base/mechanics/bloom";
+import { getSalvageTriggersThisTurn, incrementSalvageTriggersThisTurn } from "../content/sets/base/mechanics/salvage";
 import { createInitialGameState } from "../model/state";
 import { advancePhase } from "./phaseMachine";
 
@@ -95,10 +97,11 @@ describe("phaseMachine", () => {
 
   it("clears bloom tracking on turn handoff", () => {
     const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
-    state.bloomedUnitIdsThisTurn = ["unit_player_1_test_bloom"];
-    state.lastBloomSourceItemId = "stack_test_bloom";
-    state.lastBloomedUnitIds = ["unit_player_1_test_bloom"];
-    state.salvageTriggersThisTurn.player_1 = 2;
+    getBloomedUnitIdsThisTurn(state).push("unit_player_1_test_bloom");
+    setLastBloomSourceItemId(state, "stack_test_bloom");
+    getLastBloomedUnitIds(state).push("unit_player_1_test_bloom");
+    incrementSalvageTriggersThisTurn(state, "player_1");
+    incrementSalvageTriggersThisTurn(state, "player_1");
 
     advancePhase(state); // economy
     advancePhase(state); // main
@@ -106,12 +109,9 @@ describe("phaseMachine", () => {
     advancePhase(state); // end
     advancePhase(state); // start, next turn
 
-    expect(state.bloomedUnitIdsThisTurn).toEqual([]);
-    expect(state.lastBloomSourceItemId).toBeNull();
-    expect(state.lastBloomedUnitIds).toEqual([]);
-    expect(state.salvageTriggersThisTurn).toEqual({
-      player_1: 0,
-      player_2: 0,
-    });
+    expect(getBloomedUnitIdsThisTurn(state)).toEqual([]);
+    expect(getLastBloomedUnitIds(state)).toEqual([]);
+    expect(getSalvageTriggersThisTurn(state, "player_1")).toBe(0);
+    expect(getSalvageTriggersThisTurn(state, "player_2")).toBe(0);
   });
 });

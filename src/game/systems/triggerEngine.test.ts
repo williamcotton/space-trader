@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
 import { requireMapDefinition } from "../content/maps/catalog";
+import { getLastBloomedUnitIds, setLastBloomSourceItemId } from "../content/sets/base/mechanics/bloom";
 import { createInitialGameState } from "../model/state";
 import { evaluateTriggersFromEvent, resetTriggerDepth, incrementTriggerDepth } from "./triggerEngine";
 import type { CardPlayedToStackEvent, GameEvent } from "../actions/events";
@@ -266,8 +267,8 @@ describe("triggerEngine", () => {
         temporaryAttackBonus: 0,
         temporaryArmorBonus: 0,
       };
-      state.lastBloomSourceItemId = "stack_bloom_1";
-      state.lastBloomedUnitIds = ["unit_player_1_bloom_archivist"];
+      setLastBloomSourceItemId(state, "stack_bloom_1");
+      getLastBloomedUnitIds(state).push("unit_player_1_bloom_archivist");
 
       const bloomEvent: GameEvent = {
         type: "STACK_ITEM_RESOLVED",
@@ -346,8 +347,8 @@ describe("triggerEngine", () => {
         temporaryAttackBonus: 0,
         temporaryArmorBonus: 0,
       };
-      state.lastBloomSourceItemId = "stack_bloom_2";
-      state.lastBloomedUnitIds = ["unit_player_1_bloom_target"];
+      setLastBloomSourceItemId(state, "stack_bloom_2");
+      getLastBloomedUnitIds(state).push("unit_player_1_bloom_target");
 
       const bloomEvent: GameEvent = {
         type: "STACK_ITEM_RESOLVED",

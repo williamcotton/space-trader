@@ -3,7 +3,10 @@ import type { GameCommand } from "./commands";
 import { dispatchCommand } from "./reducers";
 import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
 import { requireMapDefinition } from "../content/maps/catalog";
+import { getBloomedUnitIdsThisTurn } from "../content/sets/base/mechanics/bloom";
 import { RELAY_KEYWORD, SPROUT_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
+import { getSalvageTriggersThisTurn, incrementSalvageTriggersThisTurn } from "../content/sets/base/mechanics/salvage";
+import { getTacticsCastThisTurn } from "../content/sets/base/mechanics/surge";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage, getEffectiveUnitSiegeDamageBonus } from "../systems/unitStats";
 
@@ -1899,7 +1902,7 @@ describe("dispatchCommand", () => {
 
     expect(state.players.player_1.resources.credits).toBe(0);
     expect(state.players.player_1.resources.biomass).toBe(2);
-    expect(state.bloomedUnitIdsThisTurn).toEqual(expect.arrayContaining([tenderId, supportId]));
+    expect(getBloomedUnitIdsThisTurn(state)).toEqual(expect.arrayContaining([tenderId, supportId]));
   });
 
   it("Bloom only pays out once per unit each turn", () => {
@@ -1967,7 +1970,7 @@ describe("dispatchCommand", () => {
 
     expect(state.players.player_1.resources.credits).toBe(0);
     expect(state.players.player_1.resources.biomass).toBe(1);
-    expect(state.bloomedUnitIdsThisTurn.filter((unitId) => unitId === supportId)).toHaveLength(1);
+    expect(getBloomedUnitIdsThisTurn(state).filter((unitId) => unitId === supportId)).toHaveLength(1);
   });
 
   it("Bloom Archivist draws when it blooms", () => {
@@ -2125,7 +2128,7 @@ describe("dispatchCommand", () => {
     state.stack = [];
     state.players.player_1.resources.credits = 0;
     state.players.player_1.resources.biomass = 1;
-    state.bloomedUnitIdsThisTurn = ["unit_player_1_scout", "unit_player_1_harvester"];
+    getBloomedUnitIdsThisTurn(state).push("unit_player_1_scout", "unit_player_1_harvester");
 
     const cardInstanceId = addCardToHand(state, "player_1", "canopy_dividend");
 
@@ -2173,7 +2176,7 @@ describe("dispatchCommand", () => {
 
     expect(state.entities[target.id]).toBeUndefined();
     expect(state.players.player_1.resources.alloy).toBe(1);
-    expect(state.salvageTriggersThisTurn.player_1).toBe(1);
+    expect(getSalvageTriggersThisTurn(state, "player_1")).toBe(1);
   });
 
   it("Bastion grants +1 ARM while adjacent to another allied unit", () => {
@@ -2239,7 +2242,8 @@ describe("dispatchCommand", () => {
     state.stack = [];
     state.players.player_1.resources.credits = 0;
     state.players.player_1.resources.alloy = 1;
-    state.salvageTriggersThisTurn.player_1 = 2;
+    incrementSalvageTriggersThisTurn(state, "player_1");
+    incrementSalvageTriggersThisTurn(state, "player_1");
 
     const cardInstanceId = addCardToHand(state, "player_1", "scrap_dividend");
 
@@ -2380,7 +2384,7 @@ describe("dispatchCommand", () => {
     const firstStackItem = state.stack[state.stack.length - 1];
     expect(firstStackItem?.sourceCardId).toBe("static_insight");
     expect(firstStackItem?.activeModifierIds).toEqual([]);
-    expect(state.tacticsCastThisTurn.player_2).toBe(1);
+    expect(getTacticsCastThisTurn(state, "player_2")).toBe(1);
 
     resolveStackByPassing(state);
 
@@ -2393,7 +2397,7 @@ describe("dispatchCommand", () => {
     const secondStackItem = state.stack[state.stack.length - 1];
     expect(secondStackItem?.sourceCardId).toBe("ion_surge_archive");
     expect(secondStackItem?.activeModifierIds).toEqual(["surge"]);
-    expect(state.tacticsCastThisTurn.player_2).toBe(2);
+    expect(getTacticsCastThisTurn(state, "player_2")).toBe(2);
 
     resolveStackByPassing(state);
 
@@ -2418,7 +2422,7 @@ describe("dispatchCommand", () => {
       cardInstanceId,
     });
     expect(play.ok).toBe(true);
-    expect(state.tacticsCastThisTurn.player_2).toBe(1);
+    expect(getTacticsCastThisTurn(state, "player_2")).toBe(1);
 
     resolveStackByPassing(state);
     advanceToPhase(state, "end");
@@ -2430,8 +2434,8 @@ describe("dispatchCommand", () => {
 
     expect(state.activePlayerId).toBe("player_1");
     expect(state.phase).toBe("start");
-    expect(state.tacticsCastThisTurn.player_1).toBe(0);
-    expect(state.tacticsCastThisTurn.player_2).toBe(0);
+    expect(getTacticsCastThisTurn(state, "player_1")).toBe(0);
+    expect(getTacticsCastThisTurn(state, "player_2")).toBe(0);
   });
 
   it("Arc Bloom expands to adjacent enemy units when surged", () => {

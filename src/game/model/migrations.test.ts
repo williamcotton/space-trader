@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { requireMapDefinition } from "../content/maps/catalog";
+import { getBloomedUnitIdsThisTurn, getLastBloomSourceItemId, getLastBloomedUnitIds } from "../content/sets/base/mechanics/bloom";
 import { RELAY_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
+import { getSalvageTriggersThisTurn } from "../content/sets/base/mechanics/salvage";
+import { getTacticsCastThisTurn } from "../content/sets/base/mechanics/surge";
 import { migrateRuntimeState } from "./migrations";
 import { createInitialGameState } from "./state";
 
@@ -21,7 +24,7 @@ describe("migrateRuntimeState", () => {
     expect(relayCandidate.keywords).toContain(RELAY_KEYWORD);
   });
 
-  it("hydrates missing surge tracking fields", () => {
+  it("hydrates missing mechanic namespaces and active modifier arrays", () => {
     const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
     state.stack.push({
       id: "legacy_stack_item",
@@ -43,27 +46,18 @@ describe("migrateRuntimeState", () => {
     });
 
     // Simulate older serialized state.
-    Reflect.deleteProperty(state as typeof state & { tacticsCastThisTurn?: unknown }, "tacticsCastThisTurn");
-    Reflect.deleteProperty(state as typeof state & { bloomedUnitIdsThisTurn?: unknown }, "bloomedUnitIdsThisTurn");
-    Reflect.deleteProperty(state as typeof state & { lastBloomSourceItemId?: unknown }, "lastBloomSourceItemId");
-    Reflect.deleteProperty(state as typeof state & { lastBloomedUnitIds?: unknown }, "lastBloomedUnitIds");
-    Reflect.deleteProperty(state as typeof state & { salvageTriggersThisTurn?: unknown }, "salvageTriggersThisTurn");
+    Reflect.deleteProperty(state, "mechanicState");
     Reflect.deleteProperty(state.stack[0] as typeof state.stack[number] & { activeModifierIds?: unknown }, "activeModifierIds");
-    (state.stack[0] as typeof state.stack[number] & { surgeActive?: unknown }).surgeActive = false;
 
     migrateRuntimeState(state);
 
-    expect(state.tacticsCastThisTurn).toEqual({
-      player_1: 0,
-      player_2: 0,
-    });
-    expect(state.bloomedUnitIdsThisTurn).toEqual([]);
-    expect(state.lastBloomSourceItemId).toBeNull();
-    expect(state.lastBloomedUnitIds).toEqual([]);
-    expect(state.salvageTriggersThisTurn).toEqual({
-      player_1: 0,
-      player_2: 0,
-    });
+    expect(getTacticsCastThisTurn(state, "player_1")).toBe(0);
+    expect(getTacticsCastThisTurn(state, "player_2")).toBe(0);
+    expect(getBloomedUnitIdsThisTurn(state)).toEqual([]);
+    expect(getLastBloomSourceItemId(state)).toBeNull();
+    expect(getLastBloomedUnitIds(state)).toEqual([]);
+    expect(getSalvageTriggersThisTurn(state, "player_1")).toBe(0);
+    expect(getSalvageTriggersThisTurn(state, "player_2")).toBe(0);
     expect(state.stack[0]?.activeModifierIds).toEqual([]);
   });
 });

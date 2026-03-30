@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
 import { requireMapDefinition } from "../content/maps/catalog";
+import { getBloomedUnitIdsThisTurn } from "../content/sets/base/mechanics/bloom";
 import { SPROUT_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
+import { incrementSalvageTriggersThisTurn } from "../content/sets/base/mechanics/salvage";
+import { incrementTacticsCastThisTurn } from "../content/sets/base/mechanics/surge";
 import { hexDistance } from "../model/hex";
 import { createInitialGameState } from "../model/state";
 import { decideMvpBotCommand } from "./mvpBot";
@@ -372,7 +375,7 @@ describe("decideMvpBotCommand", () => {
     state.zones.player_2.hand = [];
     state.players.player_2.resources.credits = 2;
     state.players.player_2.resources.flux = 1;
-    state.tacticsCastThisTurn.player_2 = 1;
+    incrementTacticsCastThisTurn(state, "player_2");
 
     const enemyScout = state.entities.unit_player_1_scout;
     const enemyHarvester = state.entities.unit_player_1_harvester;
@@ -521,7 +524,7 @@ describe("decideMvpBotCommand", () => {
     state.stack = [];
     state.zones.player_1.hand = [];
     state.players.player_1.resources.biomass = 1;
-    state.bloomedUnitIdsThisTurn = ["unit_player_1_scout", "unit_player_1_harvester"];
+    getBloomedUnitIdsThisTurn(state).push("unit_player_1_scout", "unit_player_1_harvester");
 
     const cardInstanceId = addCardToHand(state, "player_1", "canopy_dividend");
 
@@ -541,7 +544,8 @@ describe("decideMvpBotCommand", () => {
     state.stack = [];
     state.zones.player_1.hand = [];
     state.players.player_1.resources.alloy = 1;
-    state.salvageTriggersThisTurn.player_1 = 2;
+    incrementSalvageTriggersThisTurn(state, "player_1");
+    incrementSalvageTriggersThisTurn(state, "player_1");
 
     const cardInstanceId = addCardToHand(state, "player_1", "scrap_dividend");
 

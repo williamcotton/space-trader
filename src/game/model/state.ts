@@ -475,7 +475,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   const initialMatchId = options.matchId ?? `match_${matchIdPrefix}`;
 
   const state = {
-    stateVersion: 23,
+    stateVersion: 24,
     matchId: initialMatchId,
     turn: 1,
     phase: "start",

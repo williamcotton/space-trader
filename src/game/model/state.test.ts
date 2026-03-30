@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
 import { requireMapDefinition } from "../content/maps/catalog";
+import { getBloomedUnitIdsThisTurn, getLastBloomSourceItemId, getLastBloomedUnitIds } from "../content/sets/base/mechanics/bloom";
+import { getSalvageTriggersThisTurn } from "../content/sets/base/mechanics/salvage";
+import { getTacticsCastThisTurn } from "../content/sets/base/mechanics/surge";
 import { getStarterDeckCardIds } from "../content/decks/starterDecks";
 import {
   DEFAULT_GAME_RULES,
@@ -57,17 +60,13 @@ describe("createInitialGameState", () => {
       flux: STARTING_PRIMARY_RESOURCE,
       biomass: 0,
     });
-    expect(state.tacticsCastThisTurn).toEqual({
-      player_1: 0,
-      player_2: 0,
-    });
-    expect(state.bloomedUnitIdsThisTurn).toEqual([]);
-    expect(state.lastBloomSourceItemId).toBeNull();
-    expect(state.lastBloomedUnitIds).toEqual([]);
-    expect(state.salvageTriggersThisTurn).toEqual({
-      player_1: 0,
-      player_2: 0,
-    });
+    expect(getTacticsCastThisTurn(state, "player_1")).toBe(0);
+    expect(getTacticsCastThisTurn(state, "player_2")).toBe(0);
+    expect(getBloomedUnitIdsThisTurn(state)).toEqual([]);
+    expect(getLastBloomSourceItemId(state)).toBeNull();
+    expect(getLastBloomedUnitIds(state)).toEqual([]);
+    expect(getSalvageTriggersThisTurn(state, "player_1")).toBe(0);
+    expect(getSalvageTriggersThisTurn(state, "player_2")).toBe(0);
   });
 
   it("derives match metadata from registered content instead of hardcoded map strings", () => {

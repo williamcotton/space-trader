@@ -4,7 +4,7 @@ import { registerCombatHook } from "../../../../registries/combatHooks";
 import { registerSpellScoringResolver } from "../../../../registries/spellScoring";
 import { registerTriggerConditionEvaluator } from "../../../../registries/triggerConditions";
 import { registerTriggerConditionScoreContributor } from "../../../../registries/aiMechanics";
-import { registerMechanicStateInitializer, registerMechanicStateMigrator, registerMechanicTurnResetHook } from "../../../../registries/mechanicState";
+import { registerMechanicStateInitializer, registerMechanicTurnResetHook } from "../../../../registries/mechanicState";
 import { getRegisteredResourceIds } from "../../../registry";
 import { unitHasActiveKeyword } from "../../../../systems/keywords";
 import { ensureMechanicStateNamespace } from "../../../mechanics/stateAccess";
@@ -12,13 +12,6 @@ import { registerMechanicApi } from "../../../../registries/mechanicApis";
 import { SALVAGE_KEYWORD } from "./keywordIds";
 
 const SALVAGE_MECHANIC_ID = "salvage";
-
-declare module "../../../../model/state" {
-  interface GameState {
-    /** @deprecated Use salvage mechanic helpers. */
-    salvageTriggersThisTurn: Record<PlayerId, number>;
-  }
-}
 
 type SalvageTurnState = {
   triggersByPlayer: Record<PlayerId, number>;
@@ -46,33 +39,15 @@ export function resetSalvageTurnState(state: GameState): void {
   getSalvageTurnState(state).triggersByPlayer.player_2 = 0;
 }
 
-export function installSalvageCompatibilityShim(state: GameState): void {
-  Object.defineProperty(state, "salvageTriggersThisTurn", {
-    configurable: true,
-    enumerable: true,
-    get: () => getSalvageTurnState(state).triggersByPlayer,
-    set: (value: Record<PlayerId, number>) => {
-      getSalvageTurnState(state).triggersByPlayer = value;
-    },
-  });
-}
-
 export function installSalvageMechanic(): void {
   registerMechanicStateInitializer(SALVAGE_MECHANIC_ID, (state) => {
     getSalvageTurnState(state);
   });
 
   registerMechanicApi(SALVAGE_MECHANIC_ID, {
-    installCompatibilityShim: installSalvageCompatibilityShim,
     getSalvageTriggersThisTurn,
     incrementSalvageTriggersThisTurn,
-  });
-
-  registerMechanicStateMigrator(SALVAGE_MECHANIC_ID, (state) => {
-    const legacy = (state as GameState & { salvageTriggersThisTurn?: Record<PlayerId, number> }).salvageTriggersThisTurn;
-    const next = getSalvageTurnState(state).triggersByPlayer;
-    next.player_1 = typeof legacy?.player_1 === "number" ? legacy.player_1 : 0;
-    next.player_2 = typeof legacy?.player_2 === "number" ? legacy.player_2 : 0;
+    resetSalvageTurnState,
   });
 
   registerMechanicTurnResetHook(SALVAGE_MECHANIC_ID, resetSalvageTurnState);

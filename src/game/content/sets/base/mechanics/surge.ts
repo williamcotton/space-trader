@@ -3,19 +3,12 @@ import type { GameState } from "../../../../model/state";
 import { registerTriggerConditionEvaluator } from "../../../../registries/triggerConditions";
 import { registerTriggerConditionScoreContributor } from "../../../../registries/aiMechanics";
 import { registerCardPlayModifier } from "../../../../registries/cardPlayModifiers";
-import { registerMechanicStateInitializer, registerMechanicStateMigrator, registerMechanicTurnResetHook } from "../../../../registries/mechanicState";
+import { registerMechanicStateInitializer, registerMechanicTurnResetHook } from "../../../../registries/mechanicState";
 import { getCardDefinition } from "../../../cards/catalog";
 import { ensureMechanicStateNamespace } from "../../../mechanics/stateAccess";
 import { registerMechanicApi } from "../../../../registries/mechanicApis";
 
 const SURGE_MECHANIC_ID = "surge";
-
-declare module "../../../../model/state" {
-  interface GameState {
-    /** @deprecated Use surge mechanic helpers. */
-    tacticsCastThisTurn: Record<PlayerId, number>;
-  }
-}
 
 type SurgeTurnState = {
   tacticsCastByPlayer: Record<PlayerId, number>;
@@ -47,24 +40,15 @@ export function resetSurgeTurnState(state: GameState): void {
   getSurgeTurnState(state).tacticsCastByPlayer.player_2 = 0;
 }
 
-export function installSurgeCompatibilityShim(state: GameState): void {
-  Object.defineProperty(state, "tacticsCastThisTurn", {
-    configurable: true,
-    enumerable: true,
-    get: () => getSurgeTurnState(state).tacticsCastByPlayer,
-    set: (value: Record<PlayerId, number>) => {
-      getSurgeTurnState(state).tacticsCastByPlayer = value;
-    },
-  });
-}
-
 export function installSurgeMechanic(): void {
   registerMechanicStateInitializer(SURGE_MECHANIC_ID, (state) => {
     getSurgeTurnState(state);
   });
 
   registerMechanicApi(SURGE_MECHANIC_ID, {
-    installCompatibilityShim: installSurgeCompatibilityShim,
+    getTacticsCastThisTurn,
+    incrementTacticsCastThisTurn,
+    resetSurgeTurnState,
   });
 
   registerCardPlayModifier(SURGE_MECHANIC_ID, {
@@ -75,13 +59,6 @@ export function installSurgeMechanic(): void {
         incrementTacticsCastThisTurn(state, playerId);
       }
     },
-  });
-
-  registerMechanicStateMigrator(SURGE_MECHANIC_ID, (state) => {
-    const legacy = (state as GameState & { tacticsCastThisTurn?: Record<PlayerId, number> }).tacticsCastThisTurn;
-    const next = getSurgeTurnState(state).tacticsCastByPlayer;
-    next.player_1 = typeof legacy?.player_1 === "number" ? legacy.player_1 : 0;
-    next.player_2 = typeof legacy?.player_2 === "number" ? legacy.player_2 : 0;
   });
 
   registerMechanicTurnResetHook(SURGE_MECHANIC_ID, resetSurgeTurnState);

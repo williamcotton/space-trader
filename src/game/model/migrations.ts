@@ -5,7 +5,7 @@ import { ensureEntityPresentation } from "../presentation";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createDefaultGameRules, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
 
-export const CURRENT_STATE_VERSION = 23;
+export const CURRENT_STATE_VERSION = 24;
 
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
@@ -89,17 +89,13 @@ export function migrateRuntimeState(state: GameState): void {
   } else {
     const defaultRules = createDefaultGameRules();
     if (typeof (state.rules as typeof state.rules & { currencyDepositAmount?: unknown }).currencyDepositAmount !== "number") {
-      const legacyCreditDepositAmount = (state.rules as typeof state.rules & { creditDepositAmount?: unknown }).creditDepositAmount;
-      state.rules.currencyDepositAmount =
-        typeof legacyCreditDepositAmount === "number" ? legacyCreditDepositAmount : defaultRules.currencyDepositAmount;
+      state.rules.currencyDepositAmount = defaultRules.currencyDepositAmount;
     }
     if (typeof state.rules.primaryDepositAmount !== "number") {
       state.rules.primaryDepositAmount = defaultRules.primaryDepositAmount;
     }
     if (typeof (state.rules as typeof state.rules & { economyCurrencyIncome?: unknown }).economyCurrencyIncome !== "number") {
-      const legacyEconomyCreditsIncome = (state.rules as typeof state.rules & { economyCreditsIncome?: unknown }).economyCreditsIncome;
-      state.rules.economyCurrencyIncome =
-        typeof legacyEconomyCreditsIncome === "number" ? legacyEconomyCreditsIncome : defaultRules.economyCurrencyIncome;
+      state.rules.economyCurrencyIncome = defaultRules.economyCurrencyIncome;
     }
     if (typeof state.rules.economyPrimaryIncome !== "number") {
       state.rules.economyPrimaryIncome = defaultRules.economyPrimaryIncome;
@@ -120,9 +116,8 @@ export function migrateRuntimeState(state: GameState): void {
     if (typeof stackItem.effectId === "undefined") {
       stackItem.effectId = "noop_log";
     }
-    const legacySurgeActive = (stackItem as typeof stackItem & { surgeActive?: unknown }).surgeActive;
     if (!Array.isArray(stackItem.activeModifierIds)) {
-      stackItem.activeModifierIds = legacySurgeActive === true ? ["surge"] : [];
+      stackItem.activeModifierIds = [];
     }
     const definition = getStackEffectDefinition(stackItem.effectId);
     if (typeof stackItem.effectMagnitude !== "number") {
