@@ -16,6 +16,17 @@ This is a larger goal than the current engine can support today, so this plan in
 - the idealized target architecture
 - a staged migration plan from the exact current codebase to that target
 
+Status as of March 29, 2026:
+- phases `0` through `8` are complete in the live codebase
+- Base Set is loaded as a real set manifest through the loader
+- mechanics, factions, resources, maps, decks, previews, AI scoring, and resolve animations are registry/set-owned
+- runtime can now create or reset from an explicit content bundle
+- legacy compatibility shims for bloom/surge/salvage state aliases have been removed
+
+What remains is future-facing work, not unfinished refactor work:
+- process-isolated content contexts instead of process-global registries
+- feature waves like graveyard/reanimation, tokens, multi-target cards, and true infinite combo handling
+
 ## What The Current Code Already Does Well
 
 The current codebase is not a bad starting point. It already has strong foundations:

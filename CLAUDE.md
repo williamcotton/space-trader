@@ -30,7 +30,7 @@
   - bot toggles
   - pending targeting flow
   - debug helpers
-  - active runtime-profile context
+  - active content-selection + runtime-profile context
 - `src/game/systems.ts`
   - `updateGame`
   - `renderGame`
@@ -68,6 +68,9 @@
 - `src/game/content/loader.ts`
   - explicit set loading
   - registry reset / reload lifecycle
+- `src/game/content/sets/catalog.ts`
+  - built-in set manifest catalog
+  - built-in set id lookup
 - `src/game/content/registry.ts`
   - registered sets, cards, stack effects, factions, resources, maps, deck recipes, runtime profiles
 - `src/game/content/sets/types.ts`
@@ -100,7 +103,6 @@
 
 - `src/game/mechanics/index.ts`
   - generic mechanic-state lifecycle
-  - compatibility shims for migrated saves
 - `src/game/content/sets/base/mechanics/**`
   - current live Base Set mechanics
   - `stealth`
@@ -120,6 +122,7 @@
 - `src/game/registries/playEffects.ts`
 - `src/game/registries/cardPlayModifiers.ts`
 - `src/game/registries/cardCounterability.ts`
+- `src/game/registries/cardResolveAnimations.ts`
 - `src/game/registries/directInteraction.ts`
 - `src/game/registries/cascadeBranches.ts`
 - `src/game/registries/combatHooks.ts`
@@ -244,7 +247,12 @@
   - `turn`
   - `resolution`
 - Content is explicitly loaded through `content/loader.ts`.
+- Built-in set manifests are selected through `content/sets/catalog.ts`.
 - Base Set is now loaded through the same set manifest / installer path future expansions should use.
+- Runtime can now be created or reset from explicit content bundles through:
+  - `loadConfiguredContentSets(...)`
+  - `createConfiguredRuntime(...)`
+  - `GameRuntime.resetWithContent(...)`
 - Runtime defaults come from registered runtime profiles, not kernel constants.
 - Resource modules now own:
   - `kind` such as currency vs primary
@@ -257,7 +265,7 @@
   - generic play-effect registries
   - set-owned installers for AI/animation/preview/debug behaviors
 - `StackResolutionRules` is not the mental model anymore.
-- Current state version is `23`.
+- Current state version is `24`.
 
 ## Current Faction Mechanics Snapshot
 

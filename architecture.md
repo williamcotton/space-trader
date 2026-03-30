@@ -125,6 +125,7 @@ src/game/
   content/
     loader.ts
     registry.ts
+    sets/catalog.ts
     maps/catalog.ts
     decks/starterDecks.ts
     cards/
@@ -172,6 +173,7 @@ src/game/
     autoTargets.ts
     boardBlastEffects.ts
     cardCounterability.ts
+    cardResolveAnimations.ts
     cardPlayModifiers.ts
     cascadeBranches.ts
     combatHooks.ts
@@ -282,20 +284,21 @@ Important live fields:
   - `tacticalHarvestedUnitIds`
 
 Current state version:
-- `23`
+- `24`
 
 Mechanic-specific counters no longer belong on the base `GameState` surface.
-They now belong in namespaced mechanic state, with migration compatibility shims where needed.
+They now belong in namespaced mechanic state owned by the mechanics themselves.
 
 ## Content Loading And Registry Lifecycle
 
 The live game no longer relies on Base Set import-time side effects.
 
 Content loading flow:
-1. `content/loader.ts` receives one or more `CardSet` manifests.
-2. Dependency order is resolved.
-3. Registries are reset if requested.
-4. Each set registers:
+1. `content/sets/catalog.ts` exposes built-in set manifests.
+2. `content/loader.ts` selects a content bundle through `loadConfiguredContentSets(...)`.
+3. Dependency order is resolved.
+4. Registries are reset if requested.
+5. Each set registers:
    - resources
    - factions
    - cards
@@ -308,6 +311,7 @@ Content loading flow:
 
 Important consequences:
 - Base Set is now loaded through the same pathway future expansions should use.
+- runtime can now be created or reset from explicit content bundles rather than only “whatever is globally loaded”
 - The kernel no longer owns:
   - default map id
   - default faction ids
@@ -526,19 +530,14 @@ The runtime is intentionally HMR-safe:
 - runtime singleton persists across reloads
 - systems and bot logic can hot-swap
 - `migrations.ts` upgrades restored state in place
+- runtime can be recreated from explicit set/runtime-profile selections without kernel edits
 
 Current migration model:
 - explicit `CURRENT_STATE_VERSION`
 - backfill missing fields
 - update entity defaults and keyword sets
-- rehydrate old stack items and legacy modifier fields
+- rehydrate old stack items
 - keep hot-loaded matches playable when schema changes
-
-Known intentional legacy leakage in core:
-- compatibility shims for old `surgeActive`
-- compatibility shims for old currency rule field names
-
-These are acceptable until the later cleanup phase removes legacy save support.
 
 ## Testing Strategy
 
@@ -626,4 +625,4 @@ It is not yet the final form for:
 - treat graveyard/reanimation as its own feature wave
 - treat tokens as their own feature wave
 - treat multi-target choice as its own feature wave
-- eventually remove legacy migration shims once old hot-state compatibility is no longer needed
+- keep future migration work focused on real schema evolution rather than compatibility aliases
