@@ -38,7 +38,7 @@ export function renderGame(state: GameState, frame: GameFrame): void {
   }
 
   for (let i = 0; i < entities.length; i++) {
-    drawUnit(state, entities[i], context, originX, originY, hexSize, frame.transients.timeSeconds);
+    drawUnit(state, entities[i], context, originX, originY, hexSize);
   }
 
   drawAnimations(context, frame, originX, originY, hexSize, "foreground");

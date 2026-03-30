@@ -230,7 +230,6 @@ export class GameRuntime {
   private botActionReadyAtMs = 0;
   private automationTimer: ReturnType<typeof setTimeout> | null = null;
   private automationTimerDueAtMs = 0;
-  private elapsedSeconds = 0;
   private animations: CanvasAnimation[] = [];
   private botAutoplayEnabled: Record<PlayerId, boolean> = {
     player_1: false,
@@ -302,7 +301,6 @@ export class GameRuntime {
     Object.assign(this.state, newState);
     this.clearAutomationTimer();
     this.animations = [];
-    this.elapsedSeconds = 0;
     this.botActionReadyAtMs = 0;
     this.pendingCardTargeting = null;
     this.hoveredHex = null;
@@ -325,9 +323,6 @@ export class GameRuntime {
   rehydrateHotState(): void {
     if (!Array.isArray(this.animations)) {
       this.animations = [];
-    }
-    if (typeof this.elapsedSeconds !== "number") {
-      this.elapsedSeconds = 0;
     }
     if (typeof this.botActionReadyAtMs !== "number") {
       this.botActionReadyAtMs = 0;
@@ -439,6 +434,10 @@ export class GameRuntime {
 
   getAnimations(): CanvasAnimation[] {
     return this.animations;
+  }
+
+  hasActiveAnimations(): boolean {
+    return this.animations.length > 0;
   }
 
   dispatch(command: GameCommand): DispatchResult {
@@ -1023,7 +1022,6 @@ export class GameRuntime {
   }
 
   step(context: CanvasRenderingContext2D, deltaSeconds: number): void {
-    this.elapsedSeconds += deltaSeconds;
     this.animations = stepAnimations(this.animations, deltaSeconds);
 
     if (this.stateVersion > this.derivedState.sourceVersion) {
@@ -1036,7 +1034,6 @@ export class GameRuntime {
       deltaSeconds,
       transients: {
         animations: this.animations,
-        timeSeconds: this.elapsedSeconds,
         hoveredHex: this.hoveredHex,
       },
       derived: this.derivedState,

@@ -122,6 +122,17 @@ describe("GameRuntime", () => {
     expect(runtime.getTransientVersion()).toBeGreaterThan(transientVersionBefore);
   });
 
+  it("only requires continuous rendering while canvas animations are active", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    runtime.replaceSystems(() => undefined, () => undefined);
+
+    expect(runtime.hasActiveAnimations()).toBe(true);
+
+    runtime.step({} as CanvasRenderingContext2D, 5);
+
+    expect(runtime.hasActiveAnimations()).toBe(false);
+  });
+
   it("can create a runtime from an explicit content bundle", () => {
     const runtime = createConfiguredRuntime({
       extraSets: [TEST_EXPANSION_SET],

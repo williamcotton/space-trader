@@ -60,7 +60,7 @@ function drawUnitShape(context: CanvasRenderingContext2D, unit: UnitEntity, x: n
   }
 }
 
-export function drawUnit(state: GameState, entity: EntityState, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number, timeSeconds: number): void {
+export function drawUnit(state: GameState, entity: EntityState, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
   if (entity.kind !== "unit") {
     return;
   }
@@ -69,7 +69,6 @@ export function drawUnit(state: GameState, entity: EntityState, context: CanvasR
   const roleTheme = getUnitRoleTheme(entity.role);
   const { x, y } = toPixel(entity.coord, originX, originY, hexSize);
   const size = hexSize * 0.36;
-  const pulse = 0.5 + 0.5 * Math.sin(timeSeconds * 7);
 
   context.fillStyle = theme.shadow;
   context.beginPath();
@@ -98,8 +97,8 @@ export function drawUnit(state: GameState, entity: EntityState, context: CanvasR
 
   if (state.selectedEntityId === entity.id) {
     context.beginPath();
-    context.arc(x, y, size * (1.35 + pulse * 0.12), 0, Math.PI * 2);
-    context.strokeStyle = `rgba(255, 255, 255, ${0.42 + pulse * 0.25})`;
+    context.arc(x, y, size * 1.42, 0, Math.PI * 2);
+    context.strokeStyle = "rgba(255, 255, 255, 0.7)";
     context.lineWidth = 2;
     context.stroke();
   }

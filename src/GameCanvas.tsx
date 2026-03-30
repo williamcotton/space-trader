@@ -54,21 +54,78 @@ export function GameCanvas() {
     runtime.setViewport(canvas.width, canvas.height);
 
     let frame = 0;
-    let lastTime = performance.now();
+    let loopRunning = false;
+    let lastTime = 0;
+
+    const stopLoop = (): void => {
+      if (frame !== 0) {
+        window.cancelAnimationFrame(frame);
+      }
+      frame = 0;
+      loopRunning = false;
+      lastTime = 0;
+    };
 
     const loop = (time: number): void => {
-      const deltaSeconds = Math.min((time - lastTime) / 1000, 0.05);
+      if (document.hidden) {
+        stopLoop();
+        return;
+      }
+
+      const deltaSeconds = lastTime === 0 ? 0 : Math.min((time - lastTime) / 1000, 0.05);
       lastTime = time;
 
       runtime.step(context, deltaSeconds);
+
+      if (runtime.hasActiveAnimations()) {
+        frame = window.requestAnimationFrame(loop);
+        return;
+      }
+
+      frame = 0;
+      loopRunning = false;
+    };
+
+    const startLoop = (): void => {
+      if (loopRunning || document.hidden || !runtime.hasActiveAnimations()) {
+        return;
+      }
+
+      loopRunning = true;
+      lastTime = 0;
       frame = window.requestAnimationFrame(loop);
     };
 
-    runtime.step(context, 0);
-    frame = window.requestAnimationFrame(loop);
+    const renderNow = (): void => {
+      if (document.hidden) {
+        return;
+      }
+
+      if (!loopRunning) {
+        runtime.step(context, 0);
+      }
+      startLoop();
+    };
+
+    renderNow();
+    const unsubscribeState = runtime.subscribe(renderNow);
+    const unsubscribeTransient = runtime.subscribeTransient(renderNow);
+
+    const onVisibilityChange = (): void => {
+      if (document.hidden) {
+        stopLoop();
+        return;
+      }
+      renderNow();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      window.cancelAnimationFrame(frame);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      unsubscribeTransient();
+      unsubscribeState();
+      stopLoop();
     };
   }, []);
 
