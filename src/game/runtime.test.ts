@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { requireMapDefinition } from "./content/maps/catalog";
 import { createInitialGameState } from "./model/state";
 import { createConfiguredRuntime, GameRuntime, getBoardClickCommand } from "./runtime";
@@ -7,6 +7,10 @@ import { TEST_EXPANSION_SET } from "../test/testExpansion";
 function setupState() {
   return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("getBoardClickCommand", () => {
   it("selects a friendly unit when clicked", () => {
@@ -114,5 +118,39 @@ describe("GameRuntime", () => {
     expect(runtime.state.players.player_1.faction).toBe("crystal_clan");
     expect(runtime.state.players.player_2.faction).toBe("flux_collective");
     expect(runtime.state.matchId.startsWith("match_test_expansion_")).toBe(true);
+  });
+
+  it("runs autoflow from scheduled automation without stepping the render loop", async () => {
+    vi.useFakeTimers();
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
+    state.phase = "main";
+    state.priorityPlayerId = "player_1";
+    state.activePlayerId = "player_1";
+    state.zones.player_1.hand = [];
+    state.players.player_1.handSize = 0;
+
+    const runtime = new GameRuntime(state);
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(runtime.state.phase).toBe("tactical");
+  });
+
+  it("runs bot autoplay from scheduled automation without stepping the render loop", async () => {
+    vi.useFakeTimers();
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
+    state.phase = "start";
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+
+    const runtime = new GameRuntime(state);
+    runtime.replaceBotDecisionSystem(() => ({
+      type: "END_PHASE",
+      playerId: "player_2",
+    }));
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(runtime.state.phase).toBe("economy");
+    expect(runtime.state.activePlayerId).toBe("player_2");
   });
 });

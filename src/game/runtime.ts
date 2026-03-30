@@ -43,7 +43,7 @@ const INITIAL_VIEWPORT: GameViewport = {
   height: 768,
 };
 
-const BOT_ACTION_INTERVAL_SECONDS = 0.16;
+const BOT_ACTION_INTERVAL_MS = 160;
 
 type BotDecisionSystem = typeof decideMvpBotCommand;
 
@@ -227,7 +227,9 @@ export class GameRuntime {
   private updateSystem: UpdateSystem = updateGame;
   private renderSystem: RenderSystem = renderGame;
   private botDecisionSystem: BotDecisionSystem = decideMvpBotCommand;
-  private botActionCooldownSeconds = 0;
+  private botActionReadyAtMs = 0;
+  private automationTimer: ReturnType<typeof setTimeout> | null = null;
+  private automationTimerDueAtMs = 0;
   private elapsedSeconds = 0;
   private animations: CanvasAnimation[] = [];
   private botAutoplayEnabled: Record<PlayerId, boolean> = {
@@ -263,6 +265,7 @@ export class GameRuntime {
       player_2: this.state.players.player_2.faction,
     });
     this.pushAnimations([buildMatchIntroAnimation(this.state)]);
+    this.scheduleAutomationFromCurrentState();
   }
 
   resetWithFactions(factions: { player_1: Faction; player_2: Faction }): void {
@@ -294,9 +297,10 @@ export class GameRuntime {
       extraSets: options?.extraSets ?? this.contentSelection.extraSets,
     };
     Object.assign(this.state, newState);
+    this.clearAutomationTimer();
     this.animations = [];
     this.elapsedSeconds = 0;
-    this.botActionCooldownSeconds = 0;
+    this.botActionReadyAtMs = 0;
     this.pendingCardTargeting = null;
     this.consumedPriorityStopKeys = new Set();
     this.derivedState = createEmptyDerivedState();
@@ -306,6 +310,7 @@ export class GameRuntime {
     });
     this.pushAnimations([buildMatchIntroAnimation(this.state)]);
     this.notifyListeners();
+    this.scheduleAutomationFromCurrentState();
   }
 
   setViewport(width: number, height: number): void {
@@ -319,6 +324,15 @@ export class GameRuntime {
     }
     if (typeof this.elapsedSeconds !== "number") {
       this.elapsedSeconds = 0;
+    }
+    if (typeof this.botActionReadyAtMs !== "number") {
+      this.botActionReadyAtMs = 0;
+    }
+    if (typeof this.automationTimerDueAtMs !== "number") {
+      this.automationTimerDueAtMs = 0;
+    }
+    if (typeof this.automationTimer === "undefined") {
+      this.automationTimer = null;
     }
     if (!this.botAutoplayEnabled) {
       this.botAutoplayEnabled = {
@@ -386,12 +400,19 @@ export class GameRuntime {
   }
 
   dispatch(command: GameCommand): DispatchResult {
+    return this.dispatchCommand(command);
+  }
+
+  private dispatchCommand(command: GameCommand, options?: { scheduleAutomation?: boolean }): DispatchResult {
     const before = captureAnimationSnapshot(this.state);
     const result = dispatchCommand(this.state, command);
     if (result.ok && result.events.length > 0) {
       this.pushAnimations(buildAnimationsFromEvents(result.events, before, this.state));
     }
     this.notifyListeners();
+    if (result.ok && options?.scheduleAutomation !== false) {
+      this.scheduleAutomationFromCurrentState();
+    }
     return result;
   }
 
@@ -406,6 +427,7 @@ export class GameRuntime {
       text: `${playerId} bot autopilot ${enabled ? "enabled" : "disabled"}.`,
     });
     this.notifyListeners();
+    this.scheduleAutomationFromCurrentState();
   }
 
   toggleBotAutoplay(playerId: PlayerId): boolean {
@@ -730,6 +752,7 @@ export class GameRuntime {
       text: `${playerId} gained ${amount} of each resource for testing.`,
     });
     this.notifyListeners();
+    this.scheduleAutomationFromCurrentState();
   }
 
   debugKillTestUnit(playerId: PlayerId): void {
@@ -763,6 +786,7 @@ export class GameRuntime {
 
     this.pushAnimations(buildAnimationsFromEvents([], before, this.state));
     this.notifyListeners();
+    this.scheduleAutomationFromCurrentState();
   }
 
   debugWinTestGame(playerId: PlayerId): void {
@@ -781,6 +805,7 @@ export class GameRuntime {
       this.pushAnimations(buildAnimationsFromEvents([], before, this.state));
     }
     this.notifyListeners();
+    this.scheduleAutomationFromCurrentState();
   }
 
   debugRespondStack(): void {
@@ -854,6 +879,56 @@ export class GameRuntime {
     this.botDecisionSystem = system;
   }
 
+  private clearAutomationTimer(): void {
+    if (this.automationTimer !== null) {
+      clearTimeout(this.automationTimer);
+      this.automationTimer = null;
+    }
+    this.automationTimerDueAtMs = 0;
+  }
+
+  private scheduleAutomation(delayMs: number): void {
+    if (this.state.winner) {
+      this.clearAutomationTimer();
+      return;
+    }
+
+    const clampedDelay = Math.max(0, Math.floor(delayMs));
+    const dueAtMs = Date.now() + clampedDelay;
+    if (this.automationTimer && this.automationTimerDueAtMs <= dueAtMs) {
+      return;
+    }
+
+    this.clearAutomationTimer();
+    this.automationTimerDueAtMs = dueAtMs;
+    this.automationTimer = setTimeout(() => {
+      this.automationTimer = null;
+      this.automationTimerDueAtMs = 0;
+      this.runAutomationTick();
+    }, clampedDelay);
+  }
+
+  private scheduleAutomationFromCurrentState(): void {
+    this.clearAutomationTimer();
+
+    if (this.state.winner) {
+      return;
+    }
+
+    if (getAutoFlowCommand(this.state)) {
+      this.scheduleAutomation(0);
+      return;
+    }
+
+    const priorityPlayerId = this.state.priorityPlayerId;
+    if (!priorityPlayerId || !this.botAutoplayEnabled[priorityPlayerId]) {
+      return;
+    }
+
+    const remainingDelayMs = Math.max(0, this.botActionReadyAtMs - Date.now());
+    this.scheduleAutomation(remainingDelayMs);
+  }
+
   private getPendingPriorityStopWindow() {
     const window = getPriorityStopWindow(this.state, this.botAutoplayEnabled, this.priorityStopSettings);
     if (!window || this.consumedPriorityStopKeys.has(window.key)) {
@@ -862,14 +937,25 @@ export class GameRuntime {
     return window;
   }
 
-  private stepBotAutoplay(deltaSeconds: number): void {
-    this.botActionCooldownSeconds = Math.max(0, this.botActionCooldownSeconds - deltaSeconds);
-    if (this.botActionCooldownSeconds > 0 || this.state.winner) {
+  private runAutomationTick(): void {
+    if (this.state.winner) {
+      return;
+    }
+
+    const autoFlowCommand = getAutoFlowCommand(this.state);
+    if (autoFlowCommand) {
+      void this.dispatchCommand(autoFlowCommand, { scheduleAutomation: true });
       return;
     }
 
     const priorityPlayerId = this.state.priorityPlayerId;
     if (!priorityPlayerId || !this.botAutoplayEnabled[priorityPlayerId]) {
+      return;
+    }
+
+    const remainingDelayMs = this.botActionReadyAtMs - Date.now();
+    if (remainingDelayMs > 0) {
+      this.scheduleAutomation(remainingDelayMs);
       return;
     }
 
@@ -880,14 +966,15 @@ export class GameRuntime {
         turn: this.state.turn,
         text: `Priority stop ${PRIORITY_STOP_LABELS[priorityStopWindow.stopKey]}: ${priorityStopWindow.priorityPlayerId} yielded to ${priorityStopWindow.yieldedToPlayerId}.`,
       });
-      const result = this.dispatch({
-        type: "PASS_PRIORITY",
-        playerId: priorityStopWindow.priorityPlayerId,
-      });
-      this.botActionCooldownSeconds = BOT_ACTION_INTERVAL_SECONDS;
-      if (!result.ok) {
-        this.botActionCooldownSeconds = BOT_ACTION_INTERVAL_SECONDS * 2;
-      }
+      const result = this.dispatchCommand(
+        {
+          type: "PASS_PRIORITY",
+          playerId: priorityStopWindow.priorityPlayerId,
+        },
+        { scheduleAutomation: false }
+      );
+      this.botActionReadyAtMs = Date.now() + (result.ok ? BOT_ACTION_INTERVAL_MS : BOT_ACTION_INTERVAL_MS * 2);
+      this.scheduleAutomationFromCurrentState();
       return;
     }
 
@@ -896,26 +983,13 @@ export class GameRuntime {
       return;
     }
 
-    const result = this.dispatch(command);
-    this.botActionCooldownSeconds = BOT_ACTION_INTERVAL_SECONDS;
-    if (!result.ok) {
-      this.botActionCooldownSeconds = BOT_ACTION_INTERVAL_SECONDS * 2;
-    }
-  }
-
-  private stepAutoFlow(): void {
-    const command = getAutoFlowCommand(this.state);
-    if (!command) {
-      return;
-    }
-
-    void this.dispatch(command);
+    const result = this.dispatchCommand(command, { scheduleAutomation: false });
+    this.botActionReadyAtMs = Date.now() + (result.ok ? BOT_ACTION_INTERVAL_MS : BOT_ACTION_INTERVAL_MS * 2);
+    this.scheduleAutomationFromCurrentState();
   }
 
   step(context: CanvasRenderingContext2D, deltaSeconds: number): void {
     this.elapsedSeconds += deltaSeconds;
-    this.stepAutoFlow();
-    this.stepBotAutoplay(deltaSeconds);
     this.animations = stepAnimations(this.animations, deltaSeconds);
 
     if (this.stateVersion > this.derivedState.sourceVersion) {
