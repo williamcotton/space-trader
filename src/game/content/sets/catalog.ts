@@ -1,8 +1,12 @@
 import type { CardSet } from "./types";
-import { BASE_SET } from "./base";
+import { ALPHA_SET } from "./alpha";
+import { FOUNDATION_SET } from "./foundation";
 
-const BUILT_IN_CARD_SET_MANIFESTS = new Map<string, CardSet>([[BASE_SET.id, BASE_SET]]);
-const DEFAULT_BUILT_IN_SET_IDS = [BASE_SET.id] as const;
+const BUILT_IN_CARD_SET_MANIFESTS = new Map<string, CardSet>([
+  [FOUNDATION_SET.id, FOUNDATION_SET],
+  [ALPHA_SET.id, ALPHA_SET],
+]);
+const DEFAULT_BUILT_IN_SET_IDS = [ALPHA_SET.id] as const;
 
 export function getDefaultBuiltInSetIds(): string[] {
   return [...DEFAULT_BUILT_IN_SET_IDS];

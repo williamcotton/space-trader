@@ -1,6 +1,6 @@
 import type { CardSet } from "../game/content/sets/types";
-import { FRONTIER_BELT_MAP } from "../game/content/sets/base/maps/frontierBelt";
-import { BASE_STARTER_DECKS } from "../game/content/sets/base/decks";
+import { FRONTIER_BELT_MAP } from "../game/content/sets/alpha/maps/frontierBelt";
+import { ALPHA_STARTER_DECKS } from "../game/content/sets/alpha/decks";
 
 const TEST_EXPANSION_MAP = {
   ...FRONTIER_BELT_MAP,
@@ -12,7 +12,7 @@ const TEST_EXPANSION_MAP = {
 export const TEST_EXPANSION_SET: CardSet = {
   id: "test_expansion",
   name: "Test Expansion",
-  dependencies: ["base"],
+  dependencies: ["alpha"],
   resources: [
     {
       id: "crystal",
@@ -82,7 +82,7 @@ export const TEST_EXPANSION_SET: CardSet = {
     {
       id: "test_expansion_crystal_starter",
       factionId: "crystal_clan",
-      cardIds: [...BASE_STARTER_DECKS.alloy_clan],
+      cardIds: [...ALPHA_STARTER_DECKS.alloy_clan],
     },
   ],
   maps: [

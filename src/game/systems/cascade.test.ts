@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { requireMapDefinition } from "../content/maps/catalog";
-import { RELAY_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
+import { RELAY_KEYWORD } from "../content/sets/alpha/mechanics/keywordIds";
 import { createInitialGameState, type UnitEntity } from "../model/state";
 import { getCascadeAffectedHexes } from "./cascade";
 

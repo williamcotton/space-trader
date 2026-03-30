@@ -12,16 +12,16 @@ import {
   getRegisteredStackEffectDefinitions,
   getRegisteredResourceIds,
 } from "./registry";
-import { initializeBaseContent, getLoadedContentSetIds, loadConfiguredContentSets, resetLoadedContent } from "./loader";
+import { initializeDefaultContent, getLoadedContentSetIds, loadConfiguredContentSets, resetLoadedContent } from "./loader";
 import { getFactionPresentation, getRegisteredResourceTheme, getRegisteredUnitRoleTheme } from "../registries/presentation";
 import { TEST_EXPANSION_SET } from "../../test/testExpansion";
 
 describe("content loader", () => {
   afterEach(() => {
-    initializeBaseContent();
+    initializeDefaultContent();
   });
 
-  it("can reset and reload base content deterministically", () => {
+  it("can reset and reload default content deterministically", () => {
     resetLoadedContent();
 
     expect(getLoadedContentSetIds()).toEqual([]);
@@ -31,10 +31,10 @@ describe("content loader", () => {
     expect(getRegisteredStackEffectDefinitions()).toEqual({});
     expect(() => getFactionPresentation("alloy_clan")).toThrow();
 
-    initializeBaseContent();
+    initializeDefaultContent();
 
-    expect(getLoadedContentSetIds()).toEqual(["base"]);
-    expect(getRegisteredCardSet("base")?.name).toBe("Base Set");
+    expect(getLoadedContentSetIds()).toEqual(["foundation", "alpha"]);
+    expect(getRegisteredCardSet("alpha")?.name).toBe("Alpha");
     expect(getRegisteredFactionIds()).toEqual(["alloy_clan", "flux_collective", "biomass_swarm"]);
     expect(getRegisteredResourceIds()).toEqual(["credits", "alloy", "flux", "biomass"]);
     expect(getOrderedRegisteredResourceModules().map((resource) => resource.id)).toEqual(["credits", "alloy", "flux", "biomass"]);
@@ -52,7 +52,7 @@ describe("content loader", () => {
 
     const state = createInitialGameState({ mapId: "frontier_belt" });
 
-    expect(getLoadedContentSetIds()).toEqual(["base"]);
+    expect(getLoadedContentSetIds()).toEqual(["foundation", "alpha"]);
     expect(state.map.id).toBe("frontier_belt");
     expect(state.players.player_1.faction).toBe("alloy_clan");
     expect(state.players.player_2.faction).toBe("flux_collective");
@@ -64,7 +64,7 @@ describe("content loader", () => {
       reset: true,
     });
 
-    expect(getLoadedContentSetIds()).toEqual(["base", "test_expansion"]);
+    expect(getLoadedContentSetIds()).toEqual(["foundation", "alpha", "test_expansion"]);
     expect(getRegisteredCardSet("test_expansion")?.name).toBe("Test Expansion");
     expect(getRegisteredFactionIds()).toContain("crystal_clan");
     expect(getRegisteredResourceIds()).toContain("crystal");

@@ -1,3 +1,3 @@
-import { initializeBaseContent } from "../game/content/loader";
+import { initializeDefaultContent } from "../game/content/loader";
 
-initializeBaseContent();
+initializeDefaultContent();

@@ -234,24 +234,24 @@ export function loadBuiltInContentSets(setIds: readonly string[], options?: { re
   });
 }
 
-export function initializeBaseContent(): void {
-  if (loadedSetIds.has("base")) {
+export function initializeDefaultContent(): void {
+  if (loadedSetIds.has("alpha")) {
     return;
   }
   loadConfiguredContentSets({
-    builtInSetIds: ["base"],
+    builtInSetIds: ["alpha"],
     reset: true,
   });
 }
 
-export function ensureBaseContentLoaded(): void {
+export function ensureDefaultContentLoaded(): void {
   if (loadedSetIds.size === 0) {
-    initializeBaseContent();
+    initializeDefaultContent();
     return;
   }
 
-  if (!loadedSetIds.has("base")) {
-    throw new Error("Base content is not loaded. Explicitly load compatible content sets before using base gameplay facades.");
+  if (!loadedSetIds.has("alpha")) {
+    throw new Error("Default content is not loaded. Explicitly load compatible content sets before using gameplay facades.");
   }
 }
 

@@ -1,7 +1,7 @@
 import type { GameCommand } from "./actions/commands";
 import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { decideMvpBotCommand } from "./ai/mvpBot";
-import { ensureBaseContentLoaded, getLoadedContentSetIds, loadConfiguredContentSets, type ContentLoadSelection } from "./content/loader";
+import { ensureDefaultContentLoaded, getLoadedContentSetIds, loadConfiguredContentSets, type ContentLoadSelection } from "./content/loader";
 import { getCardDefinition } from "./content/cards/catalog";
 import {
   findRegisteredRuntimeProfileForMap,
@@ -69,7 +69,7 @@ function createRuntimeMatchId(matchPrefix: string): string {
 }
 
 function getDefaultRuntimeMap() {
-  ensureBaseContentLoaded();
+  ensureDefaultContentLoaded();
   const runtimeProfile = getDefaultRuntimeProfile();
   if (runtimeProfile) {
     const runtimeMap = getRegisteredMap(runtimeProfile.defaultMapId);

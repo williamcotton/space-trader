@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
 import { requireMapDefinition } from "../content/maps/catalog";
-import { getBloomedUnitIdsThisTurn, getLastBloomSourceItemId, getLastBloomedUnitIds } from "../content/sets/base/mechanics/bloom";
-import { getSalvageTriggersThisTurn } from "../content/sets/base/mechanics/salvage";
-import { getTacticsCastThisTurn } from "../content/sets/base/mechanics/surge";
+import { getBloomedUnitIdsThisTurn, getLastBloomSourceItemId, getLastBloomedUnitIds } from "../content/sets/alpha/mechanics/bloom";
+import { getSalvageTriggersThisTurn } from "../content/sets/alpha/mechanics/salvage";
+import { getTacticsCastThisTurn } from "../content/sets/alpha/mechanics/surge";
 import { getStarterDeckCardIds } from "../content/decks/starterDecks";
 import {
   DEFAULT_GAME_RULES,
@@ -73,7 +73,7 @@ describe("createInitialGameState", () => {
     const state = createInitialGameState({});
 
     expect(state.map.id).toBe("frontier_belt");
-    expect(state.matchId).toBe("match_base");
+    expect(state.matchId).toBe("match_alpha");
     expect(state.log[0]?.text).toBe(`Match initialized on ${state.map.name}.`);
   });
 

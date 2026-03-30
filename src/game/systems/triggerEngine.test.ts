@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
 import { requireMapDefinition } from "../content/maps/catalog";
-import { getLastBloomedUnitIds, setLastBloomSourceItemId } from "../content/sets/base/mechanics/bloom";
+import { getLastBloomedUnitIds, setLastBloomSourceItemId } from "../content/sets/alpha/mechanics/bloom";
 import { createInitialGameState } from "../model/state";
 import { evaluateTriggersFromEvent, resetTriggerDepth, incrementTriggerDepth } from "./triggerEngine";
 import type { CardPlayedToStackEvent, GameEvent } from "../actions/events";

@@ -4,9 +4,16 @@ import type { GameState, HexCoord } from "../../../model/state";
 import type { GameInstruction, InstructionContext } from "../../../actions/instructions";
 import { hexDistance, isWithinMapBounds } from "../../../model/hex";
 import { LAYER } from "../../../systems/continuousEffects";
+import { createModifierEffectConfigs, tacticPlay, unitPlay } from "../../cards/builders";
 import type {
   CascadeUnitBuffOptions,
   CascadeUnitBuffPlayEffectConfig,
+  ResourcesByBloomCountOptions,
+  ResourcesByBloomCountPlayEffectConfig,
+  ResourcesBySalvageCountOptions,
+  ResourcesBySalvageCountPlayEffectConfig,
+} from "./playEffects";
+import type {
   DestroyDamagedUnitsOptions,
   DestroyDamagedUnitsPlayEffectConfig,
   DrawAndGainResourcesOptions,
@@ -15,98 +22,20 @@ import type {
   GlobalUnitBuffPlayEffectConfig,
   HexAreaDamageOptions,
   HexAreaDamagePlayEffectConfig,
-  MassDamagePlayEffectConfig,
-  ResourcesByBloomCountOptions,
-  ResourcesByBloomCountPlayEffectConfig,
-  ResourcesBySalvageCountOptions,
-  ResourcesBySalvageCountPlayEffectConfig,
   MassDamageOptions,
+  MassDamagePlayEffectConfig,
   ResourcesByUnitCountOptions,
   ResourcesByUnitCountPlayEffectConfig,
-} from "./playEffects";
+} from "../foundation/playEffects";
 import type {
   CardDefinition,
-  CardPlayEffectConfig,
-  CardPlayModifierEffectConfigs,
   CardPlayProfile,
   CardSourceDestination,
-  CardTargetMode,
   HexTargetPredicate,
-  TargetPredicate,
 } from "../../cards/types";
 
 function getStartOfControllersNextTurn(state: Readonly<GameState>, controllerId: PlayerId): number {
   return state.activePlayerId === controllerId ? state.turn + 2 : state.turn + 1;
-}
-
-function tacticPlay(
-  stackEffectId: string,
-  options?: {
-    targetMode?: CardTargetMode;
-    isValidTarget?: TargetPredicate;
-    isValidHexTarget?: HexTargetPredicate;
-    effectConfig?: CardPlayEffectConfig;
-    modifierEffectConfigs?: CardPlayModifierEffectConfigs;
-    sourceDestinationOnResolve?: CardSourceDestination;
-  }
-): CardPlayProfile {
-  const targetMode = options?.targetMode ?? "none";
-
-  if (targetMode === "entity") {
-    if (!options?.isValidTarget) {
-      throw new Error(`Entity-targeted card play ${stackEffectId} is missing isValidTarget.`);
-    }
-    return {
-      stackEffectId,
-      effectConfig: options?.effectConfig,
-      modifierEffectConfigs: options?.modifierEffectConfigs,
-      targetMode,
-      sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
-      isValidTarget: options.isValidTarget,
-    };
-  }
-
-  if (targetMode === "hex") {
-    if (!options?.isValidHexTarget) {
-      throw new Error(`Hex-targeted card play ${stackEffectId} is missing isValidHexTarget.`);
-    }
-    return {
-      stackEffectId,
-      effectConfig: options?.effectConfig,
-      modifierEffectConfigs: options?.modifierEffectConfigs,
-      targetMode,
-      sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
-      isValidHexTarget: options.isValidHexTarget,
-    };
-  }
-
-  return {
-    stackEffectId,
-    effectConfig: options?.effectConfig,
-    modifierEffectConfigs: options?.modifierEffectConfigs,
-    targetMode,
-    sourceDestinationOnResolve: options?.sourceDestinationOnResolve ?? "discard",
-  };
-}
-
-function createModifierEffectConfigs(
-  modifierId: string,
-  effectConfig?: CardPlayEffectConfig
-): CardPlayModifierEffectConfigs | undefined {
-  if (!effectConfig) {
-    return undefined;
-  }
-  return { [modifierId]: effectConfig };
-}
-
-function unitPlay(stackEffectId = "deploy_unit_card"): CardPlayProfile {
-  return {
-    stackEffectId,
-    targetMode: "none",
-    sourceDestinationOnResolve: "none",
-    requiresOpenBaseAdjacentTile: true,
-    reserveEntityId: true,
-  };
 }
 
 function getOpponentPlayer(playerId: PlayerId): PlayerId {
@@ -373,7 +302,7 @@ function hasFriendlyUnitNearEntity(state: Readonly<GameState>, playerId: PlayerI
   );
 }
 
-export const BASE_CARD_DEFINITIONS: Record<string, CardDefinition> = {
+export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
   orbital_ping: {
     id: "orbital_ping",
     name: "Orbital Ping",

@@ -1,5 +1,5 @@
 import { getCardDefinition } from "./content/cards/catalog";
-import { ensureBaseContentLoaded } from "./content/loader";
+import { ensureDefaultContentLoaded } from "./content/loader";
 import type { Faction, ResourceType, UnitRole } from "./model/enums";
 import type { PlayerId } from "./model/ids";
 import type { EntityState, GameState } from "./model/state";
@@ -28,7 +28,7 @@ let activePlayerThemes: Record<PlayerId, PlayerTheme> = {
 };
 
 export function configurePlayerThemes(factions: Record<PlayerId, Faction>): void {
-  ensureBaseContentLoaded();
+  ensureDefaultContentLoaded();
   const sameFaction = factions.player_1 === factions.player_2;
   activePlayerThemes = {
     player_1: getFactionPresentation(factions.player_1).theme,
@@ -83,12 +83,12 @@ export function getPlayerLabel(playerId: PlayerId): string {
 }
 
 export function getResourceTheme(resourceType: ResourceType): ResourceTheme {
-  ensureBaseContentLoaded();
+  ensureDefaultContentLoaded();
   return getRegisteredResourceTheme(resourceType);
 }
 
 export function getUnitRoleTheme(role: UnitRole): RoleTheme {
-  ensureBaseContentLoaded();
+  ensureDefaultContentLoaded();
   return getRegisteredUnitRoleTheme(role);
 }
 
@@ -96,7 +96,7 @@ export function formatFactionName(faction: Faction | "neutral"): string {
   if (faction === "neutral") {
     return "Neutral";
   }
-  ensureBaseContentLoaded();
+  ensureDefaultContentLoaded();
   return getFactionPresentation(faction).label ?? formatWords(faction);
 }
 

@@ -1,4 +1,4 @@
-import { BASE_CARD_DEFINITIONS } from "./cards";
+import { ALPHA_CARD_DEFINITIONS } from "./cards";
 
 type DeckEntry = readonly [cardId: string, copies: number];
 
@@ -88,7 +88,7 @@ const BIOMASS_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["orbital_purge", 2],
 ];
 
-export const BASE_STARTER_DECKS: Record<string, string[]> = {
+export const ALPHA_STARTER_DECKS: Record<string, string[]> = {
   alloy_clan: defineStarterDeck(ALLOY_STARTER_ENTRIES),
   flux_collective: defineStarterDeck(FLUX_STARTER_ENTRIES),
   biomass_swarm: defineStarterDeck(BIOMASS_STARTER_ENTRIES),
@@ -103,7 +103,7 @@ export function validateDeckCardIds(cardIds: string[]): string[] {
 
   const copyCounts = new Map<string, number>();
   for (const cardId of cardIds) {
-    if (!BASE_CARD_DEFINITIONS[cardId]) {
+    if (!ALPHA_CARD_DEFINITIONS[cardId]) {
       errors.push(`Deck contains unknown card id: ${cardId}`);
       continue;
     }

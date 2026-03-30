@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
 import { requireMapDefinition } from "../content/maps/catalog";
-import { SPROUT_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
+import { SPROUT_KEYWORD } from "../content/sets/alpha/mechanics/keywordIds";
 import { MAX_HAND_SIZE, createInitialGameState } from "../model/state";
 import { getAutoFlowCommand } from "./autoFlow";
 

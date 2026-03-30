@@ -60,7 +60,7 @@ const BIOMASS_MIRROR_THEME = {
   line: "#f0e078",
 } as const;
 
-export const BASE_SET_FACTIONS: FactionModule[] = [
+export const ALPHA_SET_FACTIONS: FactionModule[] = [
   {
     id: "alloy_clan",
     label: "Alloy Clan",

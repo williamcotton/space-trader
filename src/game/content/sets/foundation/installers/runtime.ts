@@ -3,7 +3,6 @@ import {
   combineConfiguredSpellScores,
   scoreBaseDamageSpell,
   scoreBraceProtocolTarget,
-  scoreCascadeAttackBuffTarget,
   scoreDamageSpellTarget,
   scoreDestroyDamagedUnitsSpell,
   scoreDestroySpellTarget,
@@ -13,8 +12,8 @@ import {
   scoreMassDamageSpell,
   scoreResourcesByUnitCountSpell,
 } from "../ai/spellScoring";
-import { getCardDefinition, getCardPlayEffectConfigsByType, getResolvedCardPlayEffectConfigs } from "../../../cards/catalog";
-import { installBasePlayEffectRegistrations, installBaseStackEffectMagnitudeRegistrations } from "../stackEffects";
+import { getCardDefinition, getResolvedCardPlayEffectConfigs } from "../../../cards/catalog";
+import { installFoundationPlayEffectRegistrations, installFoundationStackEffectMagnitudeRegistrations } from "../stackEffects";
 import { hexDistance } from "../../../../model/hex";
 import type { PlayerId } from "../../../../model/ids";
 import type { GameState, HexCoord, UnitEntity } from "../../../../model/state";
@@ -38,7 +37,6 @@ import {
   getUniqueHexes,
 } from "../../../../render/animations";
 import { canTargetEntityDirectly } from "../../../../rules/directInteraction";
-import { getCascadeAffectedHexes } from "../../../../systems/cascade";
 
 function sortWeakestEnemyUnits(units: UnitEntity[]): UnitEntity[] {
   return [...units].sort((a, b) => {
@@ -57,7 +55,7 @@ function getOpponentPlayer(playerId: PlayerId): PlayerId {
   return playerId === "player_1" ? "player_2" : "player_1";
 }
 
-function registerBaseAutoTargetResolvers(): void {
+function registerFoundationAutoTargetResolvers(): void {
   registerAutoTargetResolver("weakest_enemy_unit", (state, controllerId, preferredTargetId) => {
     const preferredTarget = preferredTargetId ? state.entities[preferredTargetId] : null;
     if (
@@ -109,30 +107,12 @@ function registerBaseAutoTargetResolvers(): void {
   });
 }
 
-function registerBaseTriggerConditions(): void {
+function registerFoundationTriggerConditions(): void {
   registerTriggerConditionEvaluator("on_owner_tactic_played", (_state, event, _condition, unit) => {
     if (event.type !== "CARD_PLAYED_TO_STACK" || event.playerId !== unit.ownerId) {
       return false;
     }
     return getCardDefinition(event.cardId)?.kind === "tactic";
-  });
-
-  registerTriggerConditionEvaluator("on_cascaded", (state, event, _condition, unit) => {
-    if (event.type !== "STACK_ITEM_RESOLVED" || event.controllerId !== unit.ownerId || !event.targetHex || !event.sourceCardId) {
-      return false;
-    }
-
-    const sourceCard = getCardDefinition(event.sourceCardId);
-    const cascadeConfig = getCardPlayEffectConfigsByType(sourceCard, "cascade_unit_buff")[0];
-    const waves = Number(cascadeConfig?.waves ?? Number.NaN);
-    if (!Number.isFinite(waves)) {
-      return false;
-    }
-
-    const affectedHexes = getCascadeAffectedHexes(state, event.controllerId, event.targetHex, waves, {
-      excludeKeywordEffectIdPrefix: `ce_${event.itemId}_`,
-    });
-    return affectedHexes.some((coord) => coord.q === unit.coord.q && coord.r === unit.coord.r);
   });
 
   registerTriggerConditionEvaluator("on_enter_battlefield", (_state, event) => event.type === "CARD_PLAYED_TO_BATTLEFIELD");
@@ -145,7 +125,7 @@ function registerBaseTriggerConditions(): void {
   registerTriggerConditionEvaluator("at_end_of_turn", () => false);
 }
 
-function registerBaseSpellScoring(): void {
+function registerFoundationSpellScoring(): void {
   registerSpellScoringResolver("damage_entity", ({ state, botPlayerId, targeting, effect }) => {
     if (!targeting.targetEntityId) {
       return -Infinity;
@@ -295,32 +275,6 @@ function registerBaseSpellScoring(): void {
     );
   });
 
-  registerSpellScoringResolver("cascade_unit_buff", ({ state, botPlayerId, targeting, effectConfigs }) => {
-    if (!targeting.targetHex) {
-      return -Infinity;
-    }
-    const targetHex = targeting.targetHex;
-    return combineConfiguredSpellScores(
-      effectConfigs
-        .filter((effectConfig) => effectConfig.type === "cascade_unit_buff")
-        .map((effectConfig) =>
-          scoreCascadeAttackBuffTarget(state, botPlayerId, targetHex, {
-            attackBonus: Number(effectConfig.attackBonus ?? 0),
-            armorBonus: Number(effectConfig.armorBonus ?? 0),
-            waves: Number(effectConfig.waves ?? 0),
-            roleFilter:
-              effectConfig.roleFilter === "combat" ||
-              effectConfig.roleFilter === "resource" ||
-              effectConfig.roleFilter === "utility"
-                ? effectConfig.roleFilter
-                : undefined,
-            grantedKeywords: Array.isArray(effectConfig.grantedKeywords) ? effectConfig.grantedKeywords : undefined,
-            reward: typeof effectConfig.reward === "object" && effectConfig.reward !== null ? effectConfig.reward as never : undefined,
-          })
-        )
-    );
-  });
-
   registerSpellScoringResolver("counter", () => -Infinity);
   registerSpellScoringResolver("deploy_unit", () => -Infinity);
   registerSpellScoringResolver("draw_cards", () => -Infinity);
@@ -328,7 +282,7 @@ function registerBaseSpellScoring(): void {
   registerSpellScoringResolver("noop_log", () => -Infinity);
 }
 
-function registerBaseStackPreviewPresenters(): void {
+function registerFoundationStackPreviewPresenters(): void {
   registerStackPreviewPresenterByEffectId("deploy_unit_card", ({ sourceCard }) =>
     sourceCard?.kind === "unit"
       ? {
@@ -354,10 +308,10 @@ function registerBaseStackPreviewPresenters(): void {
   }));
 }
 
-function registerBaseCardResolveAnimations(): void {
+function registerFoundationCardResolveAnimations(): void {
   registerCardResolveAnimationBuilder("hex_shower", ({ event, state, baseId, sourceCard, profile }) => {
     const label = typeof profile.label === "string" ? profile.label : sourceCard.name;
-    const waves = Number(profile.waves ?? getCardPlayEffectConfigsByType(sourceCard, "cascade_unit_buff")[0]?.waves ?? 0);
+    const waves = Number(profile.waves ?? 0);
     const accent = typeof profile.accent === "string" ? profile.accent : getCardAnimationAccent(event.sourceCardId);
 
     return buildHexShowerAnimation(event, state, baseId, label, waves, accent);
@@ -401,14 +355,14 @@ function registerBaseCardResolveAnimations(): void {
   });
 }
 
-function registerBaseDebugStackResponses(): void {
+function registerFoundationDebugStackResponses(): void {
   registerDebugStackResponse({
     id: "noop_response",
     label: "Debug response",
     effectId: "noop_log",
   });
   registerDebugStackResponse({
-    id: "base_strike",
+    id: "debug_base_strike",
     label: "Debug Base Strike",
     effectId: "damage_enemy_base_2",
   });
@@ -420,7 +374,7 @@ function registerBaseDebugStackResponses(): void {
   });
 }
 
-function registerBaseStackResolveAnimations(): void {
+function registerFoundationStackResolveAnimations(): void {
   registerStackResolveAnimationBuilder("counter", ({ event, before, state, baseId, behavior }) => {
     const sourceBase = state.entities[state.players[event.controllerId].baseEntityId];
     const targetItem = event.targetStackItemId ? before.stackItems[event.targetStackItemId] : undefined;
@@ -539,17 +493,6 @@ function registerBaseStackResolveAnimations(): void {
     };
   });
 
-  registerStackResolveAnimationBuilder("cascade_unit_buff", ({ event, state, baseId, sourceCard, behavior }) =>
-    buildHexShowerAnimation(
-      event,
-      state,
-      baseId,
-      event.label,
-      Number(getCardPlayEffectConfigsByType(sourceCard, "cascade_unit_buff")[0]?.waves ?? behavior.waves ?? 0),
-      getCardAnimationAccent(event.sourceCardId)
-    )
-  );
-
   registerStackResolveAnimationBuilder("hex_area_damage", ({ event, state, baseId, sourceCard }) => {
     if (!event.targetHex) {
       return null;
@@ -598,7 +541,7 @@ function registerBaseStackResolveAnimations(): void {
   });
 }
 
-function registerBaseBoardBlastResolvers(): void {
+function registerFoundationBoardBlastResolvers(): void {
   registerBoardBlastEffectResolver("mass_damage", ({ before, controllerId, effectConfig }) => ({
     hexes: getAffectedUnitHexes(
       before,
@@ -648,20 +591,20 @@ function registerBaseBoardBlastResolvers(): void {
   }));
 }
 
-export function installBaseRuntimeExtensions(): void {
-  installBasePlayEffectRegistrations();
-  installBaseStackEffectMagnitudeRegistrations();
-  registerBaseAutoTargetResolvers();
-  registerBaseBoardBlastResolvers();
-  registerBaseCardResolveAnimations();
-  registerBaseTriggerConditions();
-  registerBaseSpellScoring();
-  registerBaseStackPreviewPresenters();
-  registerBaseDebugStackResponses();
-  registerBaseStackResolveAnimations();
+export function installFoundationRuntimeExtensions(): void {
+  installFoundationPlayEffectRegistrations();
+  installFoundationStackEffectMagnitudeRegistrations();
+  registerFoundationAutoTargetResolvers();
+  registerFoundationBoardBlastResolvers();
+  registerFoundationCardResolveAnimations();
+  registerFoundationTriggerConditions();
+  registerFoundationSpellScoring();
+  registerFoundationStackPreviewPresenters();
+  registerFoundationDebugStackResponses();
+  registerFoundationStackResolveAnimations();
 }
 
-export const BASE_RUNTIME_INSTALLER: SetInstallerModule = {
-  id: "base_runtime_extensions",
-  install: installBaseRuntimeExtensions,
+export const FOUNDATION_RUNTIME_INSTALLER: SetInstallerModule = {
+  id: "foundation_runtime_extensions",
+  install: installFoundationRuntimeExtensions,
 };

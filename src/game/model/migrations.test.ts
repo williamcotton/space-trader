@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { requireMapDefinition } from "../content/maps/catalog";
-import { getBloomedUnitIdsThisTurn, getLastBloomSourceItemId, getLastBloomedUnitIds } from "../content/sets/base/mechanics/bloom";
-import { RELAY_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
-import { getSalvageTriggersThisTurn } from "../content/sets/base/mechanics/salvage";
-import { getTacticsCastThisTurn } from "../content/sets/base/mechanics/surge";
+import { getBloomedUnitIdsThisTurn, getLastBloomSourceItemId, getLastBloomedUnitIds } from "../content/sets/alpha/mechanics/bloom";
+import { RELAY_KEYWORD } from "../content/sets/alpha/mechanics/keywordIds";
+import { getSalvageTriggersThisTurn } from "../content/sets/alpha/mechanics/salvage";
+import { getTacticsCastThisTurn } from "../content/sets/alpha/mechanics/surge";
 import { migrateRuntimeState } from "./migrations";
 import { createInitialGameState } from "./state";
 

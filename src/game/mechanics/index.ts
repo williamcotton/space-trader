@@ -1,5 +1,5 @@
 import type { GameState } from "../model/state";
-import { ensureBaseContentLoaded } from "../content/loader";
+import { ensureDefaultContentLoaded } from "../content/loader";
 import {
   initializeRegisteredMechanicState,
   migrateRegisteredMechanicState,
@@ -18,23 +18,23 @@ function ensureMechanicStateRoot(state: GameState): void {
 }
 
 export function initializeMechanicState(state: GameState): void {
-  ensureBaseContentLoaded();
+  ensureDefaultContentLoaded();
   ensureMechanicStateRoot(state);
   initializeRegisteredMechanicState(state);
 }
 
 export function migrateMechanicState(state: GameState): void {
-  ensureBaseContentLoaded();
+  ensureDefaultContentLoaded();
   ensureMechanicStateRoot(state);
   migrateRegisteredMechanicState(state);
 }
 
 export function resetTurnMechanicState(state: GameState): void {
-  ensureBaseContentLoaded();
+  ensureDefaultContentLoaded();
   resetRegisteredTurnMechanicState(state);
 }
 
 export function resetResolutionMechanicState(state: GameState): void {
-  ensureBaseContentLoaded();
+  ensureDefaultContentLoaded();
   resetRegisteredResolutionMechanicState(state);
 }

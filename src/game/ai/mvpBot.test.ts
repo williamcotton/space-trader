@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
 import { requireMapDefinition } from "../content/maps/catalog";
-import { getBloomedUnitIdsThisTurn } from "../content/sets/base/mechanics/bloom";
-import { SPROUT_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
-import { incrementSalvageTriggersThisTurn } from "../content/sets/base/mechanics/salvage";
-import { incrementTacticsCastThisTurn } from "../content/sets/base/mechanics/surge";
+import { getBloomedUnitIdsThisTurn } from "../content/sets/alpha/mechanics/bloom";
+import { SPROUT_KEYWORD } from "../content/sets/alpha/mechanics/keywordIds";
+import { incrementSalvageTriggersThisTurn } from "../content/sets/alpha/mechanics/salvage";
+import { incrementTacticsCastThisTurn } from "../content/sets/alpha/mechanics/surge";
 import { hexDistance } from "../model/hex";
 import { createInitialGameState } from "../model/state";
 import { decideMvpBotCommand } from "./mvpBot";

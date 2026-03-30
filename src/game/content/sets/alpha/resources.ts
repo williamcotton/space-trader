@@ -1,6 +1,6 @@
 import type { ResourceModule } from "../types";
 
-export const BASE_SET_RESOURCES: ResourceModule[] = [
+export const ALPHA_SET_RESOURCES: ResourceModule[] = [
   {
     id: "credits",
     label: "Credits",

@@ -3,10 +3,10 @@ import type { GameCommand } from "./commands";
 import { dispatchCommand } from "./reducers";
 import { getCardDefinition, type UnitCardDefinition } from "../content/cards/catalog";
 import { requireMapDefinition } from "../content/maps/catalog";
-import { getBloomedUnitIdsThisTurn } from "../content/sets/base/mechanics/bloom";
-import { RELAY_KEYWORD, SPROUT_KEYWORD } from "../content/sets/base/mechanics/keywordIds";
-import { getSalvageTriggersThisTurn, incrementSalvageTriggersThisTurn } from "../content/sets/base/mechanics/salvage";
-import { getTacticsCastThisTurn } from "../content/sets/base/mechanics/surge";
+import { getBloomedUnitIdsThisTurn } from "../content/sets/alpha/mechanics/bloom";
+import { RELAY_KEYWORD, SPROUT_KEYWORD } from "../content/sets/alpha/mechanics/keywordIds";
+import { getSalvageTriggersThisTurn, incrementSalvageTriggersThisTurn } from "../content/sets/alpha/mechanics/salvage";
+import { getTacticsCastThisTurn } from "../content/sets/alpha/mechanics/surge";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage, getEffectiveUnitSiegeDamageBonus } from "../systems/unitStats";
 

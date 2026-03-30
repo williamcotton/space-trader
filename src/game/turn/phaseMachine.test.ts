@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { requireMapDefinition } from "../content/maps/catalog";
-import { getBloomedUnitIdsThisTurn, getLastBloomedUnitIds, setLastBloomSourceItemId } from "../content/sets/base/mechanics/bloom";
-import { getSalvageTriggersThisTurn, incrementSalvageTriggersThisTurn } from "../content/sets/base/mechanics/salvage";
+import { getBloomedUnitIdsThisTurn, getLastBloomedUnitIds, setLastBloomSourceItemId } from "../content/sets/alpha/mechanics/bloom";
+import { getSalvageTriggersThisTurn, incrementSalvageTriggersThisTurn } from "../content/sets/alpha/mechanics/salvage";
 import { createInitialGameState } from "../model/state";
 import { advancePhase } from "./phaseMachine";
 

@@ -8,7 +8,7 @@ import { installStealthMechanic } from "./stealth";
 import { installSurgeMechanic } from "./surge";
 import { installUncounterableMechanic } from "./uncounterable";
 
-export const BASE_SET_MECHANICS: SetMechanicModule[] = [
+export const ALPHA_SET_MECHANICS: SetMechanicModule[] = [
   { id: "sprout", install: installSproutMechanic },
   { id: "stealth", install: installStealthMechanic },
   { id: "relay", install: installRelayMechanic },
