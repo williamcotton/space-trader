@@ -4,6 +4,7 @@ import { ensureBaseContentLoaded } from "../content/loader";
 import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
 import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
 import {
+  findRegisteredRuntimeProfileForMap,
   getDefaultRuntimeProfile,
   getRegisteredFactionIds,
   getRegisteredFactionModule,
@@ -11,6 +12,7 @@ import {
   getRegisteredMap,
   getRegisteredMaps,
   getRegisteredPrimaryResourceIdForFaction,
+  getRegisteredRuntimeProfile,
   getRegisteredResourceIds,
   isRegisteredCurrencyResource,
 } from "../content/registry";
@@ -183,6 +185,7 @@ export function unitHasKeyword(unit: UnitEntity, keyword: string): boolean {
 type CreateInitialGameStateOptions = {
   map?: MapState;
   mapId?: string;
+  runtimeProfileId?: string;
   matchId?: string;
   randomSource?: () => number;
   rules?: Partial<GameRules>;
@@ -237,6 +240,26 @@ function createStartingResources(playerId: PlayerId, faction: Faction): Resource
   return resources;
 }
 
+function resolveRuntimeProfile(options: CreateInitialGameStateOptions) {
+  if (options.runtimeProfileId) {
+    const explicitRuntimeProfile = getRegisteredRuntimeProfile(options.runtimeProfileId);
+    if (!explicitRuntimeProfile) {
+      throw new Error(`Unknown runtime profile ${options.runtimeProfileId}.`);
+    }
+    return explicitRuntimeProfile;
+  }
+
+  if (options.map) {
+    return findRegisteredRuntimeProfileForMap(options.map.id) ?? getDefaultRuntimeProfile();
+  }
+
+  if (options.mapId) {
+    return findRegisteredRuntimeProfileForMap(options.mapId) ?? getDefaultRuntimeProfile();
+  }
+
+  return getDefaultRuntimeProfile();
+}
+
 function cloneMap(map: MapState): MapState {
   return {
     ...map,
@@ -264,7 +287,7 @@ function resolveInitialMap(options: CreateInitialGameStateOptions): MapState {
     return cloneMap(map);
   }
 
-  const runtimeProfile = getDefaultRuntimeProfile();
+  const runtimeProfile = resolveRuntimeProfile(options);
   if (runtimeProfile) {
     const runtimeMap = getRegisteredMap(runtimeProfile.defaultMapId);
     if (!runtimeMap) {
@@ -326,7 +349,10 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   if (registeredFactions.length === 0) {
     throw new Error("No registered factions are available.");
   }
-  const runtimeProfile = getDefaultRuntimeProfile();
+  const runtimeProfile = resolveRuntimeProfile({
+    ...options,
+    map,
+  });
   const factionOne =
     options.factions?.player_1 ??
     runtimeProfile?.defaultFactions?.player_1 ??

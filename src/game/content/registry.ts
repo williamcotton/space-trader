@@ -176,6 +176,13 @@ export function getRegisteredRuntimeProfiles(): RuntimeProfile[] {
   return [...registeredRuntimeProfiles.values()];
 }
 
+export function findRegisteredRuntimeProfileForMap(mapId: string): RuntimeProfile | null {
+  return (
+    getRegisteredRuntimeProfiles().find((profile) => profile.defaultMapId === mapId) ??
+    null
+  );
+}
+
 export function getDefaultRuntimeProfile(): RuntimeProfile | null {
   if (defaultRuntimeProfileId) {
     return registeredRuntimeProfiles.get(defaultRuntimeProfileId) ?? null;

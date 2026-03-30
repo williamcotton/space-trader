@@ -3,7 +3,14 @@ import { dispatchCommand, type DispatchResult } from "./actions/reducers";
 import { decideMvpBotCommand } from "./ai/mvpBot";
 import { ensureBaseContentLoaded } from "./content/loader";
 import { getCardDefinition } from "./content/cards/catalog";
-import { getDefaultRuntimeProfile, getRegisteredMap, getRegisteredMaps, getRegisteredResourceIds } from "./content/registry";
+import {
+  findRegisteredRuntimeProfileForMap,
+  getDefaultRuntimeProfile,
+  getRegisteredMap,
+  getRegisteredMaps,
+  getRegisteredRuntimeProfile,
+  getRegisteredResourceIds,
+} from "./content/registry";
 import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
 import { findEntityAtHex } from "./model/queries";
 import { createInitialGameState } from "./model/state";
@@ -79,6 +86,7 @@ function createDefaultRuntimeState(): GameState {
   const runtimeProfile = getDefaultRuntimeProfile();
   return createInitialGameState({
     map,
+    runtimeProfileId: runtimeProfile?.id,
     matchId: createRuntimeMatchId(runtimeProfile?.matchIdPrefix ?? map.id),
     randomSource: () => Math.random(),
   });
@@ -166,13 +174,16 @@ export class GameRuntime {
   private listeners: Set<() => void> = new Set();
   private stateVersion = 0;
   private derivedState: DerivedState = createEmptyDerivedState();
+  private runtimeProfileId: string | null = null;
   readonly state: GameState;
 
   constructor(
-    state: GameState = createDefaultRuntimeState()
+    state: GameState = createDefaultRuntimeState(),
+    runtimeProfileId?: string
   ) {
     this.state = state;
     migrateRuntimeState(this.state);
+    this.runtimeProfileId = runtimeProfileId ?? findRegisteredRuntimeProfileForMap(this.state.map.id)?.id ?? getDefaultRuntimeProfile()?.id ?? null;
     this.rehydrateHotState();
     configurePlayerThemes({
       player_1: this.state.players.player_1.faction,
@@ -182,9 +193,14 @@ export class GameRuntime {
   }
 
   resetWithFactions(factions: { player_1: Faction; player_2: Faction }): void {
+    const runtimeProfile =
+      (this.runtimeProfileId ? getRegisteredRuntimeProfile(this.runtimeProfileId) : null) ??
+      findRegisteredRuntimeProfileForMap(this.state.map.id) ??
+      getDefaultRuntimeProfile();
     const newState = createInitialGameState({
       map: this.state.map,
-      matchId: createRuntimeMatchId(this.state.map.id),
+      runtimeProfileId: runtimeProfile?.id ?? this.runtimeProfileId ?? undefined,
+      matchId: createRuntimeMatchId(runtimeProfile?.matchIdPrefix ?? this.state.map.id),
       randomSource: () => Math.random(),
       factions,
     });
