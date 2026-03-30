@@ -21,6 +21,7 @@ import {
 import { resetAiMechanicsRegistry } from "../registries/aiMechanics";
 import { resetAutoTargetRegistry } from "../registries/autoTargets";
 import { resetBoardBlastEffectRegistry } from "../registries/boardBlastEffects";
+import { resetCardResolveAnimationRegistry } from "../registries/cardResolveAnimations";
 import { resetCardCounterabilityRegistry } from "../registries/cardCounterability";
 import { resetCardPlayModifierRegistry } from "../registries/cardPlayModifiers";
 import { resetCascadeBranchRegistry } from "../registries/cascadeBranches";
@@ -150,6 +151,7 @@ export function resetLoadedContent(): void {
   resetAiMechanicsRegistry();
   resetAutoTargetRegistry();
   resetBoardBlastEffectRegistry();
+  resetCardResolveAnimationRegistry();
   resetCardCounterabilityRegistry();
   resetCardPlayModifierRegistry();
   resetCascadeBranchRegistry();

@@ -20,6 +20,7 @@ export type StackPreviewPresentation = {
 export type StackPreviewPresenter = (context: StackPreviewContext) => StackPreviewPresentation | null;
 
 const stackPreviewPresenters = new Map<string, StackPreviewPresenter>();
+const stackPreviewPresentersByEffectId = new Map<string, StackPreviewPresenter>();
 
 export function registerStackPreviewPresenter(effectBehaviorType: string, presenter: StackPreviewPresenter): void {
   stackPreviewPresenters.set(effectBehaviorType, presenter);
@@ -29,6 +30,15 @@ export function getStackPreviewPresenter(effectBehaviorType: string): StackPrevi
   return stackPreviewPresenters.get(effectBehaviorType);
 }
 
+export function registerStackPreviewPresenterByEffectId(effectId: string, presenter: StackPreviewPresenter): void {
+  stackPreviewPresentersByEffectId.set(effectId, presenter);
+}
+
+export function getStackPreviewPresenterByEffectId(effectId: string): StackPreviewPresenter | undefined {
+  return stackPreviewPresentersByEffectId.get(effectId);
+}
+
 export function resetStackPreviewRegistry(): void {
   stackPreviewPresenters.clear();
+  stackPreviewPresentersByEffectId.clear();
 }

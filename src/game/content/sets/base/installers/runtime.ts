@@ -1,18 +1,42 @@
 import type { SetInstallerModule } from "../../types";
-import { combineConfiguredSpellScores, scoreBaseDamageSpell, scoreBraceProtocolTarget, scoreCascadeAttackBuffTarget, scoreDamageSpellTarget, scoreDestroyDamagedUnitsSpell, scoreDestroySpellTarget, scoreDrawAndGainResourcesSpell, scoreGlobalBuffSpell, scoreHexAreaDamageSpell, scoreMassDamageSpell, scoreResourcesByUnitCountSpell } from "../../../../ai/mvpBot";
+import {
+  combineConfiguredSpellScores,
+  scoreBaseDamageSpell,
+  scoreBraceProtocolTarget,
+  scoreCascadeAttackBuffTarget,
+  scoreDamageSpellTarget,
+  scoreDestroyDamagedUnitsSpell,
+  scoreDestroySpellTarget,
+  scoreDrawAndGainResourcesSpell,
+  scoreGlobalBuffSpell,
+  scoreHexAreaDamageSpell,
+  scoreMassDamageSpell,
+  scoreResourcesByUnitCountSpell,
+} from "../ai/spellScoring";
 import { getCardDefinition, getCardPlayEffectConfigsByType, getResolvedCardPlayEffectConfigs } from "../../../cards/catalog";
 import { installBasePlayEffectRegistrations, installBaseStackEffectMagnitudeRegistrations } from "../stackEffects";
 import { hexDistance } from "../../../../model/hex";
 import type { PlayerId } from "../../../../model/ids";
 import type { GameState, HexCoord, UnitEntity } from "../../../../model/state";
 import { registerAutoTargetResolver } from "../../../../registries/autoTargets";
-import { registerBoardBlastEffectResolver } from "../../../../registries/boardBlastEffects";
+import { getBoardBlastEffectResolver, registerBoardBlastEffectResolver } from "../../../../registries/boardBlastEffects";
+import { registerCardResolveAnimationBuilder } from "../../../../registries/cardResolveAnimations";
 import { registerDebugStackResponse } from "../../../../registries/debugStackResponses";
 import { registerSpellScoringResolver } from "../../../../registries/spellScoring";
-import { registerStackPreviewPresenter } from "../../../../registries/stackPreviews";
+import { registerStackPreviewPresenter, registerStackPreviewPresenterByEffectId } from "../../../../registries/stackPreviews";
 import { registerStackResolveAnimationBuilder } from "../../../../registries/stackResolveAnimations";
 import { registerTriggerConditionEvaluator } from "../../../../registries/triggerConditions";
-import { buildHexShowerAnimation, getAffectedUnitHexes, getCardAnimationAccent, getDestroyedUnitHexes, getLiveUnitHexes, getRadiusAffectedHexes, getStackAnimationVisual, getUniqueHexes } from "../../../../render/animations";
+import {
+  buildHexShowerAnimation,
+  getAffectedUnitHexes,
+  getCardAnimationAccent,
+  getDestroyedUnitHexes,
+  getLiveUnitHexes,
+  getMapCenterHex,
+  getRadiusAffectedHexes,
+  getStackAnimationVisual,
+  getUniqueHexes,
+} from "../../../../render/animations";
 import { canTargetEntityDirectly } from "../../../../rules/directInteraction";
 import { getCascadeAffectedHexes } from "../../../../systems/cascade";
 
@@ -305,6 +329,15 @@ function registerBaseSpellScoring(): void {
 }
 
 function registerBaseStackPreviewPresenters(): void {
+  registerStackPreviewPresenterByEffectId("deploy_unit_card", ({ sourceCard }) =>
+    sourceCard?.kind === "unit"
+      ? {
+          kindLabel: "Unit Spell",
+          detail: `${sourceCard.unit.role} · ${sourceCard.unit.hp} HP · deploy near base on resolve`,
+        }
+      : null
+  );
+
   registerStackPreviewPresenter("counter", ({ effect, targetStackItem }) => ({
     kindLabel: "Counter",
     detail: targetStackItem
@@ -319,6 +352,53 @@ function registerBaseStackPreviewPresenters(): void {
         ? `Deal ${Number(effect.behavior.amount ?? 0)} damage to the enemy base.`
         : (effect?.label ?? "Deal damage to the enemy base."),
   }));
+}
+
+function registerBaseCardResolveAnimations(): void {
+  registerCardResolveAnimationBuilder("hex_shower", ({ event, state, baseId, sourceCard, profile }) => {
+    const label = typeof profile.label === "string" ? profile.label : sourceCard.name;
+    const waves = Number(profile.waves ?? getCardPlayEffectConfigsByType(sourceCard, "cascade_unit_buff")[0]?.waves ?? 0);
+    const accent = typeof profile.accent === "string" ? profile.accent : getCardAnimationAccent(event.sourceCardId);
+
+    return buildHexShowerAnimation(event, state, baseId, label, waves, accent);
+  });
+
+  registerCardResolveAnimationBuilder("board_blast", ({ event, before, state, baseId, sourceCard, profile }) => {
+    const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, event.activeModifierIds ?? []);
+    const effectResolutions = effectConfigs
+      .map((effectConfig) =>
+        getBoardBlastEffectResolver(effectConfig.type)?.({
+          before,
+          state,
+          controllerId: event.controllerId,
+          effectConfig,
+        }) ?? null
+      )
+      .filter((resolution): resolution is NonNullable<typeof resolution> => Boolean(resolution));
+    const controllerBase = state.entities[state.players[event.controllerId].baseEntityId];
+    const affectedHexes = getUniqueHexes(effectResolutions.flatMap((resolution) => resolution.hexes));
+
+    if (affectedHexes.length === 0) {
+      return null;
+    }
+
+    return {
+      id: baseId,
+      kind: "board_blast",
+      playerId: event.controllerId,
+      ageSeconds: 0,
+      durationSeconds: 1.15,
+      center:
+        effectResolutions.some((resolution) => resolution.prefersMapCenter)
+          ? getMapCenterHex(state)
+          : controllerBase && controllerBase.kind === "base"
+            ? controllerBase.coord
+            : getMapCenterHex(state),
+      hexes: affectedHexes,
+      label: typeof profile.label === "string" ? profile.label : sourceCard.name,
+      accent: typeof profile.accent === "string" ? profile.accent : getCardAnimationAccent(event.sourceCardId),
+    };
+  });
 }
 
 function registerBaseDebugStackResponses(): void {
@@ -573,6 +653,7 @@ export function installBaseRuntimeExtensions(): void {
   installBaseStackEffectMagnitudeRegistrations();
   registerBaseAutoTargetResolvers();
   registerBaseBoardBlastResolvers();
+  registerBaseCardResolveAnimations();
   registerBaseTriggerConditions();
   registerBaseSpellScoring();
   registerBaseStackPreviewPresenters();

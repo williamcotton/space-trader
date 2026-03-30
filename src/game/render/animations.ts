@@ -1,7 +1,6 @@
 import type { GameEvent } from "../actions/events";
 import {
   getCardDefinition,
-  getResolvedCardPlayEffectConfigs,
   type CardAnimationAccent,
 } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
@@ -12,7 +11,7 @@ import type { CanvasAnimation } from "../types";
 import { getCascadeAffectedHexes } from "../systems/cascade";
 import { getMapAxialBounds, hexDistance, isWithinMapBounds } from "../model/hex";
 import { getFactionAnimationAccent } from "../registries/presentation";
-import { getBoardBlastEffectResolver } from "../registries/boardBlastEffects";
+import { getCardResolveAnimationBuilder } from "../registries/cardResolveAnimations";
 import { getStackResolveAnimationBuilder } from "../registries/stackResolveAnimations";
 import { buildRegisteredMechanicAnimations } from "../registries/mechanicAnimations";
 
@@ -68,7 +67,7 @@ export function captureAnimationSnapshot(state: GameState): AnimationCapture {
 
 export function getStackAnimationVisual(effectId: string, sourceCardId: string | null): "unit" | "counter" | "tactic" | "generic" {
   const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
-  if (sourceCard?.kind === "unit" || effectId === "deploy_unit_card") {
+  if (sourceCard?.kind === "unit") {
     return "unit";
   }
 
@@ -124,7 +123,7 @@ export function getCardAnimationAccent(sourceCardId: string | null): CardAnimati
   return getFactionAnimationAccent(sourceCard?.faction);
 }
 
-function getMapCenterHex(state: GameState): HexCoord {
+export function getMapCenterHex(state: GameState): HexCoord {
   const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
   const approximateCenter = {
     q: Math.round((qMin + qMax) / 2),
@@ -305,51 +304,18 @@ function buildStackResolutionAnimation(
 ): CanvasAnimation | null {
   const sourceCard = event.sourceCardId ? getCardDefinition(event.sourceCardId) : undefined;
   const cardResolveAnimation = sourceCard?.animation?.resolve;
-  if (cardResolveAnimation?.kind === "hex_shower") {
-    const customAnimation = buildHexShowerAnimation(
+  if (sourceCard && cardResolveAnimation) {
+    const animationBuilder = getCardResolveAnimationBuilder(cardResolveAnimation.kind);
+    const customAnimation = animationBuilder?.({
       event,
+      before,
       state,
       baseId,
-      cardResolveAnimation.label,
-      cardResolveAnimation.waves,
-      cardResolveAnimation.accent
-    );
+      sourceCard,
+      profile: cardResolveAnimation,
+    });
     if (customAnimation) {
       return customAnimation;
-    }
-  }
-  if (cardResolveAnimation?.kind === "board_blast") {
-    const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, event.activeModifierIds ?? []);
-    const effectResolutions = effectConfigs
-      .map((effectConfig) =>
-        getBoardBlastEffectResolver(effectConfig.type)?.({
-          before,
-          state,
-          controllerId: event.controllerId,
-          effectConfig,
-        }) ?? null
-      )
-      .filter((resolution): resolution is NonNullable<typeof resolution> => Boolean(resolution));
-    const controllerBase = state.entities[state.players[event.controllerId].baseEntityId];
-    const affectedHexes = getUniqueHexes(effectResolutions.flatMap((resolution) => resolution.hexes));
-
-    if (affectedHexes.length > 0) {
-      return {
-        id: baseId,
-        kind: "board_blast",
-        playerId: event.controllerId,
-        ageSeconds: 0,
-        durationSeconds: 1.15,
-        center:
-          effectResolutions.some((resolution) => resolution.prefersMapCenter)
-            ? getMapCenterHex(state)
-            : controllerBase && controllerBase.kind === "base"
-              ? controllerBase.coord
-              : getMapCenterHex(state),
-        hexes: affectedHexes,
-        label: cardResolveAnimation.label,
-        accent: cardResolveAnimation.accent,
-      };
     }
   }
 

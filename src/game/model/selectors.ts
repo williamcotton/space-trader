@@ -5,7 +5,7 @@ import { getCardDefinition, getCardKeywords, type CardCost, type CardDefinition 
 import { getRegisteredResourceIds } from "../content/registry";
 import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
 import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleTheme } from "../presentation";
-import { getStackPreviewPresenter } from "../registries/stackPreviews";
+import { getStackPreviewPresenter, getStackPreviewPresenterByEffectId } from "../registries/stackPreviews";
 import { getLegalPlayCardTargetOptions } from "../rules/cardPlayOptions";
 
 // --- Stack Item Selectors (from CommandStackPanel) ---
@@ -23,14 +23,10 @@ export type StackPreviewItem = {
 
 export function getStackItemKindLabel(item: StackItem, state: GameState): string {
   const sourceCard = item.sourceCardId ? getCardDefinition(item.sourceCardId) : undefined;
-  if (sourceCard?.kind === "unit" && item.effectId === "deploy_unit_card") {
-    return "Unit Spell";
-  }
-  if (sourceCard?.kind === "tactic") {
-    return "Tactic";
-  }
   const effect = getStackEffectDefinition(item.effectId);
-  const presenter = effect ? getStackPreviewPresenter(effect.behavior.type) : undefined;
+  const presenter =
+    getStackPreviewPresenterByEffectId(item.effectId) ??
+    (effect ? getStackPreviewPresenter(effect.behavior.type) : undefined);
   const presentation = presenter?.({
     item,
     state,
@@ -43,6 +39,9 @@ export function getStackItemKindLabel(item: StackItem, state: GameState): string
   if (presentation?.kindLabel) {
     return presentation.kindLabel;
   }
+  if (sourceCard?.kind === "tactic") {
+    return "Tactic";
+  }
   return item.objectKind === "ability" ? "Ability" : "Spell";
 }
 
@@ -52,9 +51,6 @@ export function getStackItemDetail(item: StackItem, state: GameState): string {
   const targetStackItem = item.targetStackItemId ? state.stack.find((si) => si.id === item.targetStackItemId) ?? null : null;
   const targetHex = item.targetHex ?? null;
 
-  if (sourceCard?.kind === "unit" && item.effectId === "deploy_unit_card") {
-    return `${sourceCard.unit.role} · ${sourceCard.unit.hp} HP · deploy near base on resolve`;
-  }
   if (sourceCard?.kind === "tactic") {
     if (targetEntity) {
       return `${sourceCard.text} Target: ${getEntityDisplayName(targetEntity, { players: state.players })}.`;
@@ -68,7 +64,9 @@ export function getStackItemDetail(item: StackItem, state: GameState): string {
     return sourceCard.text;
   }
   const effect = getStackEffectDefinition(item.effectId);
-  const presenter = effect ? getStackPreviewPresenter(effect.behavior.type) : undefined;
+  const presenter =
+    getStackPreviewPresenterByEffectId(item.effectId) ??
+    (effect ? getStackPreviewPresenter(effect.behavior.type) : undefined);
   const presentation = presenter?.({
     item,
     state,

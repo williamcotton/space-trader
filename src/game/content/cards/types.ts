@@ -24,18 +24,9 @@ export type CardAnimationAccent = string;
 
 export type CardCost = Partial<Record<ResourceType, number>>;
 
-export type CardResolveAnimationProfile =
-  | {
-      kind: "hex_shower";
-      label: string;
-      waves: number;
-      accent: CardAnimationAccent;
-    }
-  | {
-      kind: "board_blast";
-      label: string;
-      accent: CardAnimationAccent;
-    };
+export type CardResolveAnimationProfile = {
+  kind: string;
+} & Record<string, unknown>;
 
 export type CardAnimationProfile = {
   resolve?: CardResolveAnimationProfile;
