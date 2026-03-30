@@ -26,10 +26,11 @@
 - `src/game/runtime.ts`
   - persistent runtime singleton
   - authoritative mutable game state
+  - animation queue
   - bot toggles
   - pending targeting flow
   - debug helpers
-  - animation queue
+  - active runtime-profile context
 - `src/game/systems.ts`
   - `updateGame`
   - `renderGame`
@@ -38,7 +39,7 @@
 - `src/game/derived.ts`
   - cached derived state keyed off runtime version
 - `src/game/presentation.ts`
-  - theme and faction color/presentation helpers
+  - player/resource/faction presentation helpers
 
 ### Model Layer
 
@@ -47,8 +48,10 @@
   - entity shapes
   - zones
   - initial-state creation
+  - resource and runtime-profile aware defaults
 - `src/game/model/enums.ts`
   - phases, factions, resources, unit roles
+  - note: factions/resources are dynamic string ids populated by loaded content
 - `src/game/model/ids.ts`
   - typed IDs and player constants
 - `src/game/model/hex.ts`
@@ -60,23 +63,79 @@
 - `src/game/model/migrations.ts`
   - state migration / hot-state repair
 
-### Content
+### Content System
+
+- `src/game/content/loader.ts`
+  - explicit set loading
+  - registry reset / reload lifecycle
+- `src/game/content/registry.ts`
+  - registered sets, cards, stack effects, factions, resources, maps, deck recipes, runtime profiles
+- `src/game/content/sets/types.ts`
+  - set manifests
+  - faction/resource/runtime-profile module types
+- `src/game/content/sets/base/**`
+  - Base Set content and installers
+  - this is the first real plugin/set, not kernel-owned special content
+
+### Content Facades
 
 - `src/game/content/cards/catalog.ts`
-  - card definitions
-  - play profiles
-  - card-owned effect configs
-  - keywords
-  - triggers
-  - animation metadata
-- `src/game/content/cards/instructionFactories.ts`
-  - generic instruction builders for effect families
+  - registry-backed card access
+  - card metadata helpers
+- `src/game/content/cards/types.ts`
+  - generic card definition types
+  - generic play-effect config / modifier shapes
 - `src/game/content/stackEffects.ts`
-  - generic stack behaviors and static effect definitions
+  - registry-backed stack-effect access
+- `src/game/content/stackEffects/types.ts`
+  - generic stack behavior types
 - `src/game/content/decks/starterDecks.ts`
-  - 60-card starter lists + validation
-- `src/game/content/maps/frontierBelt.ts`
-  - current map content
+  - starter deck access + validation
+- `src/game/content/maps/catalog.ts`
+  - registry-backed map access
+- `src/game/content/mechanics/stateAccess.ts`
+  - helper for namespaced mechanic state
+
+### Mechanics
+
+- `src/game/mechanics/index.ts`
+  - generic mechanic-state lifecycle
+  - compatibility shims for migrated saves
+- `src/game/content/sets/base/mechanics/**`
+  - current live Base Set mechanics
+  - `stealth`
+  - `sprout`
+  - `relay`
+  - `surge`
+  - `bloom`
+  - `salvage`
+  - `bastion`
+  - `uncounterable`
+
+### Registries
+
+- `src/game/registries/triggerConditions.ts`
+- `src/game/registries/autoTargets.ts`
+- `src/game/registries/instructionHandlers.ts`
+- `src/game/registries/playEffects.ts`
+- `src/game/registries/cardPlayModifiers.ts`
+- `src/game/registries/cardCounterability.ts`
+- `src/game/registries/directInteraction.ts`
+- `src/game/registries/cascadeBranches.ts`
+- `src/game/registries/combatHooks.ts`
+- `src/game/registries/unitDeployment.ts`
+- `src/game/registries/unitStatHooks.ts`
+- `src/game/registries/mechanicInstructions.ts`
+- `src/game/registries/mechanicAnimations.ts`
+- `src/game/registries/mechanicState.ts`
+- `src/game/registries/mechanicApis.ts`
+- `src/game/registries/spellScoring.ts`
+- `src/game/registries/stackEffectMagnitudes.ts`
+- `src/game/registries/stackResolveAnimations.ts`
+- `src/game/registries/stackPreviews.ts`
+- `src/game/registries/boardBlastEffects.ts`
+- `src/game/registries/debugStackResponses.ts`
+- `src/game/registries/presentation.ts`
 
 ### Actions Pipeline
 
@@ -96,6 +155,8 @@
   - command legality
 - `src/game/rules/cardPlayOptions.ts`
   - shared legal-target enumeration
+- `src/game/rules/cardPlayLegality.ts`
+  - playability/stack targeting helpers
 
 ### Turn Management
 
@@ -116,7 +177,6 @@
 - `src/game/systems/cascade.ts`
 - `src/game/systems/replacementEngine.ts`
 - `src/game/systems/triggerEngine.ts`
-- `src/game/systems/triggers.ts`
 
 ### AI
 
@@ -147,6 +207,7 @@
 - `architecture.md`
 - `faction-identity.md`
 - `new-cards.md`
+- `faction-refactor.md`
 
 ## Commands
 
@@ -165,7 +226,7 @@
   - events
   - instructions
   - triggers
-- The live phase loop is:
+- Live phase loop:
   - `start`
   - `economy`
   - `main`
@@ -173,38 +234,30 @@
   - `end`
   - `discard`
 - Current live economy defaults:
-  - player 1 starts with `2 credits + 2 primary`
-  - player 2 starts with `5 credits + 2 primary`
+  - player 1 starts with `2 currency + 2 primary`
+  - player 2 starts with `5 currency + 2 primary`
   - deposits are `2`
-  - passive economy is `+1 credit`
+  - passive economy is `+1 currency`
 - Continuous effects are layered and authoritative for stat/keyword changes.
-- Keywords are a real engine surface, not just labels.
-  - current live keywords include:
-    - `stealth`
-    - `sprout`
-    - `relay`
-    - `bloom`
-    - `salvage`
-    - `bastion`
-    - `uncounterable`
-- Card resolution is now primarily data-driven through:
+- Mechanic-owned state lives under `state.mechanicState` in:
+  - `match`
+  - `turn`
+  - `resolution`
+- Content is explicitly loaded through `content/loader.ts`.
+- Base Set is now loaded through the same set manifest / installer path future expansions should use.
+- Runtime defaults come from registered runtime profiles, not kernel constants.
+- Resource modules now own:
+  - `kind` such as currency vs primary
+  - display order
+  - glyph data
+  - theme data
+- Card resolution is data-driven through:
   - card play metadata in `catalog.ts`
-  - generic behaviors in `stackEffects.ts`
-  - reusable factories in `instructionFactories.ts`
-- `StackResolutionRules` is no longer the main mental model for new work.
-  - new effects should prefer generic stack behaviors + card-owned configs
-- The trigger engine is live and supports real faction mechanics.
-  - important current trigger conditions:
-    - `on_owner_tactic_played`
-    - `on_owner_surged_tactic_played`
-    - `on_owner_salvaged`
-    - `on_cascaded`
-    - `on_self_bloomed`
-    - `on_owner_unit_bloomed`
-- Cascade uses deterministic BFS propagation.
-- Card-owned resolve animations are supported and should be preferred over hardcoded card-id animation branches.
-- Runtime state is migrated in place through `migrations.ts`.
-  - current state version is `21`
+  - generic stack behavior definitions
+  - generic play-effect registries
+  - set-owned installers for AI/animation/preview/debug behaviors
+- `StackResolutionRules` is not the mental model anymore.
+- Current state version is `23`.
 
 ## Current Faction Mechanics Snapshot
 
@@ -226,34 +279,31 @@
 - `getGameRuntime()` returns the same runtime instance for the life of the renderer session.
 - React should subscribe to runtime snapshots, not copy gameplay state into component state.
 - `GameCanvas` owns the RAF loop and calls runtime step/render plumbing.
-- New gameplay state belongs in `state.ts` plus `migrations.ts`, not in React components.
+- New authoritative gameplay state belongs in `state.ts` plus `migrations.ts`.
 
 ## HMR Workflow
 
 - Runtime instance persists through HMR.
 - Simulation/render logic can be hot-swapped without wiping the match.
 - State schema changes should always be accompanied by migration updates.
-- Bot logic is hot-swappable separately from the rest of the runtime.
-
-## Performance Notes
-
-- Render-path spatial queries should prefer `DerivedState`.
-- O(E) helpers in `model/queries.ts` are acceptable for command-frequency logic.
-- Avoid putting authoritative gameplay work in the render loop.
+- Registry-backed content can be reset and reloaded deterministically.
 
 ## Current Extension Points
 
-- more generic effect families in `instructionFactories.ts` / `stackEffects.ts`
-- additional keywords that hook into `systems/keywords.ts` and `triggerEngine.ts`
-- richer bot scoring in `mvpBot.ts`
-- more card-owned animations in `catalog.ts`
+- new content sets through `CardSet` manifests
+- new runtime installers through `installers`
+- new mechanics through set-owned mechanic modules
+- new resources/factions/maps/decks/runtime profiles through the content registry
+- new effect families through generic play-effect / stack-effect registrations
+- new AI/animation/preview behaviors through registries instead of kernel switches
 
 ## Architectural Pressure Points
 
-These are likely to require real engine work, not just more card data:
+These still imply meaningful engine work, not just content:
 
 - graveyard / reanimation / recursion UX and rules
 - true token support
 - multi-target choice cards
 - explicit support for deterministic infinite combos
+- full content-context isolation beyond the current process-global registries
 - any major change to spell-damage-vs-armor rules
