@@ -1,7 +1,7 @@
 import type { GameFrame } from "./types";
 import type { GameState } from "./model/state";
 import { getHexMetrics } from "./render/layout";
-import { drawBackdrop, drawHexGrid, drawPlayerTerritory, drawMoveRangeOverlay, drawResourceNodes } from "./render/grid";
+import { drawMoveRangeOverlay, drawResourceNodeControlOverlays, drawStaticBoardLayer } from "./render/grid";
 import { drawBase, drawUnit } from "./render/entities";
 import { drawStackAnchor, drawHoverHexAndTargetPreview, drawMapFrame } from "./render/overlays";
 import { drawAnimations } from "./render/animationDrawing";
@@ -18,11 +18,9 @@ export function renderGame(state: GameState, frame: GameFrame): void {
   const originY = metrics.origin.y;
   const hexSize = metrics.size;
 
-  drawBackdrop(context, frame);
-  drawPlayerTerritory(state, context, originX, originY, hexSize);
-  drawHexGrid(state, context, originX, originY, hexSize);
+  drawStaticBoardLayer(state, frame, context, originX, originY, hexSize);
+  drawResourceNodeControlOverlays(state, context, originX, originY, hexSize);
   drawMoveRangeOverlay(frame, context, originX, originY, hexSize);
-  drawResourceNodes(state, context, originX, originY, hexSize);
   drawHoverHexAndTargetPreview(state, frame, context, originX, originY, hexSize);
   const stackActivityLevel = frame.transients.animations.some((animation) => {
     return animation.kind === "stack_cast" || animation.kind === "stack_counter" || animation.kind === "spell_resolve" || animation.kind === "hex_shower";

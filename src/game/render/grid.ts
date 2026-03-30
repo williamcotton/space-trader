@@ -4,10 +4,14 @@ import { getPlayerTheme, getResourceTheme } from "../presentation";
 import type { GameFrame } from "../types";
 import { toPixel, clamp, drawHexOutline, drawResourceGlyph } from "./primitives";
 
+type DrawContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
 let backdropCache: OffscreenCanvas | null = null;
 let backdropCacheKey = "";
+let staticBoardCache: OffscreenCanvas | null = null;
+let staticBoardCacheKey = "";
 
-export function drawBackdrop(context: CanvasRenderingContext2D, frame: GameFrame): void {
+export function drawBackdrop(context: DrawContext, frame: GameFrame): void {
   const { width, height } = frame.viewport;
   const key = `${width},${height}`;
 
@@ -50,7 +54,26 @@ export function drawBackdrop(context: CanvasRenderingContext2D, frame: GameFrame
   context.drawImage(backdropCache, 0, 0);
 }
 
-export function drawHexGrid(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
+function buildStaticBoardCacheKey(
+  state: GameState,
+  frame: GameFrame,
+  originX: number,
+  originY: number,
+  hexSize: number
+): string {
+  return [
+    frame.viewport.width,
+    frame.viewport.height,
+    state.map.id,
+    state.players.player_1.faction,
+    state.players.player_2.faction,
+    originX.toFixed(2),
+    originY.toFixed(2),
+    hexSize.toFixed(2),
+  ].join("|");
+}
+
+export function drawHexGrid(state: GameState, context: DrawContext, originX: number, originY: number, hexSize: number): void {
   const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
   const fillPulse = 0.42 + 0.08 * Math.sin((originX + originY) * 0.001);
 
@@ -67,7 +90,7 @@ export function drawHexGrid(state: GameState, context: CanvasRenderingContext2D,
   }
 }
 
-export function drawPlayerTerritory(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
+export function drawPlayerTerritory(state: GameState, context: DrawContext, originX: number, originY: number, hexSize: number): void {
   for (const playerId of ["player_1", "player_2"] as const) {
     const base = state.entities[state.players[playerId].baseEntityId];
     if (!base || base.kind !== "base") {
@@ -87,21 +110,7 @@ export function drawPlayerTerritory(state: GameState, context: CanvasRenderingCo
   }
 }
 
-export function drawMoveRangeOverlay(frame: GameFrame, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
-  const cells = frame.derived.moveRangeOverlay;
-  for (let i = 0; i < cells.length; i++) {
-    const cell = cells[i];
-    const { x, y } = toPixel(cell.coord, originX, originY, hexSize);
-    drawHexOutline(context, x, y, hexSize - 3.2);
-    context.fillStyle = cell.occupied ? "rgba(255, 110, 110, 0.11)" : "rgba(107, 245, 188, 0.1)";
-    context.fill();
-    context.strokeStyle = cell.occupied ? "rgba(255, 145, 145, 0.34)" : "rgba(107, 245, 188, 0.35)";
-    context.lineWidth = 1.4;
-    context.stroke();
-  }
-}
-
-export function drawResourceNodes(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
+function drawStaticResourceNodes(state: GameState, context: DrawContext, originX: number, originY: number, hexSize: number): void {
   const labelSize = clamp(hexSize * 0.36, 10, 14);
 
   for (const node of state.map.resourceNodes) {
@@ -123,7 +132,7 @@ export function drawResourceNodes(state: GameState, context: CanvasRenderingCont
     context.arc(x, y, outerRadius, 0, Math.PI * 2);
     context.fill();
 
-    context.strokeStyle = node.controlledBy ? getPlayerTheme(node.controlledBy).line : "rgba(140, 158, 193, 0.32)";
+    context.strokeStyle = "rgba(140, 158, 193, 0.32)";
     context.lineWidth = 2;
     context.stroke();
 
@@ -137,4 +146,66 @@ export function drawResourceNodes(state: GameState, context: CanvasRenderingCont
     context.textBaseline = "top";
     context.fillText(node.displayName, x, y + outerRadius + 6);
   }
+}
+
+export function drawStaticBoardLayer(state: GameState, frame: GameFrame, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
+  const key = buildStaticBoardCacheKey(state, frame, originX, originY, hexSize);
+
+  if (!staticBoardCache || staticBoardCacheKey !== key) {
+    staticBoardCache = new OffscreenCanvas(frame.viewport.width, frame.viewport.height);
+    staticBoardCacheKey = key;
+    const offCtx = staticBoardCache.getContext("2d");
+    if (!offCtx) {
+      return;
+    }
+
+    drawBackdrop(offCtx, frame);
+    drawPlayerTerritory(state, offCtx, originX, originY, hexSize);
+    drawHexGrid(state, offCtx, originX, originY, hexSize);
+    drawStaticResourceNodes(state, offCtx, originX, originY, hexSize);
+  }
+
+  context.drawImage(staticBoardCache, 0, 0);
+}
+
+export function drawResourceNodeControlOverlays(
+  state: GameState,
+  context: CanvasRenderingContext2D,
+  originX: number,
+  originY: number,
+  hexSize: number
+): void {
+  for (const node of state.map.resourceNodes) {
+    if (!node.controlledBy) {
+      continue;
+    }
+
+    const { x, y } = toPixel(node.coord, originX, originY, hexSize);
+    const outerRadius = hexSize * 0.36;
+
+    context.beginPath();
+    context.arc(x, y, outerRadius, 0, Math.PI * 2);
+    context.strokeStyle = getPlayerTheme(node.controlledBy).line;
+    context.lineWidth = 2;
+    context.stroke();
+  }
+}
+
+export function drawMoveRangeOverlay(frame: GameFrame, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
+  const cells = frame.derived.moveRangeOverlay;
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    const { x, y } = toPixel(cell.coord, originX, originY, hexSize);
+    drawHexOutline(context, x, y, hexSize - 3.2);
+    context.fillStyle = cell.occupied ? "rgba(255, 110, 110, 0.11)" : "rgba(107, 245, 188, 0.1)";
+    context.fill();
+    context.strokeStyle = cell.occupied ? "rgba(255, 145, 145, 0.34)" : "rgba(107, 245, 188, 0.35)";
+    context.lineWidth = 1.4;
+    context.stroke();
+  }
+}
+
+export function drawResourceNodes(state: GameState, context: CanvasRenderingContext2D, originX: number, originY: number, hexSize: number): void {
+  drawStaticResourceNodes(state, context, originX, originY, hexSize);
+  drawResourceNodeControlOverlays(state, context, originX, originY, hexSize);
 }

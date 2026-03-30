@@ -5,6 +5,8 @@ import { getRegisteredCurrencyResourceId, getRegisteredResourceModule } from "..
 import type { ResourceGlyphShape } from "../content/sets/types";
 import { getRegisteredResourceTheme, tryGetRegisteredResourceTheme } from "../registries/presentation";
 
+type DrawContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
 export function toPixel(coord: HexCoord, originX: number, originY: number, hexSize: number): { x: number; y: number } {
   return axialToPixel(coord, { x: originX, y: originY }, hexSize);
 }
@@ -18,7 +20,7 @@ export function truncateLabel(label: string, maxLength = 18): string {
 }
 
 export function drawRegularPolygon(
-  context: CanvasRenderingContext2D,
+  context: DrawContext,
   x: number,
   y: number,
   radius: number,
@@ -39,11 +41,11 @@ export function drawRegularPolygon(
   context.closePath();
 }
 
-export function drawHexOutline(context: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+export function drawHexOutline(context: DrawContext, x: number, y: number, size: number): void {
   drawRegularPolygon(context, x, y, size, 6, -Math.PI / 6);
 }
 
-export function drawDiamond(context: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+export function drawDiamond(context: DrawContext, x: number, y: number, size: number): void {
   context.beginPath();
   context.moveTo(x, y - size);
   context.lineTo(x + size * 0.92, y);
@@ -52,7 +54,7 @@ export function drawDiamond(context: CanvasRenderingContext2D, x: number, y: num
   context.closePath();
 }
 
-export function drawRoundedRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
+export function drawRoundedRect(context: DrawContext, x: number, y: number, width: number, height: number, radius: number): void {
   const resolvedRadius = Math.min(radius, width / 2, height / 2);
   context.beginPath();
   context.moveTo(x + resolvedRadius, y);
@@ -76,7 +78,7 @@ function resolveGlyphPaint(paint: string | undefined, currentColor: string): str
   return !paint || paint === "currentColor" ? currentColor : paint;
 }
 
-function drawCanvasGlyphShape(context: CanvasRenderingContext2D, shape: ResourceGlyphShape, currentColor: string): void {
+function drawCanvasGlyphShape(context: DrawContext, shape: ResourceGlyphShape, currentColor: string): void {
   context.beginPath();
   context.lineCap = "round";
   context.lineJoin = "round";
@@ -143,7 +145,7 @@ function drawCanvasGlyphShape(context: CanvasRenderingContext2D, shape: Resource
 }
 
 export function drawResourceGlyph(
-  context: CanvasRenderingContext2D,
+  context: DrawContext,
   x: number,
   y: number,
   resourceType: ResourceType,
@@ -175,7 +177,7 @@ export function drawResourceGlyph(
   context.restore();
 }
 
-export function drawHealthBar(context: CanvasRenderingContext2D, x: number, y: number, width: number, hp: number, maxHp: number, color: string): void {
+export function drawHealthBar(context: DrawContext, x: number, y: number, width: number, hp: number, maxHp: number, color: string): void {
   const ratio = clamp(hp / maxHp, 0, 1);
   drawRoundedRect(context, x - width / 2, y, width, 5, 2.5);
   context.fillStyle = "rgba(6, 11, 26, 0.82)";
