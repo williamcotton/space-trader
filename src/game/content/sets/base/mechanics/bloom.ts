@@ -104,14 +104,7 @@ export function installBloomCompatibilityShims(state: GameState): void {
   });
 }
 
-let installed = false;
-
 export function installBloomMechanic(): void {
-  if (installed) {
-    return;
-  }
-  installed = true;
-
   registerMechanicStateInitializer(BLOOM_MECHANIC_ID, (state) => {
     getBloomTurnState(state);
     getBloomResolutionState(state);

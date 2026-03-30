@@ -29,6 +29,7 @@ import type { GameState } from "./model/state";
 import type { CanvasAnimation, GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
 import { removeEffectsForEntity } from "./systems/continuousEffects";
 import { getLegalPlayCardTargetOptions, getPlayCardTargetPrompt, getRequiredPlayCardTargetMode } from "./rules/cardPlayOptions";
+import { getDebugStackResponse } from "./registries/debugStackResponses";
 
 const INITIAL_VIEWPORT: GameViewport = {
   width: 1024,
@@ -665,11 +666,17 @@ export class GameRuntime {
       return;
     }
 
+    const response = getDebugStackResponse("noop_response");
+    if (!response) {
+      return;
+    }
+
     void this.dispatch({
       type: "RESPOND_STACK",
       playerId: priorityPlayerId,
-      label: "Debug response",
-      effectId: "noop_log",
+      label: response.label,
+      effectId: response.effectId,
+      targetStackItemId: response.getTargetStackItemId?.(this.state) ?? undefined,
     });
   }
 
@@ -679,11 +686,17 @@ export class GameRuntime {
       return;
     }
 
+    const response = getDebugStackResponse("base_strike");
+    if (!response) {
+      return;
+    }
+
     void this.dispatch({
       type: "RESPOND_STACK",
       playerId: priorityPlayerId,
-      label: "Debug Base Strike",
-      effectId: "damage_enemy_base_2",
+      label: response.label,
+      effectId: response.effectId,
+      targetStackItemId: response.getTargetStackItemId?.(this.state) ?? undefined,
     });
   }
 
@@ -693,13 +706,18 @@ export class GameRuntime {
       return;
     }
 
-    const resolvedTargetId = targetStackItemId ?? this.state.stack[this.state.stack.length - 1]?.id;
+    const response = getDebugStackResponse("counter_top_item");
+    if (!response) {
+      return;
+    }
+
+    const resolvedTargetId = targetStackItemId ?? response.getTargetStackItemId?.(this.state) ?? undefined;
 
     void this.dispatch({
       type: "RESPOND_STACK",
       playerId: priorityPlayerId,
-      label: "Debug Counter",
-      effectId: "counter_top_item",
+      label: response.label,
+      effectId: response.effectId,
       targetStackItemId: resolvedTargetId,
     });
   }

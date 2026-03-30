@@ -7,6 +7,7 @@ import type { CardSet, DeckRecipe } from "../types";
 import { BASE_SET_FACTIONS } from "./factions";
 import { BASE_SET_RESOURCES } from "./resources";
 import { BASE_SET_ROLE_THEMES } from "./presentation";
+import { BASE_RUNTIME_INSTALLER } from "./installers/runtime";
 
 const BASE_SET_DECK_RECIPES: DeckRecipe[] = [
   {
@@ -30,6 +31,7 @@ export const BASE_SET: CardSet = {
   id: "base",
   name: "Base Set",
   mechanics: BASE_SET_MECHANICS,
+  installers: [BASE_RUNTIME_INSTALLER],
   cards: BASE_CARD_DEFINITIONS,
   stackEffects: BASE_STACK_EFFECTS,
   factions: BASE_SET_FACTIONS,

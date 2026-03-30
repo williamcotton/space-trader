@@ -70,3 +70,9 @@ export function getDirectAttackBlockReasonFromRegistry(
   }
   return null;
 }
+
+export function resetDirectInteractionRegistry(): void {
+  unitActionBlockers.clear();
+  directTargetingBlockers.clear();
+  directAttackBlockers.clear();
+}

@@ -5,6 +5,7 @@ import { getCardDefinition, getCardKeywords, type CardCost, type CardDefinition 
 import { getRegisteredResourceIds } from "../content/registry";
 import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
 import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleTheme } from "../presentation";
+import { getStackPreviewPresenter } from "../registries/stackPreviews";
 import { getLegalPlayCardTargetOptions } from "../rules/cardPlayOptions";
 
 // --- Stack Item Selectors (from CommandStackPanel) ---
@@ -20,7 +21,7 @@ export type StackPreviewItem = {
   ownerLabel: string;
 };
 
-export function getStackItemKindLabel(item: StackItem): string {
+export function getStackItemKindLabel(item: StackItem, state: GameState): string {
   const sourceCard = item.sourceCardId ? getCardDefinition(item.sourceCardId) : undefined;
   if (sourceCard?.kind === "unit" && item.effectId === "deploy_unit_card") {
     return "Unit Spell";
@@ -29,11 +30,18 @@ export function getStackItemKindLabel(item: StackItem): string {
     return "Tactic";
   }
   const effect = getStackEffectDefinition(item.effectId);
-  if (effect?.behavior.type === "counter") {
-    return "Counter";
-  }
-  if (effect?.behavior.type === "damage_enemy_base") {
-    return "Strike";
+  const presenter = effect ? getStackPreviewPresenter(effect.behavior.type) : undefined;
+  const presentation = presenter?.({
+    item,
+    state,
+    sourceCard,
+    effect,
+    targetEntity: null,
+    targetStackItem: null,
+    targetHex: item.targetHex ?? null,
+  });
+  if (presentation?.kindLabel) {
+    return presentation.kindLabel;
   }
   return item.objectKind === "ability" ? "Ability" : "Spell";
 }
@@ -41,7 +49,7 @@ export function getStackItemKindLabel(item: StackItem): string {
 export function getStackItemDetail(item: StackItem, state: GameState): string {
   const sourceCard = item.sourceCardId ? getCardDefinition(item.sourceCardId) : undefined;
   const targetEntity = item.targetEntityId ? state.entities[item.targetEntityId] : null;
-  const targetStackItem = item.targetStackItemId ? state.stack.find((si) => si.id === item.targetStackItemId) : null;
+  const targetStackItem = item.targetStackItemId ? state.stack.find((si) => si.id === item.targetStackItemId) ?? null : null;
   const targetHex = item.targetHex ?? null;
 
   if (sourceCard?.kind === "unit" && item.effectId === "deploy_unit_card") {
@@ -60,13 +68,18 @@ export function getStackItemDetail(item: StackItem, state: GameState): string {
     return sourceCard.text;
   }
   const effect = getStackEffectDefinition(item.effectId);
-  if (effect?.behavior.type === "counter") {
-    const destination = effect.behavior.destination === "hand" ? "hand" : "discard";
-    const baseText = destination === "hand" ? "Counter target spell and return it to hand." : "Counter target spell.";
-    return targetStackItem ? `${baseText} Target: ${targetStackItem.label}.` : baseText;
-  }
-  if (effect?.behavior.type === "damage_enemy_base") {
-    return `Deal ${Number(effect.behavior.amount ?? 0)} damage to the enemy base.`;
+  const presenter = effect ? getStackPreviewPresenter(effect.behavior.type) : undefined;
+  const presentation = presenter?.({
+    item,
+    state,
+    sourceCard,
+    effect,
+    targetEntity,
+    targetStackItem,
+    targetHex,
+  });
+  if (presentation?.detail) {
+    return presentation.detail;
   }
   if (targetEntity) {
     return `${effect?.label ?? item.effectId} targeting ${getEntityDisplayName(targetEntity, { players: state.players })}.`;
@@ -84,7 +97,7 @@ export function getStackItemPreview(item: StackItem, state: GameState): StackPre
     controllerId: item.controllerId,
     effectId: item.effectId,
     counterable: item.counterable,
-    kindLabel: getStackItemKindLabel(item),
+    kindLabel: getStackItemKindLabel(item, state),
     detail: getStackItemDetail(item, state),
     ownerLabel: getPlayerLabel(item.controllerId === "player_1" ? "player_1" : "player_2"),
   };

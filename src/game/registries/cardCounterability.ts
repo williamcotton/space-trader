@@ -24,3 +24,7 @@ export function resolveCardCounterable(
   }
   return counterable;
 }
+
+export function resetCardCounterabilityRegistry(): void {
+  cardCounterabilityHooks.clear();
+}

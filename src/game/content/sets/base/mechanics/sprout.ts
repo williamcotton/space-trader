@@ -2,14 +2,7 @@ import { registerUnitActionBlocker } from "../../../../registries/directInteract
 import { registerUnitDeploymentAdjustmentHook } from "../../../../registries/unitDeployment";
 import { SPROUT_KEYWORD } from "./keywordIds";
 
-let installed = false;
-
 export function installSproutMechanic(): void {
-  if (installed) {
-    return;
-  }
-  installed = true;
-
   registerUnitActionBlocker("sprout_summoning_sickness", (unit, _action) => {
     if (!unit.hasSummoningSickness || unit.keywords?.includes(SPROUT_KEYWORD)) {
       return null;

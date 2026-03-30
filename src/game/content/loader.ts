@@ -17,6 +17,27 @@ import {
   registerUnitRoleTheme,
   resetPresentationRegistry,
 } from "../registries/presentation";
+import { resetAiMechanicsRegistry } from "../registries/aiMechanics";
+import { resetAutoTargetRegistry } from "../registries/autoTargets";
+import { resetBoardBlastEffectRegistry } from "../registries/boardBlastEffects";
+import { resetCardCounterabilityRegistry } from "../registries/cardCounterability";
+import { resetCardPlayModifierRegistry } from "../registries/cardPlayModifiers";
+import { resetCascadeBranchRegistry } from "../registries/cascadeBranches";
+import { resetCombatHookRegistry } from "../registries/combatHooks";
+import { resetStackPreviewRegistry } from "../registries/stackPreviews";
+import { resetDebugStackResponseRegistry } from "../registries/debugStackResponses";
+import { resetDirectInteractionRegistry } from "../registries/directInteraction";
+import { resetMechanicAnimationRegistry } from "../registries/mechanicAnimations";
+import { resetMechanicApiRegistry } from "../registries/mechanicApis";
+import { resetMechanicInstructionRegistry } from "../registries/mechanicInstructions";
+import { resetMechanicStateRegistry } from "../registries/mechanicState";
+import { resetPlayEffectRegistry } from "../registries/playEffects";
+import { resetSpellScoringRegistry } from "../registries/spellScoring";
+import { resetStackEffectMagnitudeRegistry } from "../registries/stackEffectMagnitudes";
+import { resetStackResolveAnimationRegistry } from "../registries/stackResolveAnimations";
+import { resetTriggerConditionRegistry } from "../registries/triggerConditions";
+import { resetUnitDeploymentRegistry } from "../registries/unitDeployment";
+import { resetUnitStatHookRegistry } from "../registries/unitStatHooks";
 
 const DEFAULT_CONTENT_SETS: readonly CardSet[] = [BASE_SET];
 
@@ -111,12 +132,37 @@ function registerSetContent(set: CardSet): void {
   for (const mechanic of set.mechanics ?? []) {
     mechanic.install();
   }
+
+  for (const installer of set.installers ?? []) {
+    installer.install();
+  }
 }
 
 export function resetLoadedContent(): void {
   loadedSetIds = new Set();
   resetRegisteredContent();
   resetPresentationRegistry();
+  resetAiMechanicsRegistry();
+  resetAutoTargetRegistry();
+  resetBoardBlastEffectRegistry();
+  resetCardCounterabilityRegistry();
+  resetCardPlayModifierRegistry();
+  resetCascadeBranchRegistry();
+  resetCombatHookRegistry();
+  resetDirectInteractionRegistry();
+  resetMechanicAnimationRegistry();
+  resetMechanicApiRegistry();
+  resetMechanicInstructionRegistry();
+  resetMechanicStateRegistry();
+  resetPlayEffectRegistry();
+  resetSpellScoringRegistry();
+  resetStackEffectMagnitudeRegistry();
+  resetStackPreviewRegistry();
+  resetStackResolveAnimationRegistry();
+  resetDebugStackResponseRegistry();
+  resetTriggerConditionRegistry();
+  resetUnitDeploymentRegistry();
+  resetUnitStatHookRegistry();
 }
 
 export function loadContentSets(sets: readonly CardSet[], options?: { reset?: boolean }): void {
@@ -127,6 +173,9 @@ export function loadContentSets(sets: readonly CardSet[], options?: { reset?: bo
 
   const orderedSets = resolveLoadOrder(sets);
   for (const set of orderedSets) {
+    if (loadedSetIds.has(set.id)) {
+      continue;
+    }
     registerSetContent(set);
     loadedSetIds.add(set.id);
   }

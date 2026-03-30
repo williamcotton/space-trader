@@ -15,3 +15,7 @@ export function registerMechanicInstructionHandler(mechanicId: string, handler: 
 export function getMechanicInstructionHandler(mechanicId: string): MechanicInstructionHandler | undefined {
   return mechanicInstructionHandlers.get(mechanicId);
 }
+
+export function resetMechanicInstructionRegistry(): void {
+  mechanicInstructionHandlers.clear();
+}

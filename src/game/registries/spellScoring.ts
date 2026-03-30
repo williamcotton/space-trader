@@ -28,3 +28,7 @@ export function getSpellScoringResolver(
 ): SpellScoringResolver | undefined {
   return spellScoringResolvers.get(type);
 }
+
+export function resetSpellScoringRegistry(): void {
+  spellScoringResolvers.clear();
+}

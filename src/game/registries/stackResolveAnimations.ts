@@ -30,3 +30,7 @@ export function getStackResolveAnimationBuilder(
 ): StackResolveAnimationBuilder | undefined {
   return stackResolveAnimationBuilders.get(type);
 }
+
+export function resetStackResolveAnimationRegistry(): void {
+  stackResolveAnimationBuilders.clear();
+}

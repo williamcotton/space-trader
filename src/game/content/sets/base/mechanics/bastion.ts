@@ -3,14 +3,7 @@ import { registerUnitStatHook } from "../../../../registries/unitStatHooks";
 import { unitHasActiveKeyword } from "../../../../systems/keywords";
 import { BASTION_KEYWORD } from "./keywordIds";
 
-let installed = false;
-
 export function installBastionMechanic(): void {
-  if (installed) {
-    return;
-  }
-  installed = true;
-
   registerUnitStatHook("bastion_adjacent_armor", (state, unit, stat) => {
     if (stat !== "armor" || !unitHasActiveKeyword(state, unit, BASTION_KEYWORD)) {
       return 0;

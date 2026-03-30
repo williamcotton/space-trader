@@ -33,3 +33,7 @@ export function getAdditionalCascadeBranches(context: CascadeBranchProviderConte
   }
   return branches;
 }
+
+export function resetCascadeBranchRegistry(): void {
+  cascadeBranchProviders.clear();
+}

@@ -97,3 +97,9 @@ export function getTriggerConditionScoreBonus(condition: TriggerCondition): numb
 
   return null;
 }
+
+export function resetAiMechanicsRegistry(): void {
+  unitBuffScoreContributors.clear();
+  cascadeScoreContributors.clear();
+  triggerConditionScoreContributors.clear();
+}

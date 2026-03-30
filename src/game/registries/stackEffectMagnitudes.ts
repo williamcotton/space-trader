@@ -22,3 +22,7 @@ export function getStackEffectMagnitudeCalculator(
 ): StackEffectMagnitudeCalculator | undefined {
   return stackEffectMagnitudeCalculators.get(type);
 }
+
+export function resetStackEffectMagnitudeRegistry(): void {
+  stackEffectMagnitudeCalculators.clear();
+}

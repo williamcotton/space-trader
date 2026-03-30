@@ -1,7 +1,6 @@
 import type { GameEvent } from "../actions/events";
 import {
   getCardDefinition,
-  getCardPlayEffectConfigsByType,
   getResolvedCardPlayEffectConfigs,
   type CardAnimationAccent,
 } from "../content/cards/catalog";
@@ -13,7 +12,8 @@ import type { CanvasAnimation } from "../types";
 import { getCascadeAffectedHexes } from "../systems/cascade";
 import { getMapAxialBounds, hexDistance, isWithinMapBounds } from "../model/hex";
 import { getFactionAnimationAccent } from "../registries/presentation";
-import { getStackResolveAnimationBuilder, registerStackResolveAnimationBuilder } from "../registries/stackResolveAnimations";
+import { getBoardBlastEffectResolver } from "../registries/boardBlastEffects";
+import { getStackResolveAnimationBuilder } from "../registries/stackResolveAnimations";
 import { buildRegisteredMechanicAnimations } from "../registries/mechanicAnimations";
 
 type EntitySnapshot = {
@@ -66,7 +66,7 @@ export function captureAnimationSnapshot(state: GameState): AnimationCapture {
   return { entities, stackItems, winner: state.winner };
 }
 
-function getStackAnimationVisual(effectId: string, sourceCardId: string | null): "unit" | "counter" | "tactic" | "generic" {
+export function getStackAnimationVisual(effectId: string, sourceCardId: string | null): "unit" | "counter" | "tactic" | "generic" {
   const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
   if (sourceCard?.kind === "unit" || effectId === "deploy_unit_card") {
     return "unit";
@@ -84,7 +84,7 @@ function getStackAnimationVisual(effectId: string, sourceCardId: string | null):
   return "generic";
 }
 
-function buildHexShowerAnimation(
+export function buildHexShowerAnimation(
   event: Extract<GameEvent, { type: "STACK_ITEM_RESOLVED" }>,
   state: GameState,
   baseId: string,
@@ -119,7 +119,7 @@ function getRelationMatches(ownerId: PlayerId, controllerId: PlayerId, relation:
   return relation === "ally" ? ownerId === controllerId : ownerId !== controllerId;
 }
 
-function getCardAnimationAccent(sourceCardId: string | null): CardAnimationAccent {
+export function getCardAnimationAccent(sourceCardId: string | null): CardAnimationAccent {
   const sourceCard = sourceCardId ? getCardDefinition(sourceCardId) : undefined;
   return getFactionAnimationAccent(sourceCard?.faction);
 }
@@ -154,7 +154,7 @@ function getMapCenterHex(state: GameState): HexCoord {
   return bestCoord ?? approximateCenter;
 }
 
-function getRadiusAffectedHexes(state: GameState, origin: HexCoord, radius: number): HexCoord[] {
+export function getRadiusAffectedHexes(state: GameState, origin: HexCoord, radius: number): HexCoord[] {
   const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
   const hexes: HexCoord[] = [];
   for (let q = qMin; q <= qMax; q += 1) {
@@ -168,7 +168,7 @@ function getRadiusAffectedHexes(state: GameState, origin: HexCoord, radius: numb
   return hexes;
 }
 
-function getAffectedUnitHexes(
+export function getAffectedUnitHexes(
   before: AnimationCapture,
   controllerId: PlayerId,
   relation: "ally" | "enemy" | "any"
@@ -190,7 +190,7 @@ function getAffectedUnitHexes(
   return hexes;
 }
 
-function getLiveUnitHexes(
+export function getLiveUnitHexes(
   state: GameState,
   controllerId: PlayerId,
   relation: "ally" | "enemy" | "any",
@@ -217,7 +217,7 @@ function getLiveUnitHexes(
   return hexes;
 }
 
-function getUniqueHexes(coords: readonly HexCoord[]): HexCoord[] {
+export function getUniqueHexes(coords: readonly HexCoord[]): HexCoord[] {
   const seen = new Set<string>();
   const unique: HexCoord[] = [];
   for (const coord of coords) {
@@ -274,7 +274,7 @@ export function buildVictoryAnimation(state: GameState, winner: PlayerId): Canva
   };
 }
 
-function getDestroyedUnitHexes(
+export function getDestroyedUnitHexes(
   before: AnimationCapture,
   state: GameState,
   controllerId: PlayerId,
@@ -296,181 +296,6 @@ function getDestroyedUnitHexes(
   }
   return hexes;
 }
-
-registerStackResolveAnimationBuilder("counter", ({ event, before, state, baseId, behavior }) => {
-  const sourceBase = state.entities[state.players[event.controllerId].baseEntityId];
-  const targetItem = event.targetStackItemId ? before.stackItems[event.targetStackItemId] : undefined;
-  if (!sourceBase || sourceBase.kind !== "base" || !targetItem) {
-    return null;
-  }
-
-  return {
-    id: baseId,
-    kind: "stack_counter",
-    playerId: event.controllerId,
-    ageSeconds: 0,
-    durationSeconds: 0.88,
-    from: sourceBase.coord,
-    label: event.label,
-    targetLabel: targetItem.label,
-    targetVisual: getStackAnimationVisual(targetItem.effectId, targetItem.sourceCardId),
-    returnToHand: behavior.destination === "hand",
-  };
-});
-
-registerStackResolveAnimationBuilder("deploy_unit", ({ event, state, baseId }) => {
-  if (!event.pendingUnitEntityId) {
-    return null;
-  }
-
-  const resolvedUnit = state.entities[event.pendingUnitEntityId];
-  if (!resolvedUnit || resolvedUnit.kind !== "unit") {
-    return null;
-  }
-
-  return {
-    id: baseId,
-    kind: "deploy",
-    playerId: resolvedUnit.ownerId,
-    ageSeconds: 0,
-    durationSeconds: 0.66,
-    coord: resolvedUnit.coord,
-  };
-});
-
-registerStackResolveAnimationBuilder("damage_entity", ({ event, before, state, baseId, behavior }) => {
-  const targetId = event.targetEntityId;
-  if (!targetId) {
-    return null;
-  }
-  const target = before.entities[targetId] ?? state.entities[targetId];
-  if (!target) {
-    return null;
-  }
-
-  return {
-    id: baseId,
-    kind: "spell_resolve",
-    playerId: event.controllerId,
-    ageSeconds: 0,
-    durationSeconds: 0.78,
-    coord: target.coord,
-    visual: target.kind === "base" ? "base_damage" : "damage",
-    amount: Number(behavior.amount ?? 0),
-    label: event.label,
-  };
-});
-
-registerStackResolveAnimationBuilder("destroy_entity", ({ event, before, state, baseId }) => {
-  const targetId = event.targetEntityId;
-  if (!targetId) {
-    return null;
-  }
-  const target = before.entities[targetId] ?? state.entities[targetId];
-  if (!target) {
-    return null;
-  }
-
-  return {
-    id: baseId,
-    kind: "spell_resolve",
-    playerId: event.controllerId,
-    ageSeconds: 0,
-    durationSeconds: 0.84,
-    coord: target.coord,
-    visual: "destroy",
-    label: event.label,
-  };
-});
-
-registerStackResolveAnimationBuilder("modify_unit_until_end_of_turn", ({ event, before, state, baseId, behavior }) => {
-  const targetId = event.targetEntityId;
-  if (!targetId) {
-    return null;
-  }
-  const target = before.entities[targetId] ?? state.entities[targetId];
-  if (!target) {
-    return null;
-  }
-
-  const buffLabelParts: string[] = [];
-  const attackBonus = Number(behavior.attackBonus ?? 0);
-  const armorBonus = Number(behavior.armorBonus ?? 0);
-  if (attackBonus !== 0) {
-    buffLabelParts.push(`${attackBonus > 0 ? "+" : ""}${attackBonus} ATK`);
-  }
-  if (armorBonus !== 0) {
-    buffLabelParts.push(`${armorBonus > 0 ? "+" : ""}${armorBonus} ARM`);
-  }
-
-  return {
-    id: baseId,
-    kind: "spell_resolve",
-    playerId: event.controllerId,
-    ageSeconds: 0,
-    durationSeconds: 0.86,
-    coord: target.coord,
-    visual: "buff",
-    label: buffLabelParts.join(" · ") || event.label,
-  };
-});
-
-registerStackResolveAnimationBuilder("cascade_unit_buff", ({ event, state, baseId, sourceCard, behavior }) =>
-  buildHexShowerAnimation(
-    event,
-    state,
-    baseId,
-    event.label,
-    Number(getCardPlayEffectConfigsByType(sourceCard, "cascade_unit_buff")[0]?.waves ?? behavior.waves ?? 0),
-    getCardAnimationAccent(event.sourceCardId)
-  )
-);
-
-registerStackResolveAnimationBuilder("hex_area_damage", ({ event, state, baseId, sourceCard }) => {
-  if (!event.targetHex) {
-    return null;
-  }
-
-  const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, event.activeModifierIds ?? [])
-    .filter((effectConfig) => effectConfig.type === "hex_area_damage");
-  if (effectConfigs.length === 0) {
-    return null;
-  }
-
-  return {
-    id: baseId,
-    kind: "hex_shower",
-    playerId: event.controllerId,
-    ageSeconds: 0,
-    durationSeconds: 1,
-    origin: event.targetHex,
-    hexes: getUniqueHexes(
-      effectConfigs.flatMap((effectConfig) =>
-        getRadiusAffectedHexes(state, event.targetHex as HexCoord, Number(effectConfig.radius ?? 0))
-      )
-    ),
-    label: event.label,
-    accent: getCardAnimationAccent(event.sourceCardId),
-  };
-});
-
-registerStackResolveAnimationBuilder("damage_enemy_base", ({ event, state, baseId, behavior }) => {
-  const targetPlayerId = event.controllerId === "player_1" ? "player_2" : "player_1";
-  const targetBase = state.entities[state.players[targetPlayerId].baseEntityId];
-  if (!targetBase || targetBase.kind !== "base") {
-    return null;
-  }
-
-  return {
-    id: baseId,
-    kind: "base_hit",
-    playerId: targetPlayerId,
-    ageSeconds: 0,
-    durationSeconds: 0.7,
-    coord: targetBase.coord,
-    damage: Number(behavior.amount ?? 0),
-  };
-});
 
 function buildStackResolutionAnimation(
   event: Extract<GameEvent, { type: "STACK_ITEM_RESOLVED" }>,
@@ -495,27 +320,18 @@ function buildStackResolutionAnimation(
   }
   if (cardResolveAnimation?.kind === "board_blast") {
     const effectConfigs = getResolvedCardPlayEffectConfigs(sourceCard, event.activeModifierIds ?? []);
+    const effectResolutions = effectConfigs
+      .map((effectConfig) =>
+        getBoardBlastEffectResolver(effectConfig.type)?.({
+          before,
+          state,
+          controllerId: event.controllerId,
+          effectConfig,
+        }) ?? null
+      )
+      .filter((resolution): resolution is NonNullable<typeof resolution> => Boolean(resolution));
     const controllerBase = state.entities[state.players[event.controllerId].baseEntityId];
-    const affectedHexes = getUniqueHexes(effectConfigs.flatMap((effectConfig) => {
-      const relation = effectConfig.relation === "ally" || effectConfig.relation === "enemy" ? effectConfig.relation : "any";
-      const roleFilter = effectConfig.roleFilter === "combat" || effectConfig.roleFilter === "resource" || effectConfig.roleFilter === "utility"
-        ? effectConfig.roleFilter
-        : undefined;
-
-      return effectConfig.type === "mass_damage"
-        ? getAffectedUnitHexes(before, event.controllerId, relation)
-        : effectConfig.type === "global_unit_buff"
-          ? getLiveUnitHexes(state, event.controllerId, relation, roleFilter)
-          : effectConfig.type === "destroy_damaged_units"
-            ? getDestroyedUnitHexes(before, state, event.controllerId, relation)
-            : effectConfig.type === "draw_and_gain_resources"
-              ? controllerBase && controllerBase.kind === "base"
-                ? [controllerBase.coord]
-                : []
-              : effectConfig.type === "resources_by_unit_count"
-                ? getLiveUnitHexes(state, event.controllerId, relation, roleFilter)
-                : [];
-    }));
+    const affectedHexes = getUniqueHexes(effectResolutions.flatMap((resolution) => resolution.hexes));
 
     if (affectedHexes.length > 0) {
       return {
@@ -525,7 +341,7 @@ function buildStackResolutionAnimation(
         ageSeconds: 0,
         durationSeconds: 1.15,
         center:
-          effectConfigs.some((effectConfig) => effectConfig.type === "mass_damage" || effectConfig.type === "destroy_damaged_units")
+          effectResolutions.some((resolution) => resolution.prefersMapCenter)
             ? getMapCenterHex(state)
             : controllerBase && controllerBase.kind === "base"
               ? controllerBase.coord

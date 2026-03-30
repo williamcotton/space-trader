@@ -57,14 +57,7 @@ export function installSalvageCompatibilityShim(state: GameState): void {
   });
 }
 
-let installed = false;
-
 export function installSalvageMechanic(): void {
-  if (installed) {
-    return;
-  }
-  installed = true;
-
   registerMechanicStateInitializer(SALVAGE_MECHANIC_ID, (state) => {
     getSalvageTurnState(state);
   });

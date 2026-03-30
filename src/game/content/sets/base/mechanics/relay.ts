@@ -5,14 +5,7 @@ import { RELAY_KEYWORD } from "./keywordIds";
 
 const USED_RELAY_UNITS_MEMORY_KEY = "relay.usedUnits";
 
-let installed = false;
-
 export function installRelayMechanic(): void {
-  if (installed) {
-    return;
-  }
-  installed = true;
-
   registerCascadeBranchProvider("relay_repeat_branch", ({ state, waveAffectedHexes, branch, options, getFriendlyUnitsOnHexes, memory }) => {
     const usedRelayUnits = (memory.get(USED_RELAY_UNITS_MEMORY_KEY) as Set<string> | undefined) ?? new Set<string>();
     memory.set(USED_RELAY_UNITS_MEMORY_KEY, usedRelayUnits);

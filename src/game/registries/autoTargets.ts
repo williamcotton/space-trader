@@ -21,3 +21,7 @@ export function registerAutoTargetResolver<K extends AutoTargetStrategy>(
 export function getAutoTargetResolver(strategy: AutoTargetStrategy): AutoTargetResolver | undefined {
   return autoTargetResolvers.get(strategy);
 }
+
+export function resetAutoTargetRegistry(): void {
+  autoTargetResolvers.clear();
+}

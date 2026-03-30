@@ -51,3 +51,7 @@ export function getCardPlayModifierLabels(activeModifierIds: readonly string[]):
     return modifier?.label ?? modifierId;
   });
 }
+
+export function resetCardPlayModifierRegistry(): void {
+  registeredCardPlayModifiers.clear();
+}

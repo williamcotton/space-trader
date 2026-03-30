@@ -49,3 +49,10 @@ export function resetRegisteredResolutionMechanicState(state: GameState): void {
     hook(state);
   }
 }
+
+export function resetMechanicStateRegistry(): void {
+  mechanicStateInitializers.clear();
+  mechanicStateMigrators.clear();
+  mechanicTurnResetHooks.clear();
+  mechanicResolutionResetHooks.clear();
+}

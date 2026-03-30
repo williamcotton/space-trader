@@ -58,14 +58,7 @@ export function installSurgeCompatibilityShim(state: GameState): void {
   });
 }
 
-let installed = false;
-
 export function installSurgeMechanic(): void {
-  if (installed) {
-    return;
-  }
-  installed = true;
-
   registerMechanicStateInitializer(SURGE_MECHANIC_ID, (state) => {
     getSurgeTurnState(state);
   });

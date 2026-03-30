@@ -18,3 +18,7 @@ export function getMechanicApi<T>(mechanicId: string): T | undefined {
 export function getRegisteredMechanicApis(): Array<[string, unknown]> {
   return [...mechanicApis.entries()];
 }
+
+export function resetMechanicApiRegistry(): void {
+  mechanicApis.clear();
+}

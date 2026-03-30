@@ -34,3 +34,8 @@ export function getPlayEffectMagnitudeCalculator(
 ): PlayEffectMagnitudeCalculator | undefined {
   return playEffectMagnitudeCalculators.get(type);
 }
+
+export function resetPlayEffectRegistry(): void {
+  playEffectResolvers.clear();
+  playEffectMagnitudeCalculators.clear();
+}

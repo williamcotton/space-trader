@@ -23,3 +23,7 @@ export function getRegisteredUnitStatAdjustments(
   }
   return total;
 }
+
+export function resetUnitStatHookRegistry(): void {
+  unitStatHooks.clear();
+}

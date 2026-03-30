@@ -26,3 +26,7 @@ export function buildRegisteredMechanicAnimations(
   }
   return animations;
 }
+
+export function resetMechanicAnimationRegistry(): void {
+  mechanicAnimationContributors.clear();
+}

@@ -12,14 +12,7 @@ function isEnemyStealthedUnit(
   return target.kind === "unit" && target.ownerId !== sourcePlayerId && unitHasActiveKeyword(state, target, STEALTH_KEYWORD);
 }
 
-let installed = false;
-
 export function installStealthMechanic(): void {
-  if (installed) {
-    return;
-  }
-  installed = true;
-
   registerDirectTargetingBlocker("stealth_targeting", (state, sourcePlayerId, target) =>
     isEnemyStealthedUnit(state, sourcePlayerId, target) ? "Stealthed enemy units cannot be targeted directly." : null
   );

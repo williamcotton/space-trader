@@ -35,3 +35,7 @@ export function getUnitDeploymentAdjustment(
   }
   return result;
 }
+
+export function resetUnitDeploymentRegistry(): void {
+  unitDeploymentAdjustmentHooks.clear();
+}

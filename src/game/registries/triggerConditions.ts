@@ -23,3 +23,7 @@ export function getTriggerConditionEvaluator(
 ): TriggerConditionEvaluator | undefined {
   return triggerConditionEvaluators.get(type);
 }
+
+export function resetTriggerConditionRegistry(): void {
+  triggerConditionEvaluators.clear();
+}

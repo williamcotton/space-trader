@@ -5,6 +5,11 @@ import type { PlayerTheme, ResourceTheme, RoleTheme } from "../../registries/pre
 import type { StackEffectDefinition } from "../stackEffects/types";
 import type { SetMechanicModule } from "../mechanics/types";
 
+export type SetInstallerModule = {
+  id: string;
+  install: () => void;
+};
+
 export type DeckRecipe = {
   id: string;
   factionId: string;
@@ -55,6 +60,7 @@ export type CardSet = {
   name: string;
   dependencies?: string[];
   mechanics?: SetMechanicModule[];
+  installers?: SetInstallerModule[];
   cards?: Record<string, CardDefinition>;
   stackEffects?: Record<string, StackEffectDefinition>;
   factions?: FactionModule[];

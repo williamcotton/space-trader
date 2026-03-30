@@ -23,3 +23,7 @@ export function runUnitDestroyedByAttackHooks(context: UnitDestroyedByAttackCont
     hook.onUnitDestroyedByAttack?.(context);
   }
 }
+
+export function resetCombatHookRegistry(): void {
+  combatHooks.clear();
+}
