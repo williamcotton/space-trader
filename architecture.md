@@ -1,6 +1,6 @@
 # Space Trader Architecture
 
-Last updated: March 29, 2026
+Last updated: March 30, 2026
 
 ## Purpose
 
@@ -17,8 +17,9 @@ It is implementation-first:
 ## Live Scope
 
 - Electron + React + TypeScript desktop game
-- one live shipped content set: Base Set
-- one live runtime profile: Base Default
+- two built-in content manifests: Foundation and Alpha
+- one live shipped playable set: Alpha
+- one live runtime profile: Alpha Default
 - one live map in that profile: Frontier Belt
 - 1v1 turn-based hex tactics
 - 3 premade faction starter decks, 60 cards each, max 4 copies
@@ -129,6 +130,7 @@ src/game/
     maps/catalog.ts
     decks/starterDecks.ts
     cards/
+      builders.ts
       catalog.ts
       helpers.ts
       types.ts
@@ -141,11 +143,18 @@ src/game/
       types.ts
     sets/
       types.ts
-      base/
+      foundation/
+        index.ts
+        stackEffects.ts
+        playEffects.ts
+        ai/spellScoring.ts
+        installers/runtime.ts
+      alpha/
         index.ts
         cards.ts
         stackEffects.ts
         playEffects.ts
+        ai/spellScoring.ts
         decks.ts
         factions.ts
         resources.ts
@@ -286,19 +295,19 @@ Important live fields:
 Current state version:
 - `24`
 
-Mechanic-specific counters no longer belong on the base `GameState` surface.
+Mechanic-specific counters no longer belong on the root `GameState` surface.
 They now belong in namespaced mechanic state owned by the mechanics themselves.
 
 ## Content Loading And Registry Lifecycle
 
-The live game no longer relies on Base Set import-time side effects.
+The live game no longer relies on set import-time side effects.
 
 Content loading flow:
 1. `content/sets/catalog.ts` exposes built-in set manifests.
 2. `content/loader.ts` selects a content bundle through `loadConfiguredContentSets(...)`.
 3. Dependency order is resolved.
 4. Registries are reset if requested.
-5. Each set registers:
+5. Each set can register zero or more of:
    - resources
    - factions
    - cards
@@ -310,7 +319,10 @@ Content loading flow:
    - runtime installers
 
 Important consequences:
-- Base Set is now loaded through the same pathway future expansions should use.
+- built-in content now has a clean dependency split:
+  - `foundation` is a cardless shared gameplay layer
+  - `alpha` is the first real playable set and depends on `foundation`
+- Alpha is now loaded through the same pathway future expansions should use.
 - runtime can now be created or reset from explicit content bundles rather than only “whatever is globally loaded”
 - The kernel no longer owns:
   - default map id
@@ -436,13 +448,15 @@ Important registry categories:
 - triggers
   - `triggerConditions`
 
-Base Set currently installs many of these via `content/sets/base/installers/runtime.ts`.
+Foundation and Alpha currently install many of these via:
+- `content/sets/foundation/installers/runtime.ts`
+- `content/sets/alpha/installers/runtime.ts`
 
 ## Keywords, Mechanics, And Triggers
 
 Keywords are a real engine surface, but keyword ids and behavior are now set-owned.
 
-Current live Base Set keywords:
+Current live Alpha keywords:
 - `stealth`
 - `sprout`
 - `relay`
@@ -467,7 +481,7 @@ The set-owned pieces are:
 - mechanic-specific instruction behavior
 - mechanic-specific animation behavior
 
-Current trigger surface in the live Base Set includes:
+Current trigger surface in live Alpha includes:
 - `on_owner_tactic_played`
 - `on_owner_surged_tactic_played`
 - `on_owner_salvaged`
@@ -562,7 +576,8 @@ Important coverage areas:
 - deterministic rules core is solid
 - card content is data-driven
 - named mechanics are now largely set-owned
-- Base Set is much closer to behaving like a real plugin
+- Foundation cleanly holds reusable non-card content
+- Alpha behaves like the first real set rather than a kernel special-case
 - resource semantics and runtime defaults are now content-owned instead of kernel-owned
 - AI / animation / preview / debug behavior can be installed by sets instead of hardcoded in core
 - HMR workflow is still strong despite schema churn
@@ -611,7 +626,7 @@ The game is much more extensible now, but it still uses process-global registrie
 
 That is good enough for:
 - one active loaded content world
-- Base Set plus future expansion bundles loaded into the same runtime
+- Foundation plus Alpha and future expansion bundles loaded into the same runtime
 
 It is not yet the final form for:
 - multiple simultaneous content contexts

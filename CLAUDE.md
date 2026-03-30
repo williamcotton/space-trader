@@ -68,17 +68,24 @@
 - `src/game/content/loader.ts`
   - explicit set loading
   - registry reset / reload lifecycle
+  - default built-in content initialization via `initializeDefaultContent()`
 - `src/game/content/sets/catalog.ts`
   - built-in set manifest catalog
   - built-in set id lookup
+  - default built-in selection (`alpha`, which depends on `foundation`)
 - `src/game/content/registry.ts`
   - registered sets, cards, stack effects, factions, resources, maps, deck recipes, runtime profiles
+- `src/game/content/cards/builders.ts`
+  - shared card authoring helpers used across sets
 - `src/game/content/sets/types.ts`
   - set manifests
   - faction/resource/runtime-profile module types
-- `src/game/content/sets/base/**`
-  - Base Set content and installers
-  - this is the first real plugin/set, not kernel-owned special content
+- `src/game/content/sets/foundation/**`
+  - cardless shared gameplay foundation
+  - shared stack effects, play effects, AI scoring, and runtime installers
+- `src/game/content/sets/alpha/**`
+  - first real playable set content and installers
+  - depends on `foundation`
 
 ### Content Facades
 
@@ -103,8 +110,8 @@
 
 - `src/game/mechanics/index.ts`
   - generic mechanic-state lifecycle
-- `src/game/content/sets/base/mechanics/**`
-  - current live Base Set mechanics
+- `src/game/content/sets/alpha/mechanics/**`
+  - current live Alpha mechanics
   - `stealth`
   - `sprout`
   - `relay`
@@ -248,7 +255,8 @@
   - `resolution`
 - Content is explicitly loaded through `content/loader.ts`.
 - Built-in set manifests are selected through `content/sets/catalog.ts`.
-- Base Set is now loaded through the same set manifest / installer path future expansions should use.
+- Default built-in content is `alpha`, which pulls in the cardless `foundation` dependency.
+- Shared reusable gameplay primitives live in `foundation`; cards, decks, maps, and runtime profiles live in real sets such as `alpha`.
 - Runtime can now be created or reset from explicit content bundles through:
   - `loadConfiguredContentSets(...)`
   - `createConfiguredRuntime(...)`
