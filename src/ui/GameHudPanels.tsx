@@ -109,7 +109,7 @@ function readSnapshot(): TacticalHudSnapshot {
           rulesText: selected.sourceCardId ? getCardDefinition(selected.sourceCardId)?.text ?? null : null,
         }
       : null,
-    hoveredHex: state.hoveredHex,
+    hoveredHex: state.hoveredHex ? { ...state.hoveredHex } : null,
     hoverCombat,
   };
 }
