@@ -1,15 +1,16 @@
 import { dispatchCommand } from "../src/game/actions/reducers";
 import { decideMvpBotCommand } from "../src/game/ai/mvpBot";
-import { FRONTIER_BELT_MAP } from "../src/game/content/maps/frontierBelt";
+import { ensureDefaultContentLoaded } from "../src/game/content/loader";
 import { FACTIONS, type Faction, type ResourceType } from "../src/game/model/enums";
 import {
   DEFAULT_GAME_RULES,
-  PLAYER_ONE_STARTING_CREDITS,
-  PLAYER_TWO_STARTING_CREDITS,
+  PLAYER_ONE_STARTING_CURRENCY,
+  PLAYER_TWO_STARTING_CURRENCY,
   STARTING_PRIMARY_RESOURCE,
+  createEmptyResourcePool,
   createInitialGameState,
-  createInitialZonesForPlayer,
-  syncPlayerZoneCounts,
+  getCurrencyResourceId,
+  getPrimaryResourceForFaction,
   type GameState,
 } from "../src/game/model/state";
 import { getAutoFlowCommand } from "../src/game/turn/autoFlow";
@@ -64,9 +65,9 @@ const DEFAULT_CONFIG: SimulationConfig = {
   games: 1000,
   maxTurns: 200,
   seed: 20260322,
-  playerOneCredits: PLAYER_ONE_STARTING_CREDITS,
+  playerOneCredits: PLAYER_ONE_STARTING_CURRENCY,
   playerOnePrimary: STARTING_PRIMARY_RESOURCE,
-  playerTwoCredits: PLAYER_TWO_STARTING_CREDITS,
+  playerTwoCredits: PLAYER_TWO_STARTING_CURRENCY,
   playerTwoPrimary: STARTING_PRIMARY_RESOURCE,
   primaryDepositAmount: DEFAULT_GAME_RULES.primaryDepositAmount,
   sweepPlayerOneResources: false,
@@ -293,33 +294,35 @@ function createStartingResources(
   }
 ): Record<ResourceType, number> {
   const primary = overrides?.primary ?? STARTING_PRIMARY_RESOURCE;
-  return {
-    credits: overrides?.credits ?? (playerId === "player_1" ? PLAYER_ONE_STARTING_CREDITS : PLAYER_TWO_STARTING_CREDITS),
-    alloy: faction === "alloy_clan" ? primary : 0,
-    flux: faction === "flux_collective" ? primary : 0,
-    biomass: faction === "biomass_swarm" ? primary : 0,
-  };
+  const currency = getCurrencyResourceId();
+  const primaryResource = getPrimaryResourceForFaction(faction);
+  const resources = createEmptyResourcePool();
+  resources[currency] = overrides?.credits ?? (playerId === "player_1" ? PLAYER_ONE_STARTING_CURRENCY : PLAYER_TWO_STARTING_CURRENCY);
+  resources[primaryResource] = primary;
+
+  return resources;
 }
 
-function assignFaction(
+function overrideStartingResources(
   state: GameState,
   playerId: "player_1" | "player_2",
   faction: Faction,
-  randomSource: () => number,
   resourceOverrides?: {
     credits?: number;
     primary?: number;
   }
 ): void {
-  state.players[playerId].faction = faction;
   state.players[playerId].resources = createStartingResources(playerId, faction, resourceOverrides);
-  state.zones[playerId] = createInitialZonesForPlayer(playerId, faction, undefined, randomSource);
 }
 
 function createFactionMatch(playerOneFaction: Faction, playerTwoFaction: Faction, config: SimulationConfig, seed: number): GameState {
   const randomSource = createSeededRandom(seed);
   const state = createInitialGameState({
-    map: FRONTIER_BELT_MAP,
+    mapId: "frontier_belt",
+    factions: {
+      player_1: playerOneFaction,
+      player_2: playerTwoFaction,
+    },
     matchId: `sim_${seed}`,
     randomSource,
     rules: {
@@ -327,15 +330,14 @@ function createFactionMatch(playerOneFaction: Faction, playerTwoFaction: Faction
     },
   });
 
-  assignFaction(state, "player_1", playerOneFaction, randomSource, {
+  overrideStartingResources(state, "player_1", playerOneFaction, {
     credits: config.playerOneCredits,
     primary: config.playerOnePrimary,
   });
-  assignFaction(state, "player_2", playerTwoFaction, randomSource, {
+  overrideStartingResources(state, "player_2", playerTwoFaction, {
     credits: config.playerTwoCredits,
     primary: config.playerTwoPrimary,
   });
-  syncPlayerZoneCounts(state);
   state.log = [
     {
       turn: 1,
@@ -773,6 +775,7 @@ if (argv.includes("--help") || argv.includes("-h")) {
   process.exit(0);
 }
 
+ensureDefaultContentLoaded();
 const config = parseConfig(argv);
 if (config.sweepResourceGrid) {
   runResourceGridSweep(config);
