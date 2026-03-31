@@ -21,7 +21,7 @@ export function GameCanvas() {
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
-        runtime.setViewport(w, h);
+        runtime.setViewport(w, h, dpr);
         // Immediately redraw after resize clears the buffer to prevent blank flash
         const ctx = canvas.getContext("2d");
         if (ctx) {
@@ -51,7 +51,7 @@ export function GameCanvas() {
     }
 
     const runtime = runtimeRef.current;
-    runtime.setViewport(canvas.width, canvas.height);
+    runtime.setViewport(canvas.width, canvas.height, window.devicePixelRatio || 1);
 
     let frame = 0;
     let loopRunning = false;

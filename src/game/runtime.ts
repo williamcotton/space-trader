@@ -41,6 +41,7 @@ import { getDebugStackResponse } from "./registries/debugStackResponses";
 const INITIAL_VIEWPORT: GameViewport = {
   width: 1024,
   height: 768,
+  scale: 1,
 };
 
 const BOT_ACTION_INTERVAL_MS = 160;
@@ -315,9 +316,10 @@ export class GameRuntime {
     this.scheduleAutomationFromCurrentState();
   }
 
-  setViewport(width: number, height: number): void {
+  setViewport(width: number, height: number, scale = 1): void {
     this.viewport.width = width;
     this.viewport.height = height;
+    this.viewport.scale = scale;
   }
 
   rehydrateHotState(): void {

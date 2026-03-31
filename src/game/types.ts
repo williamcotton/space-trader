@@ -143,6 +143,7 @@ export type FrameTransients = {
 export type GameViewport = {
   width: number;
   height: number;
+  scale?: number;
 };
 
 export type GameFrame = {
