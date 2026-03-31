@@ -703,7 +703,78 @@ describe("decideMvpBotCommand", () => {
     });
   });
 
-  it("prioritizes resource movement toward resources needed for hand costs", () => {
+  it("prioritizes killing an enemy harvester over an equivalent combat target", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "tactical";
+    state.stack = [];
+    state.zones.player_2.hand = [];
+
+    const attacker = state.entities.unit_player_2_scout;
+    const enemyCombat = state.entities.unit_player_1_scout;
+    const enemyHarvester = state.entities.unit_player_1_harvester;
+    if (!attacker || attacker.kind !== "unit" || !enemyCombat || enemyCombat.kind !== "unit" || !enemyHarvester || enemyHarvester.kind !== "unit") {
+      throw new Error("Expected units for harvester-priority tactical test.");
+    }
+
+    attacker.coord = { q: 0, r: 0 };
+    attacker.attackRange = 1;
+    attacker.attacksRemaining = 1;
+    attacker.hasSummoningSickness = false;
+
+    enemyCombat.coord = { q: 1, r: 0 };
+    enemyCombat.hp = 1;
+    enemyHarvester.coord = { q: 0, r: 1 };
+    enemyHarvester.hp = 1;
+
+    state.selectedEntityId = attacker.id;
+
+    const command = decideMvpBotCommand(state, "player_2");
+    expect(command).toEqual({
+      type: "ATTACK_UNIT",
+      playerId: "player_2",
+      attackerId: attacker.id,
+      targetId: enemyHarvester.id,
+    });
+  });
+
+  it("attacks an exposed enemy base over trading into a regular unit", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+    state.zones.player_1.hand = [];
+
+    const attacker = state.entities.unit_player_1_scout;
+    const enemyCombat = state.entities.unit_player_2_scout;
+    const enemyBase = state.entities.base_player_2;
+    if (!attacker || attacker.kind !== "unit" || !enemyCombat || enemyCombat.kind !== "unit" || !enemyBase || enemyBase.kind !== "base") {
+      throw new Error("Expected combat setup for exposed-base bot test.");
+    }
+
+    attacker.coord = { q: 3, r: 2 };
+    attacker.attackRange = 1;
+    attacker.attacksRemaining = 1;
+    attacker.hasSummoningSickness = false;
+
+    enemyCombat.coord = { q: 3, r: 1 };
+    enemyCombat.hp = enemyCombat.maxHp;
+    enemyBase.hp = enemyBase.maxHp;
+
+    state.selectedEntityId = attacker.id;
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "ATTACK_UNIT",
+      playerId: "player_1",
+      attackerId: attacker.id,
+      targetId: enemyBase.id,
+    });
+  });
+
+  it("keeps resource movement on the safer side of the map when chasing needed resources", () => {
     const state = setupState();
     state.activePlayerId = "player_2";
     state.priorityPlayerId = "player_2";
@@ -737,7 +808,7 @@ describe("decideMvpBotCommand", () => {
       throw new Error("Expected resource-focused move command.");
     }
 
-    expect(command.to).toEqual({ q: 0, r: -2 });
+    expect(command.to).toEqual({ q: 1, r: -1 });
   });
 
   it("moves a sprout unit in tactical even while it still has summoning sickness", () => {

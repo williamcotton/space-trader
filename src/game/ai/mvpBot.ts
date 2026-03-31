@@ -7,7 +7,7 @@ import type { ResourceType } from "../model/enums";
 import type { PlayerId } from "../model/ids";
 import { getPrimaryResourceForFaction, MAX_HAND_SIZE, type GameState, type HexCoord, type UnitEntity } from "../model/state";
 import { resolveCombatAttack } from "../systems/combat";
-import { canAffordCardCost, getEnemyEntities, getFirstOpenBaseAdjacentTile, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../model/queries";
+import { canAffordCardCost, getEnemyEntities, getFirstOpenBaseAdjacentTile, getPlayerBase, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../model/queries";
 import {
   canAttackEntityDirectly,
   canUnitAttack,
@@ -66,7 +66,10 @@ const AI_WEIGHTS = {
 
   // attack scoring
   attackKillScore: 100,
-  attackBaseScore: 50,
+  attackBaseScore: 120,
+  attackResourceUnitBonus: 22,
+  attackUtilityUnitBonus: 10,
+  attackCargoBonus: 14,
 
   // movement
   nearbyEnemyRadius: 3,
@@ -573,10 +576,19 @@ function chooseAttackCommand(state: GameState, botPlayerId: PlayerId, unit: Unit
       const preview = resolveCombatAttack(state, unit, target);
       const killScore = preview.targetDestroyed ? AI_WEIGHTS.attackKillScore : 0;
       const baseScore = target.kind === "base" ? AI_WEIGHTS.attackBaseScore : 0;
+      const unitRoleScore =
+        target.kind !== "unit"
+          ? 0
+          : target.role === "resource"
+            ? AI_WEIGHTS.attackResourceUnitBonus
+            : target.role === "utility"
+              ? AI_WEIGHTS.attackUtilityUnitBonus
+              : 0;
+      const cargoScore = target.kind === "unit" && target.carries ? AI_WEIGHTS.attackCargoBonus : 0;
       return {
         target,
         preview,
-        score: killScore + baseScore + preview.finalDamage,
+        score: killScore + baseScore + unitRoleScore + cargoScore + preview.finalDamage,
       };
     })
     .sort((a, b) => b.score - a.score || a.target.id.localeCompare(b.target.id));
@@ -615,10 +627,38 @@ function chooseHarvestCommand(state: GameState, botPlayerId: PlayerId, unit: Uni
   };
 }
 
+function isSafeResourceNode(state: GameState, botPlayerId: PlayerId, node: GameState["map"]["resourceNodes"][number]): boolean {
+  const botBase = getPlayerBase(state, botPlayerId);
+  const enemyBase = getPlayerBase(state, getOpponentPlayer(botPlayerId));
+  if (!botBase || !enemyBase || botBase.kind !== "base" || enemyBase.kind !== "base") {
+    return true;
+  }
+
+  const distanceToBotBase = hexDistance(botBase.coord, node.coord);
+  const distanceToEnemyBase = hexDistance(enemyBase.coord, node.coord);
+  return distanceToBotBase <= distanceToEnemyBase + 1;
+}
+
 function chooseResourceNodeObjective(state: GameState, botPlayerId: PlayerId, unit: UnitEntity): HexCoord | null {
   const resourcePriority = getPriorityResourceOrderFromHand(state, botPlayerId);
 
   for (const resource of resourcePriority) {
+    const safeContestedNodes = state.map.resourceNodes
+      .filter((node) => node.resourceType === resource && node.controlledBy !== botPlayerId && isSafeResourceNode(state, botPlayerId, node))
+      .map((node) => node.coord);
+    const safeContestedTarget = getClosestCoord(unit.coord, safeContestedNodes);
+    if (safeContestedTarget) {
+      return safeContestedTarget;
+    }
+
+    const safeControlledNodes = state.map.resourceNodes
+      .filter((node) => node.resourceType === resource && node.controlledBy === botPlayerId && isSafeResourceNode(state, botPlayerId, node))
+      .map((node) => node.coord);
+    const safeControlledTarget = getClosestCoord(unit.coord, safeControlledNodes);
+    if (safeControlledTarget) {
+      return safeControlledTarget;
+    }
+
     const contestedNodes = state.map.resourceNodes
       .filter((node) => node.resourceType === resource && node.controlledBy !== botPlayerId)
       .map((node) => node.coord);
@@ -634,6 +674,22 @@ function chooseResourceNodeObjective(state: GameState, botPlayerId: PlayerId, un
     if (controlledTarget) {
       return controlledTarget;
     }
+  }
+
+  const safeAnyContested = getClosestCoord(
+    unit.coord,
+    state.map.resourceNodes.filter((node) => node.controlledBy !== botPlayerId && isSafeResourceNode(state, botPlayerId, node)).map((node) => node.coord)
+  );
+  if (safeAnyContested) {
+    return safeAnyContested;
+  }
+
+  const safeAnyControlled = getClosestCoord(
+    unit.coord,
+    state.map.resourceNodes.filter((node) => node.controlledBy === botPlayerId && isSafeResourceNode(state, botPlayerId, node)).map((node) => node.coord)
+  );
+  if (safeAnyControlled) {
+    return safeAnyControlled;
   }
 
   const anyContested = getClosestCoord(
