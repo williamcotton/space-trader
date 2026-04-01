@@ -154,50 +154,29 @@ function scoreDeployCandidate(candidate: DeployCandidate, ctx: DeployBoardContex
   return score;
 }
 
-export function chooseCounterCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
-  const topItem = state.stack[state.stack.length - 1];
-  if (!topItem || !topItem.counterable || topItem.controllerId === botPlayerId) {
-    return null;
-  }
+type ScoredDiscardCommand = {
+  command: GameCommand;
+  score: number;
+  cardInstanceId: string;
+};
 
-  const hand = [...state.zones[botPlayerId].hand].sort((a, b) => a.instanceId.localeCompare(b.instanceId));
-  for (const cardInstance of hand) {
-    const card = getCardDefinition(cardInstance.cardId);
-    if (!card) {
-      continue;
-    }
-    if (card.play.targetMode !== "stack_item" || !isCounterResponse(card.play.stackEffectId)) {
-      continue;
-    }
-    if (!canAffordCardCost(state, botPlayerId, card.cost)) {
-      continue;
-    }
-
-    return {
-      type: "PLAY_CARD",
-      playerId: botPlayerId,
-      cardInstanceId: cardInstance.instanceId,
-      targetStackItemId: topItem.id,
-    };
-  }
-
-  return null;
-}
-
-export function chooseDiscardCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
+export function rankDiscardCardCommands(state: GameState, botPlayerId: PlayerId): ScoredDiscardCommand[] {
   const hand = [...state.zones[botPlayerId].hand];
   if (hand.length <= MAX_HAND_SIZE) {
-    return null;
+    return [];
   }
 
-  const playerFaction = state.players[botPlayerId].faction;
-  const ranked = hand
+  return hand
     .map((cardInstance) => {
       const card = getCardDefinition(cardInstance.cardId);
       if (!card) {
         return {
+          command: {
+            type: "DISCARD_CARD" as const,
+            playerId: botPlayerId,
+            cardInstanceId: cardInstance.instanceId,
+          },
           cardInstanceId: cardInstance.instanceId,
-          cardId: cardInstance.cardId,
           score: 1000,
         };
       }
@@ -205,7 +184,7 @@ export function chooseDiscardCardCommand(state: GameState, botPlayerId: PlayerId
       const totalCost = getResourceOrder().reduce((sum, resource) => sum + (card.cost[resource] ?? 0), 0);
       let score = totalCost * 10;
 
-      if (card.faction !== playerFaction && card.faction !== "neutral") {
+      if (card.faction !== state.players[botPlayerId].faction && card.faction !== "neutral") {
         score += 80;
       } else if (card.faction === "neutral") {
         score += 15;
@@ -224,28 +203,21 @@ export function chooseDiscardCardCommand(state: GameState, botPlayerId: PlayerId
       }
 
       return {
+        command: {
+          type: "DISCARD_CARD" as const,
+          playerId: botPlayerId,
+          cardInstanceId: cardInstance.instanceId,
+        },
         cardInstanceId: cardInstance.instanceId,
-        cardId: card.id,
         score,
       };
     })
-    .sort((a, b) => b.score - a.score || a.cardId.localeCompare(b.cardId) || a.cardInstanceId.localeCompare(b.cardInstanceId));
-
-  const discard = ranked[0];
-  if (!discard) {
-    return null;
-  }
-
-  return {
-    type: "DISCARD_CARD",
-    playerId: botPlayerId,
-    cardInstanceId: discard.cardInstanceId,
-  };
+    .sort((a, b) => b.score - a.score || a.cardInstanceId.localeCompare(b.cardInstanceId));
 }
 
-export function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
+export function rankTacticCardCommands(state: GameState, botPlayerId: PlayerId): ScoredCardCommand[] {
   if (state.phase !== "main" && state.phase !== "tactical") {
-    return null;
+    return [];
   }
 
   const hand = [...state.zones[botPlayerId].hand].sort((a, b) => a.instanceId.localeCompare(b.instanceId));
@@ -297,18 +269,10 @@ export function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId)
     }
   }
 
-  candidates.sort(compareScoredCardCommands);
-
-  const best = candidates[0];
-  if (!best) {
-    return null;
-  }
-
-  const threshold = state.phase === "main" ? AI_WEIGHTS.tacticMainThreshold : AI_WEIGHTS.tacticTacticalThreshold;
-  return best.score >= threshold ? best.command : null;
+  return candidates.sort(compareScoredCardCommands);
 }
 
-export function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
+export function rankMainPhaseCardCommands(state: GameState, botPlayerId: PlayerId): ScoredCardCommand[] {
   const deployOpen = getFirstOpenBaseAdjacentTile(state, botPlayerId);
   const hand = [...state.zones[botPlayerId].hand].sort((a, b) => a.instanceId.localeCompare(b.instanceId));
   const resources = state.players[botPlayerId].resources;
@@ -357,29 +321,91 @@ export function chooseMainPhaseCardCommand(state: GameState, botPlayerId: Player
     .filter((entry) => entry.card.unit.role === "combat")
     .sort((a, b) => scoreEmergencyCombat(b) - scoreEmergencyCombat(a) || a.cardInstanceId.localeCompare(b.cardInstanceId));
 
-  if ((boardCounts.combat === 0 || enemyCombatCount > boardCounts.combat) && emergencyCombatCandidates[0]) {
-    return {
-      type: "PLAY_CARD",
-      playerId: botPlayerId,
-      cardInstanceId: emergencyCombatCandidates[0].cardInstanceId,
-    };
-  }
-
   const scored = candidatePool
     .map((entry) => ({
+      command: {
+        type: "PLAY_CARD" as const,
+        playerId: botPlayerId,
+        cardInstanceId: entry.cardInstanceId,
+      },
       cardInstanceId: entry.cardInstanceId,
       score: scoreDeployCandidate(entry, ctx),
     }))
     .sort((a, b) => b.score - a.score || a.cardInstanceId.localeCompare(b.cardInstanceId));
 
-  const best = scored[0];
+  if ((boardCounts.combat === 0 || enemyCombatCount > boardCounts.combat) && emergencyCombatCandidates[0]) {
+    const emergency = emergencyCombatCandidates[0];
+    const emergencyCommand = {
+      command: {
+        type: "PLAY_CARD" as const,
+        playerId: botPlayerId,
+        cardInstanceId: emergency.cardInstanceId,
+      },
+      cardInstanceId: emergency.cardInstanceId,
+      score: 10_000 + scoreEmergencyCombat(emergency),
+    };
+
+    return [
+      emergencyCommand,
+      ...scored.filter((entry) => entry.cardInstanceId !== emergency.cardInstanceId),
+    ];
+  }
+
+  return scored;
+}
+
+export function chooseCounterCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
+  const topItem = state.stack[state.stack.length - 1];
+  if (!topItem || !topItem.counterable || topItem.controllerId === botPlayerId) {
+    return null;
+  }
+
+  const hand = [...state.zones[botPlayerId].hand].sort((a, b) => a.instanceId.localeCompare(b.instanceId));
+  for (const cardInstance of hand) {
+    const card = getCardDefinition(cardInstance.cardId);
+    if (!card) {
+      continue;
+    }
+    if (card.play.targetMode !== "stack_item" || !isCounterResponse(card.play.stackEffectId)) {
+      continue;
+    }
+    if (!canAffordCardCost(state, botPlayerId, card.cost)) {
+      continue;
+    }
+
+    return {
+      type: "PLAY_CARD",
+      playerId: botPlayerId,
+      cardInstanceId: cardInstance.instanceId,
+      targetStackItemId: topItem.id,
+    };
+  }
+
+  return null;
+}
+
+export function chooseDiscardCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
+  const discard = rankDiscardCardCommands(state, botPlayerId)[0];
+  if (!discard) {
+    return null;
+  }
+  return discard.command;
+}
+
+export function chooseTacticCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
+  const best = rankTacticCardCommands(state, botPlayerId)[0];
   if (!best) {
     return null;
   }
 
-  return {
-    type: "PLAY_CARD",
-    playerId: botPlayerId,
-    cardInstanceId: best.cardInstanceId,
-  };
+  const threshold = state.phase === "main" ? AI_WEIGHTS.tacticMainThreshold : AI_WEIGHTS.tacticTacticalThreshold;
+  return best.score >= threshold ? best.command : null;
+}
+
+export function chooseMainPhaseCardCommand(state: GameState, botPlayerId: PlayerId): GameCommand | null {
+  const best = rankMainPhaseCardCommands(state, botPlayerId)[0];
+  if (!best) {
+    return null;
+  }
+  return best.command;
 }

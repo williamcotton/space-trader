@@ -1,6 +1,8 @@
 import type { GameCommand } from "./actions/commands";
 import { dispatchCommand, type DispatchResult } from "./actions/reducers";
-import { decideMvpBotCommand } from "./ai/mvpBot";
+import type { BotDecisionWorkerRequest, BotDecisionWorkerResponse } from "./ai/botDecisionWorkerProtocol";
+import { decideMinimaxBotCommand } from "./ai/minimaxBot";
+import MinimaxBotWorker from "./ai/minimaxBot.worker?worker";
 import { ensureDefaultContentLoaded, getLoadedContentSetIds, loadConfiguredContentSets, type ContentLoadSelection } from "./content/loader";
 import { getCardDefinition } from "./content/cards/catalog";
 import {
@@ -46,7 +48,7 @@ const INITIAL_VIEWPORT: GameViewport = {
 
 const BOT_ACTION_INTERVAL_MS = 160;
 
-type BotDecisionSystem = typeof decideMvpBotCommand;
+type BotDecisionSystem = typeof decideMinimaxBotCommand;
 
 type PendingCardTargeting = {
   playerId: PlayerId;
@@ -227,10 +229,16 @@ export class GameRuntime {
   private viewport: GameViewport = { ...INITIAL_VIEWPORT };
   private updateSystem: UpdateSystem = updateGame;
   private renderSystem: RenderSystem = renderGame;
-  private botDecisionSystem: BotDecisionSystem = decideMvpBotCommand;
+  private botDecisionSystem: BotDecisionSystem = decideMinimaxBotCommand;
   private botActionReadyAtMs = 0;
   private automationTimer: ReturnType<typeof setTimeout> | null = null;
   private automationTimerDueAtMs = 0;
+  private botDecisionWorker: Worker | null = null;
+  private botDecisionWorkerEnabled = true;
+  private botDecisionWorkerFailed = false;
+  private botDecisionRequestCounter = 0;
+  private pendingBotDecisionRequestId: number | null = null;
+  private pendingBotDecisionStateVersion: number | null = null;
   private animations: CanvasAnimation[] = [];
   private botAutoplayEnabled: Record<PlayerId, boolean> = {
     player_1: false,
@@ -301,6 +309,8 @@ export class GameRuntime {
     };
     Object.assign(this.state, newState);
     this.clearAutomationTimer();
+    this.resetBotDecisionWorker();
+    this.botDecisionWorkerFailed = false;
     this.animations = [];
     this.botActionReadyAtMs = 0;
     this.pendingCardTargeting = null;
@@ -334,6 +344,25 @@ export class GameRuntime {
     }
     if (typeof this.automationTimer === "undefined") {
       this.automationTimer = null;
+    }
+    if (this.botDecisionWorker) {
+      this.botDecisionWorker.terminate();
+      this.botDecisionWorker = null;
+    }
+    if (typeof this.botDecisionWorkerEnabled !== "boolean") {
+      this.botDecisionWorkerEnabled = true;
+    }
+    if (typeof this.botDecisionWorkerFailed !== "boolean") {
+      this.botDecisionWorkerFailed = false;
+    }
+    if (typeof this.botDecisionRequestCounter !== "number") {
+      this.botDecisionRequestCounter = 0;
+    }
+    if (typeof this.pendingBotDecisionRequestId !== "number") {
+      this.pendingBotDecisionRequestId = null;
+    }
+    if (typeof this.pendingBotDecisionStateVersion !== "number") {
+      this.pendingBotDecisionStateVersion = null;
     }
     if (!this.botAutoplayEnabled) {
       this.botAutoplayEnabled = {
@@ -911,7 +940,135 @@ export class GameRuntime {
   }
 
   replaceBotDecisionSystem(system: BotDecisionSystem): void {
+    this.resetBotDecisionWorker();
     this.botDecisionSystem = system;
+    this.botDecisionWorkerEnabled = false;
+  }
+
+  private shouldUseBotDecisionWorker(): boolean {
+    return this.botDecisionWorkerEnabled && !this.botDecisionWorkerFailed && typeof Worker !== "undefined";
+  }
+
+  private clearPendingBotDecision(): void {
+    this.pendingBotDecisionRequestId = null;
+    this.pendingBotDecisionStateVersion = null;
+  }
+
+  private resetBotDecisionWorker(): void {
+    if (this.botDecisionWorker) {
+      this.botDecisionWorker.terminate();
+      this.botDecisionWorker = null;
+    }
+    this.clearPendingBotDecision();
+  }
+
+  private ensureBotDecisionWorker(): Worker | null {
+    if (!this.shouldUseBotDecisionWorker()) {
+      return null;
+    }
+
+    if (this.botDecisionWorker) {
+      return this.botDecisionWorker;
+    }
+
+    const worker = new MinimaxBotWorker();
+    worker.onmessage = (event: MessageEvent<BotDecisionWorkerResponse>) => {
+      this.handleBotDecisionWorkerMessage(event.data);
+    };
+    worker.onerror = () => {
+      this.resetBotDecisionWorker();
+      this.botDecisionWorkerFailed = true;
+      this.state.log.push({
+        turn: this.state.turn,
+        text: "Bot worker failed; falling back to main-thread decisions.",
+      });
+      this.notifyListeners();
+      this.scheduleAutomationFromCurrentState();
+    };
+
+    this.botDecisionWorker = worker;
+    return worker;
+  }
+
+  private cancelStaleBotDecisionRequest(): void {
+    if (this.pendingBotDecisionRequestId === null) {
+      return;
+    }
+
+    if (this.pendingBotDecisionStateVersion === this.stateVersion) {
+      return;
+    }
+
+    this.resetBotDecisionWorker();
+  }
+
+  private requestBotDecision(priorityPlayerId: PlayerId): boolean {
+    this.cancelStaleBotDecisionRequest();
+
+    if (this.pendingBotDecisionRequestId !== null) {
+      return true;
+    }
+
+    const worker = this.ensureBotDecisionWorker();
+    if (!worker) {
+      return false;
+    }
+
+    const requestId = ++this.botDecisionRequestCounter;
+    this.pendingBotDecisionRequestId = requestId;
+    this.pendingBotDecisionStateVersion = this.stateVersion;
+    const request: BotDecisionWorkerRequest = {
+      type: "decide",
+      requestId,
+      stateVersion: this.stateVersion,
+      playerId: priorityPlayerId,
+      state: this.state,
+    };
+    worker.postMessage(request);
+    return true;
+  }
+
+  private handleBotDecisionWorkerMessage(response: BotDecisionWorkerResponse): void {
+    if (response.requestId !== this.pendingBotDecisionRequestId) {
+      return;
+    }
+
+    this.clearPendingBotDecision();
+
+    if (response.type === "error") {
+      this.state.log.push({
+        turn: this.state.turn,
+        text: `Bot worker error: ${response.message}`,
+      });
+      this.notifyListeners();
+      this.botActionReadyAtMs = Date.now() + BOT_ACTION_INTERVAL_MS * 2;
+      this.scheduleAutomationFromCurrentState();
+      return;
+    }
+
+    if (response.stateVersion !== this.stateVersion) {
+      this.scheduleAutomationFromCurrentState();
+      return;
+    }
+
+    if (this.state.winner || this.state.priorityPlayerId !== response.playerId || !this.botAutoplayEnabled[response.playerId]) {
+      this.scheduleAutomationFromCurrentState();
+      return;
+    }
+
+    if (!response.command) {
+      return;
+    }
+
+    const result = this.dispatchCommand(response.command, { scheduleAutomation: false });
+    this.botActionReadyAtMs = Date.now() + (result.ok ? BOT_ACTION_INTERVAL_MS : BOT_ACTION_INTERVAL_MS * 2);
+    this.scheduleAutomationFromCurrentState();
+  }
+
+  enableBotDecisionWorker(): void {
+    this.botDecisionWorkerEnabled = true;
+    this.botDecisionWorkerFailed = false;
+    this.resetBotDecisionWorker();
   }
 
   private clearAutomationTimer(): void {
@@ -945,6 +1102,7 @@ export class GameRuntime {
 
   private scheduleAutomationFromCurrentState(): void {
     this.clearAutomationTimer();
+    this.cancelStaleBotDecisionRequest();
 
     if (this.state.winner) {
       return;
@@ -1013,6 +1171,10 @@ export class GameRuntime {
       return;
     }
 
+    if (this.requestBotDecision(priorityPlayerId)) {
+      return;
+    }
+
     const command = this.botDecisionSystem(this.state, priorityPlayerId);
     if (!command) {
       return;
@@ -1076,12 +1238,13 @@ if (import.meta.hot) {
     runtime.replaceSystems(next.updateGame, next.renderGame);
   });
 
-  import.meta.hot.accept("./ai/mvpBot", (module) => {
-    const next = module as typeof import("./ai/mvpBot") | undefined;
+  import.meta.hot.accept("./ai/minimaxBot", (module) => {
+    const next = module as typeof import("./ai/minimaxBot") | undefined;
     if (!next) {
       return;
     }
-    runtime.replaceBotDecisionSystem(next.decideMvpBotCommand);
+    runtime.replaceBotDecisionSystem(next.decideMinimaxBotCommand);
+    runtime.enableBotDecisionWorker();
   });
 
   import.meta.hot.dispose((data: RuntimeHotData) => {

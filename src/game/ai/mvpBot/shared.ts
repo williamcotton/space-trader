@@ -84,6 +84,17 @@ export function getEconomyFocusCards(state: GameState, botPlayerId: PlayerId): C
   return coreCards.length > 0 ? coreCards : handCards;
 }
 
+function getKnownEconomyCards(state: GameState, botPlayerId: PlayerId): CardDefinition[] {
+  const playerZones = state.zones[botPlayerId];
+  const knownCards = [...playerZones.hand, ...playerZones.deck, ...playerZones.discard]
+    .map((cardInstance) => getCardDefinition(cardInstance.cardId))
+    .filter((card): card is CardDefinition => Boolean(card));
+
+  const faction = state.players[botPlayerId].faction;
+  const coreCards = knownCards.filter((card) => card.faction === faction || card.faction === "neutral");
+  return coreCards.length > 0 ? coreCards : knownCards;
+}
+
 export function getUnitRoleCounts(state: GameState, playerId: PlayerId): Record<"combat" | "resource" | "utility", number> {
   const counts = {
     combat: 0,
@@ -137,7 +148,9 @@ export function getPriorityResourceOrderFromHand(state: GameState, botPlayerId: 
   const resources = state.players[botPlayerId].resources;
   const missingResources = new Set<ResourceType>();
   const requiredResources = new Set<ResourceType>();
+  const knownResources = new Set<ResourceType>();
   const focusCards = getEconomyFocusCards(state, botPlayerId);
+  const knownCards = getKnownEconomyCards(state, botPlayerId);
   const resourceOrder = getResourceOrder();
 
   for (const card of focusCards) {
@@ -152,6 +165,14 @@ export function getPriorityResourceOrderFromHand(state: GameState, botPlayerId: 
     }
   }
 
+  for (const card of knownCards) {
+    for (const resource of resourceOrder) {
+      if ((card.cost[resource] ?? 0) > 0) {
+        knownResources.add(resource);
+      }
+    }
+  }
+
   const missingPriority = getPriorityOrderForResourceSet(missingResources, primaryResource, true);
   if (missingPriority.length > 0) {
     return missingPriority;
@@ -162,7 +183,12 @@ export function getPriorityResourceOrderFromHand(state: GameState, botPlayerId: 
     return requiredPriority;
   }
 
-  return getPriorityOrderForResourceSet(new Set<ResourceType>(resourceOrder), primaryResource, true);
+  const knownPriority = getPriorityOrderForResourceSet(knownResources, primaryResource, true);
+  if (knownPriority.length > 0) {
+    return knownPriority;
+  }
+
+  return getPriorityOrderForResourceSet(new Set<ResourceType>([getRegisteredCurrencyResourceId(), primaryResource]), primaryResource, true);
 }
 
 export function shouldHarvestResourceType(state: GameState, botPlayerId: PlayerId, resourceType: ResourceType): boolean {

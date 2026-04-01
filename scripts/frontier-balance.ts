@@ -1,5 +1,5 @@
 import { dispatchCommand } from "../src/game/actions/reducers";
-import { decideMvpBotCommand } from "../src/game/ai/mvpBot";
+import { decideMinimaxBotCommand } from "../src/game/ai/minimaxBot";
 import { ensureDefaultContentLoaded } from "../src/game/content/loader";
 import { FACTIONS, type Faction, type ResourceType } from "../src/game/model/enums";
 import {
@@ -373,7 +373,7 @@ function simulateMatch(playerOneFaction: Faction, playerTwoFaction: Faction, con
       break;
     }
 
-    const command = decideMvpBotCommand(state, actor);
+    const command = decideMinimaxBotCommand(state, actor);
     if (!command) {
       break;
     }

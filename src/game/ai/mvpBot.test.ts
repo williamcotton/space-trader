@@ -8,6 +8,7 @@ import { incrementTacticsCastThisTurn } from "../content/sets/alpha/mechanics/su
 import { hexDistance } from "../model/hex";
 import { createInitialGameState } from "../model/state";
 import { decideMvpBotCommand } from "./mvpBot";
+import { getPriorityResourceOrderFromHand } from "./mvpBot/shared";
 
 function setupState() {
   return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
@@ -1066,6 +1067,15 @@ describe("decideMvpBotCommand", () => {
     }
 
     expect(command.to).toEqual({ q: -3, r: 1 });
+  });
+
+  it("limits fallback resource priorities to resources that actually exist in the player's cards", () => {
+    const state = setupState();
+    state.zones.player_1.hand = [];
+
+    expect(getPriorityResourceOrderFromHand(state, "player_1")).toEqual(["credits", "alloy"]);
+    expect(getPriorityResourceOrderFromHand(state, "player_1")).not.toContain("flux");
+    expect(getPriorityResourceOrderFromHand(state, "player_1")).not.toContain("biomass");
   });
 
   it("holds a contested objective node instead of stepping off before end-phase capture", () => {
