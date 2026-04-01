@@ -2,7 +2,7 @@ import type { GameCommand } from "../actions/commands";
 import { getCardDefinition, getResolvedCardPlayEffectConfigs, type CardDefinition } from "../content/cards/catalog";
 import { getRegisteredCurrencyResourceId, getRegisteredResourceIds } from "../content/registry";
 import { getStackEffectDefinition, isCounterResponse } from "../content/stackEffects";
-import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
+import { areSameHex, getMapAxialBounds, hexDistance, isWithinMapBounds } from "../model/hex";
 import type { ResourceType } from "../model/enums";
 import type { PlayerId } from "../model/ids";
 import { getPrimaryResourceForFaction, MAX_HAND_SIZE, type GameState, type HexCoord, type UnitEntity } from "../model/state";
@@ -753,14 +753,31 @@ function chooseMoveCommand(state: GameState, botPlayerId: PlayerId, unit: UnitEn
     return null;
   }
 
-  const candidateSteps = HEX_DIRECTIONS.map((dir) => ({ q: unit.coord.q + dir.q, r: unit.coord.r + dir.r }))
-    .filter((coord) => isWithinMapBounds(coord, state.map))
-    .filter((coord) => !hasEntityAtCoord(state, coord))
-    .map((coord) => ({
-      coord,
-      distance: hexDistance(coord, objective),
-    }))
-    .sort((a, b) => a.distance - b.distance || a.coord.q - b.coord.q || a.coord.r - b.coord.r);
+  const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
+  const candidateSteps: { coord: HexCoord; distance: number; moveDistance: number }[] = [];
+  for (let r = rMin; r <= rMax; r += 1) {
+    for (let q = qMin; q <= qMax; q += 1) {
+      const coord = { q, r };
+      if (!isWithinMapBounds(coord, state.map) || areSameHex(coord, unit.coord) || hasEntityAtCoord(state, coord)) {
+        continue;
+      }
+
+      const moveDistance = hexDistance(unit.coord, coord);
+      if (moveDistance > unit.movesRemaining) {
+        continue;
+      }
+
+      candidateSteps.push({
+        coord,
+        distance: hexDistance(coord, objective),
+        moveDistance,
+      });
+    }
+  }
+
+  candidateSteps.sort(
+    (a, b) => a.distance - b.distance || b.moveDistance - a.moveDistance || a.coord.q - b.coord.q || a.coord.r - b.coord.r
+  );
 
   const best = candidateSteps[0];
   if (!best) {

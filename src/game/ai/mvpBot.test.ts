@@ -808,7 +808,41 @@ describe("decideMvpBotCommand", () => {
       throw new Error("Expected resource-focused move command.");
     }
 
-    expect(command.to).toEqual({ q: 1, r: -1 });
+    expect(command.to).toEqual({ q: 1, r: 0 });
+  });
+
+  it("uses full move range instead of stopping at an adjacent blocker", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+
+    const scout = state.entities.unit_player_1_scout;
+    const harvester = state.entities.unit_player_1_harvester;
+    const enemyBase = state.entities.base_player_2;
+    if (!scout || scout.kind !== "unit" || !harvester || harvester.kind !== "unit" || !enemyBase || enemyBase.kind !== "base") {
+      throw new Error("Expected player 1 units and player 2 base.");
+    }
+
+    scout.coord = { q: 0, r: 0 };
+    scout.movesRemaining = 2;
+    scout.hasSummoningSickness = false;
+
+    harvester.coord = { q: 1, r: 0 };
+    harvester.movesRemaining = 0;
+    harvester.hasSummoningSickness = true;
+
+    enemyBase.coord = { q: 3, r: 0 };
+    state.selectedEntityId = scout.id;
+
+    const command = decideMvpBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "MOVE_UNIT",
+      playerId: "player_1",
+      entityId: scout.id,
+      to: { q: 2, r: 0 },
+    });
   });
 
   it("moves a sprout unit in tactical even while it still has summoning sickness", () => {
@@ -955,7 +989,7 @@ describe("decideMvpBotCommand", () => {
       throw new Error("Expected alloy-focused move command.");
     }
 
-    expect(command.to).toEqual({ q: -4, r: 0 });
+    expect(command.to).toEqual({ q: -3, r: -1 });
   });
 
   it("alloy bot prioritizes credits before alloy when both are missing", () => {
@@ -1031,7 +1065,7 @@ describe("decideMvpBotCommand", () => {
       throw new Error("Expected bot to leave biomass node for credits.");
     }
 
-    expect(command.to).toEqual({ q: -4, r: 1 });
+    expect(command.to).toEqual({ q: -3, r: 1 });
   });
 
   it("holds a contested objective node instead of stepping off before end-phase capture", () => {
