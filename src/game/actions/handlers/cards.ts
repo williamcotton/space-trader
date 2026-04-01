@@ -1,13 +1,13 @@
 import type { GameCommand } from "../commands";
 import type { GameEvent } from "../events";
-import { getCardDefinition, getUnitCardKeywords, type CardCost } from "../../content/cards/catalog";
+import { getCardDefinition, type CardCost } from "../../content/cards/catalog";
 import { getStackEffectDefinition, getStackEffectMagnitude, type CounterDestination } from "../../content/stackEffects";
 import { createStackItemId, getOpponentPlayer, popTopStackItem } from "../../turn/stack";
 import type { PlayerId } from "../../model/ids";
 import type { ResourceType } from "../../model/enums";
-import { syncPlayerZoneCounts, type CardInstance, type GameState, type HexCoord } from "../../model/state";
-import { createContinuousEffectId, LAYER, nextEffectTimestamp } from "../../systems/continuousEffects";
+import { syncPlayerZoneCounts, type CardInstance, type GameState } from "../../model/state";
 import type { InstructionContext } from "../instructions";
+import { createSummonedUnitId, deployUnitFromCard } from "../deployment";
 import { executeInstructions } from "../instructionHandlers";
 import { resetResolutionMechanicState } from "../../mechanics";
 import { resolveCardCounterable } from "../../registries/cardCounterability";
@@ -16,7 +16,6 @@ import {
   getCardPlayModifierLabels,
   runCardPlayedToStackModifierHooks,
 } from "../../registries/cardPlayModifiers";
-import { getUnitDeploymentAdjustment } from "../../registries/unitDeployment";
 
 function applyCardCost(state: GameState, playerId: PlayerId, cost: CardCost): void {
   const pool = state.players[playerId].resources;
@@ -56,106 +55,6 @@ export function drawCardForPlayer(state: GameState, playerId: PlayerId, drawReas
   state.log.push({
     turn: state.turn,
     text: `${playerId} downloaded ${next.cardId} from satellite (${drawReason}).`,
-  });
-}
-
-function createSummonedUnitId(state: GameState, playerId: PlayerId, cardId: string): string {
-  const suffix = Object.keys(state.entities).length + state.log.length + state.turn;
-  return `unit_${playerId}_${cardId}_${suffix}`;
-}
-
-function deployUnitToBattlefield(
-  state: GameState,
-  playerId: PlayerId,
-  cardId: string,
-  cardName: string,
-  unitEntityId: string,
-  spawnCoord: HexCoord
-): void {
-  const cardDefinition = getCardDefinition(cardId);
-  if (!cardDefinition || cardDefinition.kind !== "unit") {
-    return;
-  }
-  const keywords = getUnitCardKeywords(cardId);
-  const deploymentAdjustment = getUnitDeploymentAdjustment(cardDefinition, keywords);
-  const movesRemaining = deploymentAdjustment.movesRemaining ?? 0;
-  const attacksRemaining = deploymentAdjustment.attacksRemaining ?? 0;
-
-  state.entities[unitEntityId] = {
-    id: unitEntityId,
-    kind: "unit",
-    name: cardName,
-    ownerId: playerId,
-    role: cardDefinition.unit.role,
-    hp: cardDefinition.unit.hp,
-    maxHp: cardDefinition.unit.hp,
-    attackDamage: cardDefinition.unit.attackDamage,
-    siegeDamageBonus: cardDefinition.unit.siegeDamageBonus,
-    armor: cardDefinition.unit.armor,
-    moveRange: cardDefinition.unit.moveRange,
-    attackRange: cardDefinition.unit.attackRange,
-    attackActionsPerTurn: cardDefinition.unit.attackActionsPerTurn,
-    coord: { ...spawnCoord },
-    keywords,
-    carries: null,
-    sourceCardId: cardId,
-    hasSummoningSickness: true,
-    movesRemaining,
-    attacksRemaining,
-    temporaryAttackBonus: 0,
-    temporaryArmorBonus: 0,
-  };
-
-  if (cardDefinition.unit.auras) {
-    for (const aura of cardDefinition.unit.auras) {
-      if (aura.attackBonus) {
-        const ts = nextEffectTimestamp(state);
-        state.continuousEffects.push({
-          id: createContinuousEffectId(state, `${unitEntityId}_aura_atk`),
-          sourceEntityId: unitEntityId,
-          sourceCardId: cardId,
-          controllerId: playerId,
-          payload: { type: "stat_modifier", stat: "attackDamage", amount: aura.attackBonus },
-          target: { type: "adjacent_allies", sourceEntityId: unitEntityId, roleFilter: aura.targetRole },
-          expiry: { type: "while_source_alive", sourceEntityId: unitEntityId },
-          layer: LAYER.STATIC,
-          timestamp: ts,
-        });
-      }
-      if (aura.armorBonus) {
-        const ts = nextEffectTimestamp(state);
-        state.continuousEffects.push({
-          id: createContinuousEffectId(state, `${unitEntityId}_aura_arm`),
-          sourceEntityId: unitEntityId,
-          sourceCardId: cardId,
-          controllerId: playerId,
-          payload: { type: "stat_modifier", stat: "armor", amount: aura.armorBonus },
-          target: { type: "adjacent_allies", sourceEntityId: unitEntityId, roleFilter: aura.targetRole },
-          expiry: { type: "while_source_alive", sourceEntityId: unitEntityId },
-          layer: LAYER.STATIC,
-          timestamp: ts,
-        });
-      }
-      if (aura.siegeBonus) {
-        const ts = nextEffectTimestamp(state);
-        state.continuousEffects.push({
-          id: createContinuousEffectId(state, `${unitEntityId}_aura_sg`),
-          sourceEntityId: unitEntityId,
-          sourceCardId: cardId,
-          controllerId: playerId,
-          payload: { type: "stat_modifier", stat: "siegeDamageBonus", amount: aura.siegeBonus },
-          target: { type: "adjacent_allies", sourceEntityId: unitEntityId, roleFilter: aura.targetRole },
-          expiry: { type: "while_source_alive", sourceEntityId: unitEntityId },
-          layer: LAYER.STATIC,
-          timestamp: ts,
-        });
-      }
-    }
-  }
-
-  state.log.push({
-    turn: state.turn,
-    text: `${playerId} deployed ${cardName} to (${spawnCoord.q}, ${spawnCoord.r}).`,
   });
 }
 
@@ -357,7 +256,13 @@ export function reduceCardPlayedToBattlefield(
 
   applyCardCost(state, event.playerId, event.cost);
   syncPlayerZoneCounts(state);
-  deployUnitToBattlefield(state, event.playerId, event.cardId, event.cardName, event.unitEntityId, event.spawnCoord);
+  deployUnitFromCard(state, {
+    controllerId: event.playerId,
+    cardId: event.cardId,
+    cardName: event.cardName,
+    entityId: event.unitEntityId,
+    spawnCoord: event.spawnCoord,
+  });
 }
 
 export function reduceCardDiscarded(
