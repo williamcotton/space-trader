@@ -16,8 +16,10 @@ export function GameCanvas() {
     const resize = () => {
       const rect = parent.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      const w = Math.max(1, Math.floor(Math.max(320, Math.floor(rect.width)) * dpr));
-      const h = Math.max(1, Math.floor(Math.max(320, Math.floor(rect.height)) * dpr));
+      const cssWidth = Math.max(1, Math.floor(rect.width));
+      const cssHeight = Math.max(1, Math.floor(rect.height));
+      const w = Math.max(1, Math.floor(cssWidth * dpr));
+      const h = Math.max(1, Math.floor(cssHeight * dpr));
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
@@ -33,9 +35,13 @@ export function GameCanvas() {
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(parent);
+    window.addEventListener("resize", resize);
+    window.visualViewport?.addEventListener("resize", resize);
 
     return () => {
       observer.disconnect();
+      window.removeEventListener("resize", resize);
+      window.visualViewport?.removeEventListener("resize", resize);
     };
   }, []);
 

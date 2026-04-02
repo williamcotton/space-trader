@@ -1326,7 +1326,20 @@ body {
 @media (max-width: 1200px) {
   .game-workspace {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(320px, 1fr) auto;
+    grid-template-rows: minmax(360px, 1fr) auto auto;
+    align-content: stretch;
+  }
+
+  .game-main-column {
+    display: contents;
+  }
+
+  .game-board-shell {
+    min-height: 360px;
+  }
+
+  .hand-tray {
+    height: clamp(208px, 26vh, 272px);
   }
 
   .game-sidebar {
@@ -1392,7 +1405,12 @@ body {
   }
 
   .game-board-shell {
+    min-height: 320px;
     padding: 8px;
+  }
+
+  .hand-tray {
+    height: clamp(180px, 24vh, 228px);
   }
 
   .game-hud-panels {
