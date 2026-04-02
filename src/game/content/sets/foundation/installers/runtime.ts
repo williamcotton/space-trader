@@ -191,6 +191,7 @@ function registerFoundationSpellScoring(): void {
               effectConfig.roleFilter === "combat" || effectConfig.roleFilter === "resource" || effectConfig.roleFilter === "utility"
                 ? effectConfig.roleFilter
                 : undefined,
+            grantedKeywords: Array.isArray(effectConfig.grantedKeywords) ? effectConfig.grantedKeywords : undefined,
           })
         )
     );

@@ -4,7 +4,7 @@ import { areSameHex, getMapAxialBounds, hexDistance, isWithinMapBounds } from ".
 import { getEnemyEntities, getPlayerBase, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../../model/queries";
 import type { PlayerId } from "../../model/ids";
 import type { GameState, HexCoord, UnitEntity } from "../../model/state";
-import { canAttackEntityDirectly, canUnitAttack, canUnitMove } from "../../rules/directInteraction";
+import { canAttackEntityDirectly, canUnitDeclareAttack, canUnitMove } from "../../rules/directInteraction";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../../systems/harvesting";
 import { resolveCombatAttack } from "../../systems/combat";
 import { getOpponentPlayer } from "../../turn/stack";
@@ -201,13 +201,16 @@ function scoreMovePlan(state: Readonly<GameState>, playerId: PlayerId, unit: Uni
         score += 100;
       }
     } else if (node) {
-      if (node.controlledBy !== playerId) {
-        score += 48;
-      } else {
-        score += 24;
-      }
-      if (shouldHarvestResourceType(state as GameState, playerId, node.resourceType)) {
+      const preferredResource = shouldHarvestResourceType(state as GameState, playerId, node.resourceType);
+      if (preferredResource) {
+        if (node.controlledBy !== playerId) {
+          score += 48;
+        } else {
+          score += 24;
+        }
         score += 26;
+      } else {
+        score -= node.controlledBy !== playerId ? 32 : 20;
       }
       if (isSafeResourceNode(state, playerId, node)) {
         score += 16;
@@ -247,7 +250,7 @@ function buildAttackPlans(
   unit: UnitEntity,
   prefix: GameCommand[]
 ): SearchActionPlan[] {
-  if (unit.role !== "combat" || unit.attacksRemaining <= 0 || !canUnitAttack(unit)) {
+  if (unit.attacksRemaining <= 0 || !canUnitDeclareAttack(state, unit)) {
     return [];
   }
 
@@ -287,10 +290,12 @@ function buildHarvestPlans(
   if (!node || node.controlledBy !== playerId) {
     return [];
   }
+  if (!shouldHarvestResourceType(state as GameState, playerId, node.resourceType)) {
+    return [];
+  }
 
   const score =
-    140 +
-    (shouldHarvestResourceType(state as GameState, playerId, node.resourceType) ? 40 : 0) +
+    180 +
     (unit.carries ? -60 : 0);
 
   return [

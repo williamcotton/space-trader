@@ -14,9 +14,15 @@ export type EntityInteractionBlocker = (
   target: EntityState
 ) => string | null;
 
+export type UnitAttackPermissionChecker = (
+  state: Readonly<GameState>,
+  unit: Readonly<UnitEntity>
+) => boolean;
+
 const unitActionBlockers = new Map<string, UnitActionBlocker>();
 const directTargetingBlockers = new Map<string, EntityInteractionBlocker>();
 const directAttackBlockers = new Map<string, EntityInteractionBlocker>();
+const unitAttackPermissionCheckers = new Map<string, UnitAttackPermissionChecker>();
 
 export function registerUnitActionBlocker(id: string, blocker: UnitActionBlocker): void {
   unitActionBlockers.set(id, blocker);
@@ -28,6 +34,10 @@ export function registerDirectTargetingBlocker(id: string, blocker: EntityIntera
 
 export function registerDirectAttackBlocker(id: string, blocker: EntityInteractionBlocker): void {
   directAttackBlockers.set(id, blocker);
+}
+
+export function registerUnitAttackPermissionChecker(id: string, checker: UnitAttackPermissionChecker): void {
+  unitAttackPermissionCheckers.set(id, checker);
 }
 
 export function getUnitActionBlockReason(
@@ -71,8 +81,22 @@ export function getDirectAttackBlockReasonFromRegistry(
   return null;
 }
 
+export function unitHasRegisteredAttackPermission(
+  state: Readonly<GameState>,
+  unit: Readonly<UnitEntity>
+): boolean {
+  for (const checker of unitAttackPermissionCheckers.values()) {
+    if (checker(state, unit)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function resetDirectInteractionRegistry(): void {
   unitActionBlockers.clear();
   directTargetingBlockers.clear();
   directAttackBlockers.clear();
+  unitAttackPermissionCheckers.clear();
 }

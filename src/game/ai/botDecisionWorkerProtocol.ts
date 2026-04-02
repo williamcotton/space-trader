@@ -7,6 +7,7 @@ export type BotDecisionWorkerRequest = {
   requestId: number;
   stateVersion: number;
   playerId: PlayerId;
+  builtInSetIds: string[];
   state: GameState;
 };
 

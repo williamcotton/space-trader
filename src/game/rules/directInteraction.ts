@@ -4,6 +4,7 @@ import {
   getDirectAttackBlockReasonFromRegistry,
   getDirectTargetingBlockReasonFromRegistry,
   getUnitActionBlockReason,
+  unitHasRegisteredAttackPermission,
 } from "../registries/directInteraction";
 
 export function getUnitMoveActionBlockReason(unit: Readonly<Pick<UnitEntity, "hasSummoningSickness" | "keywords">>): string | null {
@@ -20,6 +21,29 @@ export function canUnitMove(unit: Readonly<Pick<UnitEntity, "hasSummoningSicknes
 
 export function canUnitAttack(unit: Readonly<Pick<UnitEntity, "hasSummoningSickness" | "keywords">>): boolean {
   return getUnitAttackActionBlockReason(unit) === null;
+}
+
+export function getUnitAttackDeclarationBlockReason(
+  state: Readonly<GameState>,
+  unit: Readonly<UnitEntity>
+): string | null {
+  const actionBlockReason = getUnitAttackActionBlockReason(unit);
+  if (actionBlockReason) {
+    return actionBlockReason;
+  }
+
+  if (unit.role === "combat" || unitHasRegisteredAttackPermission(state, unit)) {
+    return null;
+  }
+
+  return "Only combat units can attack.";
+}
+
+export function canUnitDeclareAttack(
+  state: Readonly<GameState>,
+  unit: Readonly<UnitEntity>
+): boolean {
+  return getUnitAttackDeclarationBlockReason(state, unit) === null;
 }
 
 export function getDirectTargetingBlockReason(

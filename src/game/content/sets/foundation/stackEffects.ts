@@ -585,7 +585,8 @@ export function installFoundationPlayEffectRegistrations(): void {
   registerPlayEffectMagnitudeCalculator("global_unit_buff", (effectConfig) =>
     Math.max(
       Math.abs(Number(effectConfig.attackBonus ?? 0)),
-      Math.abs(Number(effectConfig.armorBonus ?? 0))
+      Math.abs(Number(effectConfig.armorBonus ?? 0)),
+      Array.isArray(effectConfig.grantedKeywords) && effectConfig.grantedKeywords.length > 0 ? 1 : 0
     )
   );
   registerPlayEffectMagnitudeCalculator("destroy_damaged_units", () => 0);

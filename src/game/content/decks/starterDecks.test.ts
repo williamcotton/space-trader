@@ -103,6 +103,7 @@ describe("starter decks", () => {
     expect(countCopies(fluxCards, "overcharge_savant_card")).toBe(2);
     expect(countCopies(biomassCards, "bloom_archivist_card")).toBe(2);
     expect(countCopies(biomassCards, "compost_broker_card")).toBe(2);
+    expect(countCopies(biomassCards, "feeding_frenzy")).toBe(2);
     expect(countCopies(biomassCards, "overgrowth_wave")).toBe(4);
     expect(countCopies(biomassCards, "spore_harvest")).toBe(2);
     expect(countCopies(biomassCards, "canopy_dividend")).toBe(2);

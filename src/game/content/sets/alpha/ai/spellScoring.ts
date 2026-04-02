@@ -3,7 +3,7 @@ import type { PlayerId } from "../../../../model/ids";
 import type { ResourceType } from "../../../../model/enums";
 import { areSameHex, hexDistance } from "../../../../model/hex";
 import { getEnemyEntities, getPlayerUnits } from "../../../../model/queries";
-import { canAttackEntityDirectly, canUnitAttack } from "../../../../rules/directInteraction";
+import { canAttackEntityDirectly, canUnitAttack, canUnitDeclareAttack } from "../../../../rules/directInteraction";
 import { getOpponentPlayer } from "../../../../turn/stack";
 import { getCascadeAffectedHexes } from "../../../../systems/cascade";
 import { getEffectiveUnitAttackDamage } from "../../../../systems/unitStats";
@@ -278,8 +278,7 @@ function scoreUnitBuffOpportunity(
     if (options.armorBonus > 0) {
       const threateningEnemies = getPlayerUnits(state, getOpponentPlayer(botPlayerId)).filter(
         (enemy) =>
-          enemy.role === "combat" &&
-          canUnitAttack(enemy) &&
+          canUnitDeclareAttack(state, enemy) &&
           enemy.attacksRemaining > 0 &&
           canAttackEntityDirectly(state, enemy.ownerId, unit) &&
           hexDistance(enemy.coord, unit.coord) <= enemy.attackRange
@@ -301,7 +300,7 @@ function scoreUnitBuffOpportunity(
       }
     }
 
-    if (options.attackBonus <= 0 || unit.role !== "combat" || unit.attacksRemaining <= 0 || !canUnitAttack(unit)) {
+    if (options.attackBonus <= 0 || unit.attacksRemaining <= 0 || !canUnitDeclareAttack(state, unit)) {
       continue;
     }
 

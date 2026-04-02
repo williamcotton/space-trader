@@ -33,6 +33,7 @@ import type {
   CardSourceDestination,
   HexTargetPredicate,
 } from "../../cards/types";
+import { PREDATION_KEYWORD } from "./mechanics/keywordIds";
 
 function getStartOfControllersNextTurn(state: Readonly<GameState>, controllerId: PlayerId): number {
   return state.activePlayerId === controllerId ? state.turn + 2 : state.turn + 1;
@@ -98,6 +99,7 @@ function createGlobalUnitBuffEffectConfig(options: GlobalUnitBuffOptions): Globa
     armorBonus: options.armorBonus ?? 0,
     relation: options.relation,
     roleFilter: options.roleFilter,
+    grantedKeywords: options.grantedKeywords ? [...options.grantedKeywords] : undefined,
   };
 }
 
@@ -531,6 +533,29 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
         kind: "hex_shower",
         label: "Spore Bloom",
         waves: 2,
+        accent: "biomass",
+      },
+    },
+  },
+  feeding_frenzy: {
+    id: "feeding_frenzy",
+    name: "Feeding Frenzy",
+    faction: "biomass_swarm",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 1, biomass: 1 },
+    text: "Friendly resource units gain Predation until end of turn. (Units with Predation can attack this turn even if they are resource units.)",
+    play: globalUnitBuffTacticPlay({
+      relation: "ally",
+      roleFilter: "resource",
+      grantedKeywords: [PREDATION_KEYWORD],
+      attackBonus: 0,
+      armorBonus: 0,
+    }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Feeding Frenzy",
         accent: "biomass",
       },
     },

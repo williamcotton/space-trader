@@ -5,8 +5,8 @@ import { areSameHex, hexDistance, isWithinMapBounds } from "../model/hex";
 import { MAX_HAND_SIZE, type EntityState, type GameState } from "../model/state";
 import { canUnitHarvestNode, getResourceNodeById } from "../systems/harvesting";
 import {
-  canUnitAttack,
   canUnitMove,
+  getUnitAttackDeclarationBlockReason,
   getDirectAttackBlockReason,
 } from "./directInteraction";
 import { canAffordCardCost, hasEntityAtCoord } from "../model/queries";
@@ -172,9 +172,9 @@ function validateAttackUnit(state: GameState, command: Extract<GameCommand, { ty
   const attacker = getEntity(state, command.attackerId);
   if (!attacker || attacker.kind !== "unit") return { ok: false, reason: "Attacker must be a valid unit." };
   if (attacker.ownerId !== command.playerId) return { ok: false, reason: "Cannot attack with opponent unit." };
-  if (attacker.role !== "combat") return { ok: false, reason: "Only combat units can attack." };
   if (state.selectedEntityId !== command.attackerId) return { ok: false, reason: "Attacker must be selected before attacking." };
-  if (!canUnitAttack(attacker)) return { ok: false, reason: "Unit has summoning sickness." };
+  const attackBlockReason = getUnitAttackDeclarationBlockReason(state, attacker);
+  if (attackBlockReason) return { ok: false, reason: attackBlockReason };
   if (attacker.attacksRemaining <= 0) return { ok: false, reason: "Unit has no attacks remaining." };
 
   const target = getEntity(state, command.targetId);

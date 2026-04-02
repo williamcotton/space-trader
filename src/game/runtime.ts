@@ -24,6 +24,7 @@ import { configurePlayerThemes } from "./presentation";
 import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
 import { canAttackEntityDirectly } from "./rules/directInteraction";
+import { canUnitDeclareAttack } from "./rules/directInteraction";
 import { getAutoFlowCommand } from "./turn/autoFlow";
 import {
   PRIORITY_STOP_LABELS,
@@ -677,6 +678,9 @@ export class GameRuntime {
     if (!attacker || attacker.kind !== "unit") {
       return;
     }
+    if (!canUnitDeclareAttack(this.state, attacker) || attacker.attacksRemaining <= 0) {
+      return;
+    }
 
     const target = Object.values(this.state.entities).find((entity) => {
       if (entity.ownerId === activePlayerId) {
@@ -946,7 +950,10 @@ export class GameRuntime {
   }
 
   private shouldUseBotDecisionWorker(): boolean {
-    return this.botDecisionWorkerEnabled && !this.botDecisionWorkerFailed && typeof Worker !== "undefined";
+    return this.botDecisionWorkerEnabled &&
+      !this.botDecisionWorkerFailed &&
+      typeof Worker !== "undefined" &&
+      !(this.contentSelection.extraSets && this.contentSelection.extraSets.length > 0);
   }
 
   private clearPendingBotDecision(): void {
@@ -1022,6 +1029,7 @@ export class GameRuntime {
       requestId,
       stateVersion: this.stateVersion,
       playerId: priorityPlayerId,
+      builtInSetIds: [...(this.contentSelection.builtInSetIds ?? getLoadedContentSetIds())],
       state: this.state,
     };
     worker.postMessage(request);

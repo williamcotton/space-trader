@@ -5,7 +5,7 @@ import type { GameState, HexCoord, UnitEntity } from "../../model/state";
 import { getEnemyEntities, getPlayerBase, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../../model/queries";
 import {
   canAttackEntityDirectly,
-  canUnitAttack,
+  canUnitDeclareAttack,
   canUnitMove,
 } from "../../rules/directInteraction";
 import { resolveCombatAttack } from "../../systems/combat";
@@ -19,7 +19,7 @@ import {
 } from "./shared";
 
 function chooseAttackCommand(state: GameState, botPlayerId: PlayerId, unit: UnitEntity): GameCommand | null {
-  if (unit.role !== "combat" || unit.attacksRemaining <= 0 || !canUnitAttack(unit)) {
+  if (unit.attacksRemaining <= 0 || !canUnitDeclareAttack(state, unit)) {
     return null;
   }
 

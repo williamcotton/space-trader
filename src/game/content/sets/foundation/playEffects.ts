@@ -4,7 +4,7 @@ import { hexDistance } from "../../../model/hex";
 import type { UnitEntity } from "../../../model/state";
 import { getMechanicInstructionHandler } from "../../../registries/mechanicInstructions";
 import { LAYER } from "../../../systems/continuousEffects";
-import type { CardCost, CardPlayEffectConfig } from "../../cards/catalog";
+import type { CardCost, CardKeyword, CardPlayEffectConfig } from "../../cards/catalog";
 
 export type EffectRelation = "ally" | "enemy" | "any";
 
@@ -18,6 +18,7 @@ export type GlobalUnitBuffOptions = {
   armorBonus?: number;
   relation: EffectRelation;
   roleFilter?: UnitRole;
+  grantedKeywords?: CardKeyword[];
 };
 
 export type DestroyDamagedUnitsOptions = {
@@ -55,6 +56,7 @@ export type GlobalUnitBuffPlayEffectConfig = CardPlayEffectConfig & {
   armorBonus: number;
   relation: EffectRelation;
   roleFilter?: UnitRole;
+  grantedKeywords?: CardKeyword[];
 };
 
 export type DestroyDamagedUnitsPlayEffectConfig = CardPlayEffectConfig & {
@@ -158,6 +160,7 @@ export function createMassDamageInstructions(options: MassDamageOptions) {
 export function createGlobalUnitBuffInstructions(options: GlobalUnitBuffOptions) {
   const attackBonus = options.attackBonus ?? 0;
   const armorBonus = options.armorBonus ?? 0;
+  const grantedKeywords = options.grantedKeywords ?? [];
 
   return (context: InstructionContext): GameInstruction[] => {
     const targets = getUnitsByRelation(context, options.relation, options.roleFilter);
@@ -194,6 +197,20 @@ export function createGlobalUnitBuffInstructions(options: GlobalUnitBuffOptions)
           layer: LAYER.TEMPORARY,
         });
       }
+
+      for (const keyword of grantedKeywords) {
+        instructions.push({
+          type: "APPLY_CONTINUOUS_EFFECT",
+          effectId: `ce_${context.item.id}_${unit.id}_global_kw_${keyword}`,
+          sourceEntityId: null,
+          sourceCardId: context.item.sourceCardId,
+          controllerId: context.controllerId,
+          payload: { type: "keyword_grant", keyword },
+          target: { type: "specific_entity", entityId: unit.id },
+          expiry: { type: "end_of_turn", turn: context.state.turn },
+          layer: LAYER.ABILITY,
+        });
+      }
     }
 
     const bloomInstruction = createOptionalBloomInstruction(context, targets, {
@@ -209,6 +226,9 @@ export function createGlobalUnitBuffInstructions(options: GlobalUnitBuffOptions)
     }
     if (armorBonus !== 0) {
       buffParts.push(`${armorBonus > 0 ? "+" : ""}${armorBonus} ARM`);
+    }
+    for (const keyword of grantedKeywords) {
+      buffParts.push(`gain ${keyword}`);
     }
 
     instructions.push({

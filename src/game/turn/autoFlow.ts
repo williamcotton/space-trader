@@ -5,7 +5,7 @@ import type { PlayerId } from "../model/ids";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../systems/harvesting";
 import {
   canAttackEntityDirectly,
-  canUnitAttack,
+  canUnitDeclareAttack,
   canUnitMove,
 } from "../rules/directInteraction";
 import { hasEntityAtCoord } from "../model/queries";
@@ -36,7 +36,7 @@ function hasAvailableMove(state: GameState, unit: UnitEntity): boolean {
 }
 
 function hasAvailableAttack(state: GameState, unit: UnitEntity): boolean {
-  if (unit.role !== "combat" || !canUnitAttack(unit) || unit.attacksRemaining <= 0) {
+  if (!canUnitDeclareAttack(state, unit) || unit.attacksRemaining <= 0) {
     return false;
   }
 

@@ -45,4 +45,12 @@ describe("card catalog balance guardrails", () => {
       attackActionsPerTurn: frontlineScout.unit.attackActionsPerTurn,
     });
   });
+
+  it("defines Feeding Frenzy as the Biomass resource-attack enabler", () => {
+    const cards = getCardCatalog();
+    expect(cards.feeding_frenzy.cost).toEqual({ credits: 1, biomass: 1 });
+    expect(cards.feeding_frenzy.faction).toBe("biomass_swarm");
+    expect(cards.feeding_frenzy.play.stackEffectId).toBe("global_unit_buff");
+    expect(cards.feeding_frenzy.text).toContain("resource units gain Predation");
+  });
 });

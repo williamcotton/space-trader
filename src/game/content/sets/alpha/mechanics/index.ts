@@ -3,6 +3,7 @@ import { installBastionMechanic } from "./bastion";
 import { installBloomMechanic } from "./bloom";
 import { installRelayMechanic } from "./relay";
 import { installSalvageMechanic } from "./salvage";
+import { installPredationMechanic } from "./predation";
 import { installSproutMechanic } from "./sprout";
 import { installStealthMechanic } from "./stealth";
 import { installSurgeMechanic } from "./surge";
@@ -15,6 +16,7 @@ export const ALPHA_SET_MECHANICS: SetMechanicModule[] = [
   { id: "surge", install: installSurgeMechanic },
   { id: "bloom", install: installBloomMechanic },
   { id: "salvage", install: installSalvageMechanic },
+  { id: "predation", install: installPredationMechanic },
   { id: "bastion", install: installBastionMechanic },
   { id: "uncounterable", install: installUncounterableMechanic },
 ];

@@ -32,6 +32,22 @@ function keepOnlyEntities(state: ReturnType<typeof setupState>, ids: string[]): 
   }
 }
 
+function moveCardFromDeckToHand(state: ReturnType<typeof setupState>, playerId: "player_1" | "player_2", cardId: string): string {
+  const deck = state.zones[playerId].deck;
+  const index = deck.findIndex((card) => card.cardId === cardId);
+  if (index < 0) {
+    throw new Error(`Expected ${cardId} in ${playerId} deck.`);
+  }
+
+  const [card] = deck.splice(index, 1);
+  if (!card) {
+    throw new Error(`Failed to move ${cardId} from ${playerId} deck.`);
+  }
+
+  state.zones[playerId].hand.push(card);
+  return card.instanceId;
+}
+
 describe("decideMinimaxBotCommand", () => {
   it("returns SELECT_ENTITY first when the best line is an immediate attack", () => {
     const state = setupState();
@@ -168,5 +184,76 @@ describe("decideMinimaxBotCommand", () => {
     }
 
     expect(command.to).not.toEqual({ q: -4, r: 0 });
+  });
+
+  it("skips harvesting a wrong resource even when standing on a controlled node", () => {
+    const state = setupState();
+    advanceToTactical(state);
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.stack = [];
+
+    const biomassNode = state.map.resourceNodes.find((node) => node.id === "frontier_biomass_northwest");
+    if (!biomassNode) {
+      throw new Error("Expected northwest biomass node.");
+    }
+    biomassNode.controlledBy = "player_1";
+
+    state.players.player_1.resources.credits = 0;
+    state.players.player_1.resources.alloy = 2;
+    state.players.player_1.resources.flux = 0;
+    state.players.player_1.resources.biomass = 0;
+
+    const scout = state.entities.unit_player_1_scout;
+    expect(scout?.kind).toBe("unit");
+    if (!scout || scout.kind !== "unit") {
+      throw new Error("Expected player 1 scout for minimax harvest test.");
+    }
+    scout.movesRemaining = 0;
+    scout.attacksRemaining = 0;
+    scout.hasSummoningSickness = true;
+
+    const harvester = state.entities.unit_player_1_harvester;
+    expect(harvester?.kind).toBe("unit");
+    if (!harvester || harvester.kind !== "unit") {
+      throw new Error("Expected player 1 harvester for minimax harvest test.");
+    }
+
+    harvester.coord = { ...biomassNode.coord };
+    harvester.movesRemaining = 2;
+    harvester.hasSummoningSickness = false;
+    harvester.carries = null;
+    state.selectedEntityId = harvester.id;
+
+    const command = decideMinimaxBotCommand(state, "player_1");
+    expect(command?.type).not.toBe("HARVEST_NODE");
+    if (command?.type === "MOVE_UNIT") {
+      expect(command.to).toEqual({ q: -3, r: 1 });
+    }
+  });
+
+  it("plays an affordable combat unit in main phase when the board needs one", () => {
+    const state = setupState();
+    state.activePlayerId = "player_2";
+    state.priorityPlayerId = "player_2";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_2.hand = [];
+
+    delete state.entities.unit_player_2_scout;
+    moveCardFromDeckToHand(state, "player_2", "echo_recall");
+    const combatUnitInstanceId = moveCardFromDeckToHand(state, "player_2", "flux_runner_card");
+
+    state.players.player_2.resources.credits = 3;
+    state.players.player_2.resources.flux = 1;
+    state.players.player_2.resources.alloy = 0;
+    state.players.player_2.resources.biomass = 0;
+
+    const command = decideMinimaxBotCommand(state, "player_2");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_2",
+      cardInstanceId: combatUnitInstanceId,
+    });
   });
 });

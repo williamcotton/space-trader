@@ -8,6 +8,8 @@ import { RELAY_KEYWORD, SPROUT_KEYWORD } from "../content/sets/alpha/mechanics/k
 import { getSalvageTriggersThisTurn, incrementSalvageTriggersThisTurn } from "../content/sets/alpha/mechanics/salvage";
 import { getTacticsCastThisTurn } from "../content/sets/alpha/mechanics/surge";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
+import { validateCommand } from "../rules/validators";
+import { canUnitDeclareAttack } from "../rules/directInteraction";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage, getEffectiveUnitSiegeDamageBonus } from "../systems/unitStats";
 
 function setupState() {
@@ -1820,6 +1822,73 @@ describe("dispatchCommand", () => {
     }
     expect(getEffectiveUnitAttackDamage(state, nextScout)).toBe(nextScout.attackDamage);
     expect(getEffectiveUnitArmor(state, nextScout)).toBe(nextScout.armor);
+  });
+
+  it("Feeding Frenzy lets friendly resource units attack only until end of turn", () => {
+    const state = createInitialGameState({
+      map: requireMapDefinition("frontier_belt"),
+      factions: {
+        player_1: "biomass_swarm",
+        player_2: "flux_collective",
+      },
+    });
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "tactical";
+    state.stack = [];
+    state.players.player_1.resources.credits = 1;
+    state.players.player_1.resources.biomass = 1;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "feeding_frenzy");
+    const harvester = state.entities.unit_player_1_harvester;
+    const enemyScout = state.entities.unit_player_2_scout;
+    if (!harvester || harvester.kind !== "unit" || !enemyScout || enemyScout.kind !== "unit") {
+      throw new Error("Expected harvester and scout for Feeding Frenzy.");
+    }
+
+    harvester.coord = { q: 0, r: 0 };
+    harvester.hasSummoningSickness = false;
+    harvester.attacksRemaining = 1;
+    enemyScout.coord = { q: 1, r: 0 };
+    state.selectedEntityId = harvester.id;
+
+    expect(validateCommand(state, {
+      type: "ATTACK_UNIT",
+      playerId: "player_1",
+      attackerId: harvester.id,
+      targetId: enemyScout.id,
+    }).ok).toBe(false);
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+    expect(canUnitDeclareAttack(state, harvester)).toBe(true);
+
+    const legalAttack = validateCommand(state, {
+      type: "ATTACK_UNIT",
+      playerId: "player_1",
+      attackerId: harvester.id,
+      targetId: enemyScout.id,
+    });
+    expect(legalAttack.ok).toBe(true);
+
+    advanceToPhase(state, "end");
+    const handoff = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(handoff.ok).toBe(true);
+
+    const nextHarvester = state.entities[harvester.id];
+    if (!nextHarvester || nextHarvester.kind !== "unit") {
+      throw new Error("Expected harvester after Feeding Frenzy expired.");
+    }
+    expect(canUnitDeclareAttack(state, nextHarvester)).toBe(false);
   });
 
   it("Bloom generates biomass the first time bloom units are buffed each turn", () => {

@@ -1,10 +1,32 @@
 import type { BotDecisionWorkerRequest, BotDecisionWorkerResponse } from "./botDecisionWorkerProtocol";
 import { decideMinimaxBotCommand } from "./minimaxBot";
+import { getLoadedContentSetIds, loadConfiguredContentSets } from "../content/loader";
 
 const workerScope = self as unknown as {
   onmessage: ((event: MessageEvent<BotDecisionWorkerRequest>) => void) | null;
   postMessage: (message: BotDecisionWorkerResponse) => void;
 };
+
+function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return a.every((value, index) => value === b[index]);
+}
+
+function ensureWorkerContentLoaded(builtInSetIds: readonly string[]): void {
+  const current = getLoadedContentSetIds().sort();
+  const requested = [...builtInSetIds].sort();
+  if (arraysEqual(current, requested)) {
+    return;
+  }
+
+  loadConfiguredContentSets({
+    builtInSetIds: requested,
+    reset: true,
+  });
+}
 
 workerScope.onmessage = (event: MessageEvent<BotDecisionWorkerRequest>) => {
   const request = event.data;
@@ -13,6 +35,7 @@ workerScope.onmessage = (event: MessageEvent<BotDecisionWorkerRequest>) => {
   }
 
   try {
+    ensureWorkerContentLoaded(request.builtInSetIds);
     const command = decideMinimaxBotCommand(request.state, request.playerId);
     const response: BotDecisionWorkerResponse = {
       type: "result",
