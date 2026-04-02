@@ -134,7 +134,7 @@ export function GameCanvas() {
     const onKeyDown = (event: KeyboardEvent): void => {
       const key = event.key.toLowerCase();
       if (key === "n") {
-        runtime.debugAdvancePhase();
+        runtime.endPhase();
         return;
       }
 
@@ -154,7 +154,7 @@ export function GameCanvas() {
       }
 
       if (key === "p") {
-        runtime.debugPassPriority();
+        runtime.passPriority();
         return;
       }
 

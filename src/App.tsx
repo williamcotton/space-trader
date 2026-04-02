@@ -4,10 +4,12 @@ import { CommandStackPanel } from "./ui/CommandStackPanel";
 import { GameHudPanels } from "./ui/GameHudPanels";
 import { GameTopBar } from "./ui/GameTopBar";
 import { HandTray } from "./ui/HandTray";
+import { MultiplayerControls } from "./ui/MultiplayerControls";
 
 function App() {
   return (
     <main className="app-shell">
+      <MultiplayerControls />
       <GameTopBar />
       <section className="game-workspace">
         <div className="game-main-column">

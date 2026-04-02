@@ -6,9 +6,11 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && vite build",
+    "build": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p server/tsconfig.json && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p server/tsconfig.json --noEmit",
+    "server:build": "tsc -p server/tsconfig.json",
+    "server:start": "tsc -p server/tsconfig.json && node server/dist/server/src/index.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },

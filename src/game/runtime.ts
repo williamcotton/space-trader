@@ -41,6 +41,8 @@ import type { CanvasAnimation, GameFrame, GameViewport, RenderSystem, UpdateSyst
 import { removeEffectsForEntity } from "./systems/continuousEffects";
 import { getLegalPlayCardTargetOptions, getPlayCardTargetPrompt, getRequiredPlayCardTargetMode } from "./rules/cardPlayOptions";
 import { getDebugStackResponse } from "./registries/debugStackResponses";
+import { createSeededRandom } from "./random/seeded";
+import type { MatchStartPayload } from "../network/protocol";
 
 const INITIAL_VIEWPORT: GameViewport = {
   width: 1024,
@@ -65,6 +67,14 @@ export type RuntimeContentOptions = Omit<ContentLoadSelection, "reset"> & {
   runtimeProfileId?: string;
   mapId?: string;
   factions?: { player_1: Faction; player_2: Faction };
+  matchId?: string;
+  seed?: number;
+};
+
+type RuntimeNetworkSession = {
+  matchId: string;
+  localPlayerId: PlayerId;
+  submitCommand: (command: GameCommand) => void;
 };
 
 function createRuntimeMatchId(matchPrefix: string): string {
@@ -146,12 +156,16 @@ function createRuntimeStateFromContent(
           ? requireRuntimeMap(fallbackMapId)
           : getDefaultRuntimeMap();
 
+  const randomSource = typeof selection?.seed === "number"
+    ? createSeededRandom(selection.seed)
+    : () => Math.random();
+
   return {
     state: createInitialGameState({
       map,
       runtimeProfileId: runtimeProfile?.id ?? undefined,
-      matchId: createRuntimeMatchId(runtimeProfile?.matchIdPrefix ?? map.id),
-      randomSource: () => Math.random(),
+      matchId: selection?.matchId ?? createRuntimeMatchId(runtimeProfile?.matchIdPrefix ?? map.id),
+      randomSource,
       factions: selection?.factions,
     }),
     runtimeProfileId: runtimeProfile?.id ?? findRegisteredRuntimeProfileForMap(map.id)?.id ?? null,
@@ -259,6 +273,7 @@ export class GameRuntime {
   private contentSelection: RuntimeContentOptions = {
     builtInSetIds: ["base"],
   };
+  private networkSession: RuntimeNetworkSession | null = null;
   readonly state: GameState;
 
   constructor(
@@ -282,6 +297,9 @@ export class GameRuntime {
   }
 
   resetWithFactions(factions: { player_1: Faction; player_2: Faction }): void {
+    if (this.networkSession) {
+      return;
+    }
     this.resetWithContent({
       builtInSetIds: this.contentSelection.builtInSetIds,
       extraSets: this.contentSelection.extraSets,
@@ -292,6 +310,9 @@ export class GameRuntime {
   }
 
   resetWithContent(options?: RuntimeContentOptions): void {
+    if (this.networkSession) {
+      return;
+    }
     const { state: newState, runtimeProfileId, loadedSetIds } = createRuntimeStateFromContent(
       {
         builtInSetIds: options?.builtInSetIds ?? this.contentSelection.builtInSetIds,
@@ -304,11 +325,25 @@ export class GameRuntime {
       this.state.map.id
     );
 
+    this.applyResetState(
+      newState,
+      runtimeProfileId,
+      {
+        builtInSetIds: options?.builtInSetIds ?? this.contentSelection.builtInSetIds ?? loadedSetIds,
+        extraSets: options?.extraSets ?? this.contentSelection.extraSets,
+      },
+      { showIntroAnimation: true }
+    );
+  }
+
+  private applyResetState(
+    newState: GameState,
+    runtimeProfileId: string | null,
+    contentSelection: RuntimeContentOptions,
+    options?: { showIntroAnimation?: boolean }
+  ): void {
     this.runtimeProfileId = runtimeProfileId;
-    this.contentSelection = {
-      builtInSetIds: options?.builtInSetIds ?? this.contentSelection.builtInSetIds ?? loadedSetIds,
-      extraSets: options?.extraSets ?? this.contentSelection.extraSets,
-    };
+    this.contentSelection = contentSelection;
     Object.assign(this.state, newState);
     this.clearAutomationTimer();
     this.resetBotDecisionWorker();
@@ -323,7 +358,9 @@ export class GameRuntime {
       player_1: this.state.players.player_1.faction,
       player_2: this.state.players.player_2.faction,
     });
-    this.pushAnimations([buildMatchIntroAnimation(this.state)]);
+    if (options?.showIntroAnimation !== false) {
+      this.pushAnimations([buildMatchIntroAnimation(this.state)]);
+    }
     this.notifyListeners();
     this.scheduleAutomationFromCurrentState();
   }
@@ -407,6 +444,9 @@ export class GameRuntime {
     if (!this.derivedState || typeof this.derivedState.sourceVersion !== "number") {
       this.derivedState = createEmptyDerivedState();
     }
+    if (typeof this.networkSession === "undefined") {
+      this.networkSession = null;
+    }
   }
 
   subscribe(listener: () => void): () => void {
@@ -474,13 +514,31 @@ export class GameRuntime {
   }
 
   dispatch(command: GameCommand): DispatchResult {
+    if (this.networkSession) {
+      try {
+        this.state.lastRejectedReason = null;
+        this.networkSession.submitCommand(command);
+        return {
+          ok: true,
+          events: [],
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to submit multiplayer command.";
+        this.recordNetworkRejection(message, command);
+        return {
+          ok: false,
+          reason: message,
+          events: [],
+        };
+      }
+    }
     return this.dispatchCommand(command);
   }
 
-  private dispatchCommand(command: GameCommand, options?: { scheduleAutomation?: boolean }): DispatchResult {
+  private dispatchCommand(command: GameCommand, options?: { scheduleAutomation?: boolean; animate?: boolean }): DispatchResult {
     const before = captureAnimationSnapshot(this.state);
     const result = dispatchCommand(this.state, command);
-    if (result.ok && result.events.length > 0) {
+    if (result.ok && result.events.length > 0 && options?.animate !== false) {
       this.pushAnimations(buildAnimationsFromEvents(result.events, before, this.state));
     }
     this.notifyListeners();
@@ -495,6 +553,9 @@ export class GameRuntime {
   }
 
   setBotAutoplayEnabled(playerId: PlayerId, enabled: boolean): void {
+    if (this.networkSession) {
+      return;
+    }
     this.botAutoplayEnabled[playerId] = enabled;
     this.state.log.push({
       turn: this.state.turn,
@@ -515,6 +576,9 @@ export class GameRuntime {
   }
 
   setPriorityStopSetting(playerId: PlayerId, stopKey: PriorityStopKey, enabled: boolean): void {
+    if (this.networkSession) {
+      return;
+    }
     this.priorityStopSettings[playerId] = {
       ...this.priorityStopSettings[playerId],
       [stopKey]: enabled,
@@ -534,6 +598,92 @@ export class GameRuntime {
 
   getPendingCardTargeting(): PendingCardTargeting | null {
     return this.pendingCardTargeting ? { ...this.pendingCardTargeting } : null;
+  }
+
+  isNetworkedMatch(): boolean {
+    return this.networkSession !== null;
+  }
+
+  getNetworkLocalPlayerId(): PlayerId | null {
+    return this.networkSession?.localPlayerId ?? null;
+  }
+
+  canLocalPlayerActAs(playerId: PlayerId): boolean {
+    return !this.networkSession || this.networkSession.localPlayerId === playerId;
+  }
+
+  startNetworkMatch(
+    payload: MatchStartPayload,
+    submitCommand: (command: GameCommand) => void,
+    options?: { showIntroAnimation?: boolean }
+  ): void {
+    this.networkSession = {
+      matchId: payload.matchId,
+      localPlayerId: payload.localPlayerId,
+      submitCommand,
+    };
+
+    const { state: newState, runtimeProfileId, loadedSetIds } = createRuntimeStateFromContent({
+      builtInSetIds: payload.builtInSetIds,
+      runtimeProfileId: payload.runtimeProfileId ?? undefined,
+      mapId: payload.mapId,
+      factions: payload.factions,
+      matchId: payload.matchId,
+      seed: payload.seed,
+    });
+
+    this.botAutoplayEnabled = {
+      player_1: false,
+      player_2: false,
+    };
+
+    this.applyResetState(
+      newState,
+      runtimeProfileId,
+      {
+        builtInSetIds: payload.builtInSetIds.length > 0 ? payload.builtInSetIds : loadedSetIds,
+      },
+      { showIntroAnimation: options?.showIntroAnimation }
+    );
+    this.state.log.push({
+      turn: this.state.turn,
+      text: `Network match started as ${payload.localPlayerId}.`,
+    });
+    this.notifyListeners();
+  }
+
+  leaveNetworkMatch(reason?: string): void {
+    if (!this.networkSession) {
+      return;
+    }
+    this.networkSession = null;
+    this.pendingCardTargeting = null;
+    this.clearAutomationTimer();
+    if (reason) {
+      this.state.log.push({
+        turn: this.state.turn,
+        text: reason,
+      });
+      this.notifyListeners();
+    }
+  }
+
+  applyAuthoritativeCommand(command: GameCommand, options?: { animate?: boolean }): DispatchResult {
+    return this.dispatchCommand(command, {
+      scheduleAutomation: false,
+      animate: options?.animate,
+    });
+  }
+
+  recordNetworkRejection(reason: string, rejectedCommand?: GameCommand): void {
+    this.state.lastRejectedReason = reason;
+    this.state.log.push({
+      turn: this.state.turn,
+      text: rejectedCommand
+        ? `Server rejected ${rejectedCommand.type}: ${reason}`
+        : `Network error: ${reason}`,
+    });
+    this.notifyListeners();
   }
 
   private clearPendingCardTargeting(logText?: string): void {
@@ -621,7 +771,32 @@ export class GameRuntime {
     void this.dispatch(command);
   }
 
+  endPhase(): DispatchResult | null {
+    const playerId = this.state.activePlayerId;
+    if (!this.canLocalPlayerActAs(playerId)) {
+      return null;
+    }
+    return this.dispatch({
+      type: "END_PHASE",
+      playerId,
+    });
+  }
+
+  passPriority(): DispatchResult | null {
+    const playerId = this.state.priorityPlayerId;
+    if (!playerId || !this.canLocalPlayerActAs(playerId)) {
+      return null;
+    }
+    return this.dispatch({
+      type: "PASS_PRIORITY",
+      playerId,
+    });
+  }
+
   debugAdvancePhase(): void {
+    if (this.networkSession) {
+      return;
+    }
     void this.dispatch({
       type: "END_PHASE",
       playerId: this.state.activePlayerId,
@@ -629,6 +804,9 @@ export class GameRuntime {
   }
 
   debugSelectFirstActiveUnit(): void {
+    if (this.networkSession) {
+      return;
+    }
     const activePlayerId = this.state.activePlayerId;
     const firstUnit = Object.values(this.state.entities).find(
       (entity) => entity.kind === "unit" && entity.ownerId === activePlayerId
@@ -646,6 +824,9 @@ export class GameRuntime {
   }
 
   debugMoveSelectedUnit(deltaQ: number, deltaR: number): void {
+    if (this.networkSession) {
+      return;
+    }
     const activePlayerId = this.state.activePlayerId;
     const selectedId = this.state.selectedEntityId;
     if (!selectedId) {
@@ -669,6 +850,9 @@ export class GameRuntime {
   }
 
   debugAttackFirstTargetInRange(): void {
+    if (this.networkSession) {
+      return;
+    }
     const activePlayerId = this.state.activePlayerId;
     const selectedId = this.state.selectedEntityId;
     if (!selectedId) {
@@ -706,6 +890,9 @@ export class GameRuntime {
   }
 
   debugHarvestSelectedUnit(): void {
+    if (this.networkSession) {
+      return;
+    }
     const activePlayerId = this.state.activePlayerId;
     const selectedId = this.state.selectedEntityId;
     if (!selectedId) {
@@ -802,6 +989,9 @@ export class GameRuntime {
   }
 
   debugPassPriority(): void {
+    if (this.networkSession) {
+      return;
+    }
     const priorityPlayerId = this.state.priorityPlayerId;
     if (!priorityPlayerId) {
       return;
@@ -814,6 +1004,9 @@ export class GameRuntime {
   }
 
   debugAddTestResources(playerId: PlayerId, amount = 100): void {
+    if (this.networkSession) {
+      return;
+    }
     const pool = this.state.players[playerId].resources;
     for (const resource of getRegisteredResourceIds()) {
       pool[resource] += amount;
@@ -828,6 +1021,9 @@ export class GameRuntime {
   }
 
   debugKillTestUnit(playerId: PlayerId): void {
+    if (this.networkSession) {
+      return;
+    }
     const selected = this.state.selectedEntityId ? this.state.entities[this.state.selectedEntityId] : null;
     const target =
       selected && selected.kind === "unit" && selected.ownerId === playerId
@@ -862,6 +1058,9 @@ export class GameRuntime {
   }
 
   debugWinTestGame(playerId: PlayerId): void {
+    if (this.networkSession) {
+      return;
+    }
     const before = captureAnimationSnapshot(this.state);
     const replayVictoryOnly = this.state.winner === playerId;
 
@@ -881,6 +1080,9 @@ export class GameRuntime {
   }
 
   debugRespondStack(): void {
+    if (this.networkSession) {
+      return;
+    }
     const priorityPlayerId = this.state.priorityPlayerId;
     if (!priorityPlayerId) {
       return;
@@ -901,6 +1103,9 @@ export class GameRuntime {
   }
 
   debugRespondDamageEnemyBase(): void {
+    if (this.networkSession) {
+      return;
+    }
     const priorityPlayerId = this.state.priorityPlayerId;
     if (!priorityPlayerId) {
       return;
@@ -921,6 +1126,9 @@ export class GameRuntime {
   }
 
   debugRespondCounterTopItem(targetStackItemId?: string): void {
+    if (this.networkSession) {
+      return;
+    }
     const priorityPlayerId = this.state.priorityPlayerId;
     if (!priorityPlayerId) {
       return;
@@ -1117,6 +1325,10 @@ export class GameRuntime {
     this.cancelStaleBotDecisionRequest();
 
     if (this.state.winner) {
+      return;
+    }
+
+    if (this.networkSession) {
       return;
     }
 

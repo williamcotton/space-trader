@@ -29,6 +29,8 @@ type CommandStackSnapshot = {
   consecutivePasses: number;
   winner: PlayerId | null;
   lastRejectedReason: string | null;
+  networked: boolean;
+  networkLocalPlayerId: PlayerId | null;
   stackItems: StackPreviewItem[];
   historyEntries: HistoryEntry[];
 };
@@ -53,6 +55,8 @@ function readPanelSnapshot(): CommandStackSnapshot {
     consecutivePasses: state.consecutivePriorityPasses,
     winner: state.winner,
     lastRejectedReason: state.lastRejectedReason,
+    networked: runtime.isNetworkedMatch(),
+    networkLocalPlayerId: runtime.getNetworkLocalPlayerId(),
     stackItems,
     historyEntries,
   };
@@ -79,7 +83,12 @@ export function CommandStackPanel() {
     Boolean(snapshot.winner) ||
     snapshot.stackItems.length > 0 ||
     !snapshot.priorityPlayerId ||
-    snapshot.priorityPlayerId !== snapshot.activePlayerId;
+    snapshot.priorityPlayerId !== snapshot.activePlayerId ||
+    Boolean(snapshot.networkLocalPlayerId && snapshot.networkLocalPlayerId !== snapshot.activePlayerId);
+  const passPriorityLocked =
+    Boolean(snapshot.winner) ||
+    !snapshot.priorityPlayerId ||
+    Boolean(snapshot.networkLocalPlayerId && snapshot.networkLocalPlayerId !== snapshot.priorityPlayerId);
 
   return (
     <aside className="command-stack-panel">
@@ -191,13 +200,13 @@ export function CommandStackPanel() {
           ))}
         </ol>
         <div className="command-stack-controls-actions">
-          <button type="button" disabled={activePlayerControlsLocked} onClick={() => runtime.debugAdvancePhase()}>
+          <button type="button" disabled={activePlayerControlsLocked} onClick={() => runtime.endPhase()}>
             End Phase
           </button>
           <button
             type="button"
-            disabled={Boolean(snapshot.winner) || !snapshot.priorityPlayerId}
-            onClick={() => runtime.debugPassPriority()}
+            disabled={passPriorityLocked}
+            onClick={() => runtime.passPriority()}
           >
             Pass Priority
           </button>

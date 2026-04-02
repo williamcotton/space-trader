@@ -24,6 +24,8 @@ type TopBarSnapshot = {
   turn: number;
   activePlayerId: PlayerId;
   priorityPlayerId: PlayerId | null;
+  networked: boolean;
+  networkLocalPlayerId: PlayerId | null;
   players: PlayerTopBarSnapshot[];
 };
 
@@ -36,6 +38,8 @@ function readSnapshot(): TopBarSnapshot {
     turn: state.turn,
     activePlayerId: state.activePlayerId,
     priorityPlayerId: state.priorityPlayerId,
+    networked: runtime.isNetworkedMatch(),
+    networkLocalPlayerId: runtime.getNetworkLocalPlayerId(),
     players: (["player_1", "player_2"] as const).map((playerId) => ({
       id: playerId,
       faction: state.players[playerId].faction,
@@ -60,6 +64,9 @@ export function GameTopBar() {
         <div className="game-top-bar-match">
           <span className="eyebrow">{snapshot.mapName}</span>
           <strong>Turn {snapshot.turn}</strong>
+          {snapshot.networked && snapshot.networkLocalPlayerId ? (
+            <span className="game-top-bar-priority-chip">Online · {getPlayerLabel(snapshot.networkLocalPlayerId)}</span>
+          ) : null}
         </div>
 
         <div className="game-top-bar-players-inline">
@@ -80,6 +87,7 @@ export function GameTopBar() {
                 <select
                   className="top-bar-faction-select"
                   value={player.faction}
+                  disabled={snapshot.networked}
                   onChange={(e) => {
                     const faction = e.target.value as Faction;
                     const other = player.id === "player_1" ? "player_2" : "player_1";
@@ -104,57 +112,63 @@ export function GameTopBar() {
                 ))}
               </div>
               <div className="top-bar-player-meta">
-                <button
-                  type="button"
-                  className={["top-bar-bot-toggle", player.botAutoplay ? "enabled" : "disabled"].join(" ")}
-                  onClick={() => runtime.toggleBotAutoplay(player.id)}
-                >
-                  {player.botAutoplay ? "Bot On" : "Bot Off"}
-                </button>
-                <button
-                  type="button"
-                  className="top-bar-debug-resource"
-                  onClick={() => runtime.debugAddTestResources(player.id)}
-                  title="Add 100 of each resource"
-                  aria-label={`Add 100 of each resource to ${getPlayerLabel(player.id)}`}
-                >
-                  +100
-                </button>
-                <button
-                  type="button"
-                  className="top-bar-debug-kill"
-                  onClick={() => runtime.debugKillTestUnit(player.id)}
-                  title="Destroy the selected or first unit for this player"
-                  aria-label={`Destroy a ${getPlayerLabel(player.id)} unit for testing`}
-                >
-                  Kill
-                </button>
-                <button
-                  type="button"
-                  className="top-bar-debug-win"
-                  onClick={() => runtime.debugWinTestGame(player.id)}
-                  title="Declare this player the winner for testing"
-                  aria-label={`Declare ${getPlayerLabel(player.id)} the winner for testing`}
-                >
-                  Win
-                </button>
+                {!snapshot.networked ? (
+                  <>
+                    <button
+                      type="button"
+                      className={["top-bar-bot-toggle", player.botAutoplay ? "enabled" : "disabled"].join(" ")}
+                      onClick={() => runtime.toggleBotAutoplay(player.id)}
+                    >
+                      {player.botAutoplay ? "Bot On" : "Bot Off"}
+                    </button>
+                    <button
+                      type="button"
+                      className="top-bar-debug-resource"
+                      onClick={() => runtime.debugAddTestResources(player.id)}
+                      title="Add 100 of each resource"
+                      aria-label={`Add 100 of each resource to ${getPlayerLabel(player.id)}`}
+                    >
+                      +100
+                    </button>
+                    <button
+                      type="button"
+                      className="top-bar-debug-kill"
+                      onClick={() => runtime.debugKillTestUnit(player.id)}
+                      title="Destroy the selected or first unit for this player"
+                      aria-label={`Destroy a ${getPlayerLabel(player.id)} unit for testing`}
+                    >
+                      Kill
+                    </button>
+                    <button
+                      type="button"
+                      className="top-bar-debug-win"
+                      onClick={() => runtime.debugWinTestGame(player.id)}
+                      title="Declare this player the winner for testing"
+                      aria-label={`Declare ${getPlayerLabel(player.id)} the winner for testing`}
+                    >
+                      Win
+                    </button>
+                  </>
+                ) : null}
                 <span className="top-bar-player-zones">
                   H{player.hand} D{player.deck}
                 </span>
               </div>
-              <div className="top-bar-priority-stops">
-                <span className="top-bar-priority-stops-label">Yield</span>
-                {PRIORITY_STOP_ORDER.map((stopKey) => (
-                  <button
-                    key={stopKey}
-                    type="button"
-                    className={["top-bar-priority-stop", player.priorityStops[stopKey] ? "enabled" : "disabled"].join(" ")}
-                    onClick={() => runtime.togglePriorityStopSetting(player.id, stopKey)}
-                  >
-                    {PRIORITY_STOP_LABELS[stopKey]}
-                  </button>
-                ))}
-              </div>
+              {!snapshot.networked ? (
+                <div className="top-bar-priority-stops">
+                  <span className="top-bar-priority-stops-label">Yield</span>
+                  {PRIORITY_STOP_ORDER.map((stopKey) => (
+                    <button
+                      key={stopKey}
+                      type="button"
+                      className={["top-bar-priority-stop", player.priorityStops[stopKey] ? "enabled" : "disabled"].join(" ")}
+                      onClick={() => runtime.togglePriorityStopSetting(player.id, stopKey)}
+                    >
+                      {PRIORITY_STOP_LABELS[stopKey]}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </article>
           ))}
         </div>

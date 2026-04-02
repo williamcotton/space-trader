@@ -5,9 +5,27 @@ import { createInitialGameState } from "./model/state";
 import { createConfiguredRuntime, GameRuntime, getBoardClickCommand } from "./runtime";
 import { getHexMetrics } from "./render/layout";
 import { TEST_EXPANSION_SET } from "../test/testExpansion";
+import { MULTIPLAYER_PROTOCOL_VERSION, type MatchStartPayload } from "../network/protocol";
 
 function setupState() {
   return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
+}
+
+function createMatchStartPayload(overrides?: Partial<MatchStartPayload>): MatchStartPayload {
+  return {
+    matchId: "net_test_match",
+    seed: 12345,
+    localPlayerId: "player_1",
+    factions: {
+      player_1: "alloy_clan",
+      player_2: "flux_collective",
+    },
+    mapId: "frontier_belt",
+    runtimeProfileId: "alpha_default",
+    builtInSetIds: ["alpha"],
+    protocolVersion: MULTIPLAYER_PROTOCOL_VERSION,
+    ...overrides,
+  };
 }
 
 afterEach(() => {
@@ -149,6 +167,68 @@ describe("GameRuntime", () => {
     expect(runtime.state.matchId.startsWith("match_test_expansion_")).toBe(true);
   });
 
+  it("creates deterministic deck order when a seed is supplied", () => {
+    const first = createConfiguredRuntime({
+      seed: 123,
+      matchId: "seeded_a",
+    });
+    const second = createConfiguredRuntime({
+      seed: 123,
+      matchId: "seeded_b",
+    });
+
+    expect(first.state.zones.player_1.deck.map((card) => card.cardId)).toEqual(
+      second.state.zones.player_1.deck.map((card) => card.cardId)
+    );
+    expect(first.state.zones.player_2.deck.map((card) => card.cardId)).toEqual(
+      second.state.zones.player_2.deck.map((card) => card.cardId)
+    );
+  });
+
+  it("submits commands instead of applying them locally during a network match", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    const submitted: string[] = [];
+    runtime.startNetworkMatch(createMatchStartPayload(), (command) => {
+      submitted.push(command.type);
+    }, { showIntroAnimation: false });
+
+    const phaseBefore = runtime.state.phase;
+    const result = runtime.dispatch({
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(submitted).toEqual(["END_PHASE"]);
+    expect(runtime.state.phase).toBe(phaseBefore);
+  });
+
+  it("routes end phase through the network-aware action helper", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    const submitted: string[] = [];
+    runtime.startNetworkMatch(createMatchStartPayload(), (command) => {
+      submitted.push(command.type);
+    }, { showIntroAnimation: false });
+
+    runtime.endPhase();
+
+    expect(submitted).toEqual(["END_PHASE"]);
+  });
+
+  it("does not allow ending the phase for the remote player in a network match", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    const submitted: string[] = [];
+    runtime.startNetworkMatch(createMatchStartPayload({
+      localPlayerId: "player_2",
+    }), (command) => {
+      submitted.push(command.type);
+    }, { showIntroAnimation: false });
+
+    runtime.endPhase();
+
+    expect(submitted).toEqual([]);
+  });
+
   it("runs autoflow from scheduled automation without stepping the render loop", async () => {
     vi.useFakeTimers();
     const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
@@ -181,5 +261,15 @@ describe("GameRuntime", () => {
 
     expect(runtime.state.phase).toBe("economy");
     expect(runtime.state.activePlayerId).toBe("player_2");
+  });
+
+  it("does not run local automation after entering a network match", async () => {
+    vi.useFakeTimers();
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    runtime.startNetworkMatch(createMatchStartPayload(), () => undefined, { showIntroAnimation: false });
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(runtime.state.phase).toBe("start");
   });
 });
