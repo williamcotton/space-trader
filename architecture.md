@@ -1,6 +1,6 @@
 # Space Trader Architecture
 
-Last updated: March 30, 2026
+Last updated: April 2, 2026
 
 ## Purpose
 
@@ -17,11 +17,13 @@ It is implementation-first:
 ## Live Scope
 
 - Electron + React + TypeScript desktop game
+- in-repo Node.js multiplayer server under `server/`
 - two built-in content manifests: Foundation and Alpha
 - one live shipped playable set: Alpha
 - one live runtime profile: Alpha Default
 - one live map in that profile: Frontier Belt
 - 1v1 turn-based hex tactics
+- local skirmish plus prototype networked 1v1
 - 3 premade faction starter decks, 60 cards each, max 4 copies
 - full stack / priority interaction for spells and abilities
 - harvesting / node-control economy loop
@@ -83,9 +85,16 @@ Current live rules snapshot:
   - panels, hand, top bar, stack, debug controls
   - subscribes to runtime snapshots
   - dispatches typed commands only
+- Network client layer: `src/network/*`
+  - session token management
+  - matchmaking / queue transport
+  - server event stream subscription
+  - authoritative command submission and resync
 - Runtime layer: `src/game/runtime.ts`
   - owns the canonical `GameState`
-  - owns bot toggles, pending targeting, priority-stop settings, and animation queue
+  - owns pending targeting, priority-stop settings, and animation queue
+  - owns offline/local-vs-network command routing
+  - owns worker-backed bot decision flow
   - carries the active runtime-profile context
   - bridges simulation and render systems
 - Simulation layer
@@ -99,6 +108,12 @@ Current live rules snapshot:
   - registry population
   - runtime installers
   - set-owned mechanics
+- Server layer: `server/src/*`
+  - session lifecycle
+  - matchmaking
+  - authoritative match rooms
+  - deterministic command validation / ordering
+  - reconnect and command-history replay
 - Presentation layer
   - canvas rendering
   - frame animation stepping
@@ -113,6 +128,8 @@ src/game/
   types.ts
   derived.ts
   presentation.ts
+  random/
+    seeded.ts
 
   model/
     state.ts
@@ -240,7 +257,20 @@ src/game/
     triggerEngine.ts
 
   ai/
+    botDecisionWorkerProtocol.ts
+    minimaxBot.ts
+    minimaxBot.worker.ts
+    minimax/
+      evaluate.ts
+      generate.ts
+      search.ts
+      simulate.ts
+      types.ts
     mvpBot.ts
+    mvpBot/
+      cardChoices.ts
+      shared.ts
+      tactical.ts
 
   render/
     layout.ts
@@ -250,6 +280,21 @@ src/game/
     overlays.ts
     animations.ts
     animationDrawing.ts
+
+src/network/
+  client.ts
+  protocol.ts
+  useMultiplayerSnapshot.ts
+
+server/src/
+  index.ts
+  protocol.ts
+  sessionStore.ts
+  roomStore.ts
+  matchmaker.ts
+  matchRoom.ts
+  createMatchState.ts
+  seed.ts
 ```
 
 ## Canonical State Model
@@ -281,6 +326,8 @@ Important live fields:
   - `stack`
   - `continuousEffects`
   - `effectTimestampCounter`
+- deterministic id bookkeeping
+  - `nextGeneratedIdCounter`
 - logs / win state
   - `log`
   - `winner`
@@ -293,10 +340,16 @@ Important live fields:
   - `tacticalHarvestedUnitIds`
 
 Current state version:
-- `24`
+- `25`
 
 Mechanic-specific counters no longer belong on the root `GameState` surface.
 They now belong in namespaced mechanic state owned by the mechanics themselves.
+
+Determinism note:
+- network-relevant generated ids must come from stable sources
+- summoned units should derive ids from stable card-instance ids when available
+- stack items and other generated objects should use `nextGeneratedIdCounter`
+- do not derive authoritative ids from mutable surfaces like `log.length`
 
 ## Content Loading And Registry Lifecycle
 
@@ -351,6 +404,14 @@ The live rule pipeline is:
 
 This is still the core deterministic loop.
 
+In networked matches, the server is authoritative for this pipeline:
+- clients submit typed commands
+- the server validates and applies them against its match state
+- the server broadcasts the ordered command stream and resync events
+- clients replay the same command stream locally for presentation and input legality
+
+This preserves the same core rules path while moving authority out of the renderer.
+
 ## Turn And Priority Model
 
 Turn structure is explicit and state-machine driven:
@@ -377,6 +438,32 @@ Priority model:
   - `counterable`
   - `defaultCounterDestination`
   - active modifier ids
+
+## Multiplayer Architecture
+
+The live multiplayer prototype uses server-authoritative command replay rather than full-state sync.
+
+Authoritative responsibilities:
+- session identity and reconnect tokens
+- queue / matchmaking
+- match seed and faction assignment
+- canonical match state
+- command validation and ordering
+- auto-flow in live rooms
+- command history for reconnect / fast-forward
+
+Client responsibilities:
+- local input intent
+- rendering and animations
+- optimistic affordance checks
+- replaying server-approved commands into the local runtime
+- surfacing rejection reasons and resyncing when rejected
+
+Important implications:
+- deterministic startup matters; seeded match creation must match on both sides
+- built-in content availability must match between client and server
+- hidden-information integrity is still limited by the current shared deterministic model
+- networked bugs are often determinism bugs, not transport bugs
 
 ## Data-Driven Card And Stack Architecture
 
@@ -464,6 +551,8 @@ Current live Alpha keywords:
 - `bloom`
 - `salvage`
 - `bastion`
+- `predation`
+- `emplaced`
 - `uncounterable`
 
 The kernel-owned generic pieces are now:
@@ -500,6 +589,7 @@ Current combat properties:
 - effective attack and armor are layered through `unitStats.ts`
 - siege is an effective stat
 - supply penalty applies by distance from friendly base
+- when attacking bases, siege bypasses supply
 - minimum successful combat damage is `1`
 - spell damage is still separate from combat damage
 
@@ -567,6 +657,7 @@ Important coverage areas:
 - replacement engine
 - continuous effects
 - bot behavior
+- multiplayer session / matchmaker flow
 - starter deck validation
 - content loader lifecycle
 - render animation generation
@@ -580,6 +671,7 @@ Important coverage areas:
 - Alpha behaves like the first real set rather than a kernel special-case
 - resource semantics and runtime defaults are now content-owned instead of kernel-owned
 - AI / animation / preview / debug behavior can be installed by sets instead of hardcoded in core
+- multiplayer now reuses the same deterministic rules core instead of forking gameplay rules
 - HMR workflow is still strong despite schema churn
 
 ## Current Architecture Pressure Points
@@ -637,6 +729,8 @@ It is not yet the final form for:
 
 - keep moving toward set-owned installers and runtime behavior
 - avoid reintroducing card-id or faction-id branches in kernel code
+- keep multiplayer authority and reconnection logic on the server side
+- keep generated-id sources deterministic and explicit
 - treat graveyard/reanimation as its own feature wave
 - treat tokens as their own feature wave
 - treat multi-target choice as its own feature wave

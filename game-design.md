@@ -1,6 +1,6 @@
 # Space Trader - Game Design (Living Draft)
 
-Last updated: March 29, 2026
+Last updated: April 2, 2026
 
 ## Purpose
 This is the working game design document for Space Trader.
@@ -23,6 +23,7 @@ These are the rules the prototype should generally be designed around unless exp
 ### Match Structure
 - 1v1 on a single map: `Frontier Belt`
 - Premade decks only
+- Local skirmish plus prototype networked multiplayer
 - Current playable factions:
   - `Alloy Clan`
   - `Flux Collective`
@@ -115,6 +116,8 @@ Current unit stat vocabulary is:
   - `bloom`
   - `salvage`
   - `bastion`
+  - `predation`
+  - `emplaced`
   - `uncounterable`
 
 ## Core Pillars
@@ -247,6 +250,7 @@ Future maps can vary visual identity heavily while keeping the same economy rule
 - Combat units attack bases directly
 - Base destruction is the primary win condition
 - Siege should live on units as a unit characteristic, not a global combat rule
+- Live rule: siege damage bypasses supply when attacking bases, so forward siege pressure actually closes games
 
 ### Unit-vs-Unit Combat
 Current prototype stats support:
@@ -256,10 +260,11 @@ Current prototype stats support:
 - move range
 - attacks per turn
 
-The game still needs a tighter long-term answer on terrain and supply modifiers.
+The game still needs a tighter long-term answer on terrain.
 Current design intent remains:
 - map position should matter
 - not all combat should be decided by printed stats alone
+- supply can shape forward pressure, but it should not erase dedicated siege tools
 
 ## Card System Direction
 ### Card Types
@@ -291,6 +296,9 @@ What is already live:
 - a real `Surge` shell
 - a real `Bloom` shell
 - Alloy `Salvage` and `Bastion` packages
+- Biomass temporary resource-unit aggression through `Feeding Frenzy`
+- Flux control theft through `Signal Hijack`
+- Alloy resource-unit siege conversion through `Bulwark Refit`
 - faction-specific payoff units and payoff tactics
 
 What still needs work:
@@ -460,11 +468,12 @@ What Biomass should gain next:
 The live prototype should now be understood as:
 - one map: `Frontier Belt`
 - 1v1 skirmish
+- prototype networked 1v1 using the same ruleset
 - premade decks only
 - stack + priority working for both tactics and unit spells
 - resource harvesting loop working
 - tactical movement/combat working
-- simple bot opponent working
+- minimax-based bot opponent working
 - enough card variety to make matches tactically interesting
 - enough faction identity to support real monofaction play patterns
 
@@ -540,6 +549,10 @@ Readable feedback is part of the fun. If a combo happens, the player should feel
 - 2026-03-29: Surge is now part of the live Flux combo package.
 - 2026-03-29: Bloom is now a live Biomass engine keyword with payoff units and a payoff tactic.
 - 2026-03-29: Alloy now has live `Salvage` and `Bastion` identity hooks.
+- 2026-04-02: Prototype networked multiplayer is now part of the live product direction, using the same deterministic ruleset as local play.
+- 2026-04-02: Biomass `Predation` and Alloy `Emplaced` now let faction-specific resource-unit attack mechanics exist without leaking set behavior into the kernel.
+- 2026-04-02: `Feeding Frenzy`, `Signal Hijack`, and `Bulwark Refit` established clearer faction-signature tactic space for Biomass, Flux, and Alloy.
+- 2026-04-02: Siege damage now bypasses supply when attacking bases so siege pressure remains a real finisher.
 
 ## Backlog Seeds
 - Add a top-end Flux `Relay` / `Resonance` payoff

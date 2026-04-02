@@ -27,8 +27,9 @@
   - persistent runtime singleton
   - authoritative mutable game state
   - animation queue
-  - bot toggles
   - pending targeting flow
+  - local vs network command routing
+  - worker-backed bot decisions
   - debug helpers
   - active content-selection + runtime-profile context
 - `src/game/systems.ts`
@@ -49,6 +50,7 @@
   - zones
   - initial-state creation
   - resource and runtime-profile aware defaults
+  - deterministic generated-id counter
 - `src/game/model/enums.ts`
   - phases, factions, resources, unit roles
   - note: factions/resources are dynamic string ids populated by loaded content
@@ -62,6 +64,8 @@
   - UI selectors
 - `src/game/model/migrations.ts`
   - state migration / hot-state repair
+- `src/game/random/seeded.ts`
+  - seeded RNG helpers for deterministic match setup
 
 ### Content System
 
@@ -119,6 +123,8 @@
   - `bloom`
   - `salvage`
   - `bastion`
+  - `predation`
+  - `emplaced`
   - `uncounterable`
 
 ### Registries
@@ -190,7 +196,46 @@
 
 ### AI
 
+- `src/game/ai/minimaxBot.ts`
+  - current default bot entry point
+- `src/game/ai/minimax/**`
+  - search, evaluation, generation, and simulation helpers
+- `src/game/ai/minimaxBot.worker.ts`
+  - background worker wrapper for live renderer bot decisions
+- `src/game/ai/botDecisionWorkerProtocol.ts`
+  - worker message contract
 - `src/game/ai/mvpBot.ts`
+  - legacy heuristic bot entry point
+- `src/game/ai/mvpBot/**`
+  - shared heuristic helpers and tactical/card-choice modules
+
+### Networking
+
+- `src/network/client.ts`
+  - multiplayer session state
+  - queue / command transport
+  - SSE subscription and resync
+- `src/network/protocol.ts`
+  - shared client-side transport shapes
+- `src/network/useMultiplayerSnapshot.ts`
+  - React subscription hook
+
+### Server
+
+- `server/src/index.ts`
+  - Node server entry point
+- `server/src/matchmaker.ts`
+  - queue pairing and match creation
+- `server/src/matchRoom.ts`
+  - authoritative room state and command handling
+- `server/src/createMatchState.ts`
+  - seeded initial match creation
+- `server/src/sessionStore.ts`
+  - reconnectable player sessions
+- `server/src/roomStore.ts`
+  - live room lookup
+- `server/src/protocol.ts`
+  - server transport types
 
 ### Render
 
@@ -227,6 +272,8 @@
 - `npm run typecheck`
 - `npm test`
 - `npm run test:watch`
+- `npm run server:build`
+- `npm run server:start`
 
 ## Current Architecture Decisions
 
@@ -262,6 +309,7 @@
   - `createConfiguredRuntime(...)`
   - `GameRuntime.resetWithContent(...)`
 - Runtime defaults come from registered runtime profiles, not kernel constants.
+- Networked multiplayer is server-authoritative command replay, not client-authoritative state sync.
 - Resource modules now own:
   - `kind` such as currency vs primary
   - display order
@@ -273,13 +321,18 @@
   - generic play-effect registries
   - set-owned installers for AI/animation/preview/debug behaviors
 - `StackResolutionRules` is not the mental model anymore.
-- Current state version is `24`.
+- Generated ids that affect sync must come from stable sources:
+  - stable card-instance ids where possible
+  - otherwise `state.nextGeneratedIdCounter`
+- Never derive authoritative ids from mutable state like `log.length`.
+- Current state version is `25`.
 
 ## Current Faction Mechanics Snapshot
 
 - Alloy:
   - `bastion`
   - `salvage`
+  - `emplaced`
   - formation / siege / damaged-matters shell
 - Flux:
   - `relay`
@@ -288,6 +341,7 @@
 - Biomass:
   - `sprout`
   - `bloom`
+  - `predation`
   - swarm / growth / board-to-resource shell
 
 ## `getGameRuntime` Contract
@@ -303,6 +357,7 @@
 - Simulation/render logic can be hot-swapped without wiping the match.
 - State schema changes should always be accompanied by migration updates.
 - Registry-backed content can be reset and reloaded deterministically.
+- Server/client multiplayer bugs are often determinism bugs; check ids, seeds, and content parity before assuming transport failure.
 
 ## Current Extension Points
 
