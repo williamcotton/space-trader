@@ -1891,6 +1891,52 @@ describe("dispatchCommand", () => {
     expect(canUnitDeclareAttack(state, nextHarvester)).toBe(false);
   });
 
+  it("Signal Hijack permanently steals an enemy unit", () => {
+    const state = createInitialGameState({
+      map: requireMapDefinition("frontier_belt"),
+      factions: {
+        player_1: "flux_collective",
+        player_2: "biomass_swarm",
+      },
+    });
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.flux = 2;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "signal_hijack");
+    const target = state.entities.unit_player_2_harvester;
+    if (!target || target.kind !== "unit") {
+      throw new Error("Expected enemy unit for Signal Hijack.");
+    }
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetEntityId: target.id,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    const stolen = state.entities[target.id];
+    expect(stolen?.kind).toBe("unit");
+    if (!stolen || stolen.kind !== "unit") {
+      throw new Error("Expected stolen unit after Signal Hijack.");
+    }
+    expect(stolen.ownerId).toBe("player_1");
+
+    const select = dispatchCommand(state, {
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: stolen.id,
+    });
+    expect(select.ok).toBe(true);
+  });
+
   it("Bloom generates biomass the first time bloom units are buffed each turn", () => {
     const state = createInitialGameState({
       map: requireMapDefinition("frontier_belt"),

@@ -53,4 +53,12 @@ describe("card catalog balance guardrails", () => {
     expect(cards.feeding_frenzy.play.stackEffectId).toBe("global_unit_buff");
     expect(cards.feeding_frenzy.text).toContain("resource units gain Predation");
   });
+
+  it("defines Signal Hijack as the Flux control spell", () => {
+    const cards = getCardCatalog();
+    expect(cards.signal_hijack.cost).toEqual({ credits: 4, flux: 2 });
+    expect(cards.signal_hijack.faction).toBe("flux_collective");
+    expect(cards.signal_hijack.play.stackEffectId).toBe("gain_control_of_unit");
+    expect(cards.signal_hijack.text).toContain("Gain control of target enemy unit");
+  });
 });

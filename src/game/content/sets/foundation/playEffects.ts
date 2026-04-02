@@ -25,6 +25,8 @@ export type DestroyDamagedUnitsOptions = {
   relation: EffectRelation;
 };
 
+export type GainControlUnitOptions = Record<string, never>;
+
 export type DrawAndGainResourcesOptions = {
   drawCount?: number;
   resources?: CardCost;
@@ -62,6 +64,10 @@ export type GlobalUnitBuffPlayEffectConfig = CardPlayEffectConfig & {
 export type DestroyDamagedUnitsPlayEffectConfig = CardPlayEffectConfig & {
   type: "destroy_damaged_units";
   relation: EffectRelation;
+};
+
+export type GainControlUnitPlayEffectConfig = CardPlayEffectConfig & {
+  type: "gain_control_of_unit";
 };
 
 export type DrawAndGainResourcesPlayEffectConfig = CardPlayEffectConfig & {
@@ -260,6 +266,26 @@ export function createDestroyDamagedUnitsInstructions(options: DestroyDamagedUni
         text: `Resolved ${context.item.label}: destroyed ${targets.length} damaged unit${targets.length === 1 ? "" : "s"}.`,
       },
     ];
+  };
+}
+
+export function createGainControlUnitInstructions(_options: GainControlUnitOptions = {}) {
+  return (context: InstructionContext): GameInstruction[] => {
+    if (!context.targetEntityId) {
+      return [{ type: "LOG", text: `Resolved ${context.item.label}: no battlefield target configured.` }];
+    }
+
+    const target = context.state.entities[context.targetEntityId];
+    if (!target || target.kind !== "unit") {
+      return [{ type: "LOG", text: `Resolved ${context.item.label}: target unit not found.` }];
+    }
+
+    return [{
+      type: "CHANGE_ENTITY_OWNER",
+      targetEntityId: target.id,
+      newOwnerId: context.controllerId,
+      sourceLabel: context.item.label,
+    }];
   };
 }
 

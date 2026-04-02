@@ -18,6 +18,8 @@ import type {
   DestroyDamagedUnitsPlayEffectConfig,
   DrawAndGainResourcesOptions,
   DrawAndGainResourcesPlayEffectConfig,
+  GainControlUnitOptions,
+  GainControlUnitPlayEffectConfig,
   GlobalUnitBuffOptions,
   GlobalUnitBuffPlayEffectConfig,
   HexAreaDamageOptions,
@@ -107,6 +109,12 @@ function createDestroyDamagedUnitsEffectConfig(options: DestroyDamagedUnitsOptio
   return {
     type: "destroy_damaged_units",
     relation: options.relation,
+  };
+}
+
+function createGainControlUnitEffectConfig(_options: GainControlUnitOptions = {}): GainControlUnitPlayEffectConfig {
+  return {
+    type: "gain_control_of_unit",
   };
 }
 
@@ -221,6 +229,19 @@ function drawAndGainResourcesTacticPlay(
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createDrawAndGainResourcesEffectConfig(options),
     modifierEffectConfigs: createModifierEffectConfigs("surge", options.surgeBonus ? createDrawAndGainResourcesEffectConfig(options.surgeBonus) : undefined),
+  });
+}
+
+function gainControlUnitTacticPlay(
+  options: GainControlUnitOptions & {
+    sourceDestinationOnResolve?: CardSourceDestination;
+  } = {}
+): CardPlayProfile {
+  return tacticPlay("gain_control_of_unit", {
+    targetMode: "entity",
+    isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId !== pid,
+    sourceDestinationOnResolve: options.sourceDestinationOnResolve,
+    effectConfig: createGainControlUnitEffectConfig(options),
   });
 }
 
@@ -892,6 +913,16 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
         resources: { flux: 2 },
       },
     }),
+  },
+  signal_hijack: {
+    id: "signal_hijack",
+    name: "Signal Hijack",
+    faction: "flux_collective",
+    kind: "tactic",
+    speed: "main",
+    cost: { credits: 4, flux: 2 },
+    text: "Gain control of target enemy unit.",
+    play: gainControlUnitTacticPlay(),
   },
   overgrowth_wave: {
     id: "overgrowth_wave",

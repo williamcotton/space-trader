@@ -31,6 +31,14 @@ const AI_WEIGHTS = {
   damageAppliedMult: 10,
   destroyBase: 110,
   destroyHpDeltaMult: 4,
+  gainControlBase: 96,
+  gainControlCombatBonus: 34,
+  gainControlResourceBonus: 16,
+  gainControlUtilityBonus: 22,
+  gainControlAttackReadyBonus: 42,
+  gainControlAttackDamageMult: 18,
+  gainControlKillBonus: 72,
+  gainControlBasePressureBonus: 24,
   braceBase: 26,
   bracePreventedDmgMult: 15,
   bracePreventKillBonus: 80,
@@ -153,6 +161,50 @@ export function scoreDestroySpellTarget(state: GameState, botPlayerId: PlayerId,
     scoreEnemyEntityThreat(state, botPlayerId, target) +
     (target.maxHp - target.hp) * AI_WEIGHTS.destroyHpDeltaMult
   );
+}
+
+export function scoreGainControlSpellTarget(state: GameState, botPlayerId: PlayerId, target: UnitEntity): number {
+  let score =
+    AI_WEIGHTS.gainControlBase +
+    scoreEnemyEntityThreat(state, botPlayerId, target) +
+    scoreFriendlyUnitValue(target);
+
+  score +=
+    target.role === "combat"
+      ? AI_WEIGHTS.gainControlCombatBonus
+      : target.role === "resource"
+        ? AI_WEIGHTS.gainControlResourceBonus
+        : AI_WEIGHTS.gainControlUtilityBonus;
+
+  if (canUnitDeclareAttack(state, target) && target.attacksRemaining > 0) {
+    score += AI_WEIGHTS.gainControlAttackReadyBonus;
+
+    const bestAttackTarget = getEnemyEntities(state, botPlayerId)
+      .filter((entity) => entity.id !== target.id)
+      .filter((entity) => canAttackEntityDirectly(state, botPlayerId, entity))
+      .filter((entity) => hexDistance(target.coord, entity.coord) <= target.attackRange)
+      .map((entity) => ({
+        entity,
+        preview: resolveCombatAttack(state, target, entity),
+      }))
+      .sort((a, b) =>
+        (b.preview.finalDamage + Number(b.preview.targetDestroyed) * AI_WEIGHTS.gainControlKillBonus) -
+        (a.preview.finalDamage + Number(a.preview.targetDestroyed) * AI_WEIGHTS.gainControlKillBonus) ||
+        a.entity.id.localeCompare(b.entity.id)
+      )[0];
+
+    if (bestAttackTarget) {
+      score += bestAttackTarget.preview.finalDamage * AI_WEIGHTS.gainControlAttackDamageMult;
+      if (bestAttackTarget.preview.targetDestroyed) {
+        score += AI_WEIGHTS.gainControlKillBonus;
+      }
+      if (bestAttackTarget.entity.kind === "base") {
+        score += AI_WEIGHTS.gainControlBasePressureBonus;
+      }
+    }
+  }
+
+  return score;
 }
 
 export function scoreBaseDamageSpell(

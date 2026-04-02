@@ -3,6 +3,7 @@ import { getCardDefinition, getCardPlayEffectMagnitude, getResolvedCardPlayEffec
 import {
   createDestroyDamagedUnitsInstructions,
   createDrawAndGainResourcesInstructions,
+  createGainControlUnitInstructions,
   createGlobalUnitBuffInstructions,
   createHexAreaDamageInstructions,
   createMassDamageInstructions,
@@ -183,6 +184,10 @@ function createCardOwnedGlobalUnitBuffInstructions(context: InstructionContext):
 
 function createCardOwnedDestroyDamagedUnitsInstructions(context: InstructionContext): GameInstruction[] {
   return createCardOwnedConfiguredInstructions(context, "destroy_damaged_units", "missing destroy-damaged config on source card.");
+}
+
+function createCardOwnedGainControlUnitInstructions(context: InstructionContext): GameInstruction[] {
+  return createCardOwnedConfiguredInstructions(context, "gain_control_of_unit", "missing gain-control config on source card.");
 }
 
 function createCardOwnedDrawAndGainResourcesInstructions(context: InstructionContext): GameInstruction[] {
@@ -453,6 +458,24 @@ export const FOUNDATION_STACK_EFFECTS: Record<string, StackEffectDefinition> = {
     },
     createInstructions: createCardOwnedDestroyDamagedUnitsInstructions,
   },
+  gain_control_of_unit: {
+    id: "gain_control_of_unit",
+    label: "Gain Control Of Unit",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "entity",
+      entityKind: "unit",
+      relation: "enemy",
+    },
+    behavior: {
+      type: "gain_control_of_unit",
+    },
+    createInstructions: createCardOwnedGainControlUnitInstructions,
+  },
   draw_and_gain_resources: {
     id: "draw_and_gain_resources",
     label: "Draw and Gain Resources",
@@ -577,6 +600,7 @@ export function installFoundationPlayEffectRegistrations(): void {
   registerPlayEffectResolver("mass_damage", (context, effectConfig) => createMassDamageInstructions(effectConfig as never)(context));
   registerPlayEffectResolver("global_unit_buff", (context, effectConfig) => createGlobalUnitBuffInstructions(effectConfig as never)(context));
   registerPlayEffectResolver("destroy_damaged_units", (context, effectConfig) => createDestroyDamagedUnitsInstructions(effectConfig as never)(context));
+  registerPlayEffectResolver("gain_control_of_unit", (context, effectConfig) => createGainControlUnitInstructions(effectConfig as never)(context));
   registerPlayEffectResolver("draw_and_gain_resources", (context, effectConfig) => createDrawAndGainResourcesInstructions(effectConfig as never)(context));
   registerPlayEffectResolver("resources_by_unit_count", (context, effectConfig) => createResourcesByUnitCountInstructions(effectConfig as never)(context));
   registerPlayEffectResolver("hex_area_damage", (context, effectConfig) => createHexAreaDamageInstructions(effectConfig as never)(context));
@@ -590,6 +614,7 @@ export function installFoundationPlayEffectRegistrations(): void {
     )
   );
   registerPlayEffectMagnitudeCalculator("destroy_damaged_units", () => 0);
+  registerPlayEffectMagnitudeCalculator("gain_control_of_unit", () => 1);
   registerPlayEffectMagnitudeCalculator("draw_and_gain_resources", (effectConfig) =>
     Math.max(
       Number(effectConfig.drawCount ?? 0),
@@ -621,6 +646,9 @@ export function installFoundationStackEffectMagnitudeRegistrations(): void {
     options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
   );
   registerStackEffectMagnitudeCalculator("destroy_damaged_units", (_behavior, options) =>
+    options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
+  );
+  registerStackEffectMagnitudeCalculator("gain_control_of_unit", (_behavior, options) =>
     options.sourceCardId ? getCardPlayEffectMagnitude(getCardDefinition(options.sourceCardId), options.activeModifierIds ?? []) : 0
   );
   registerStackEffectMagnitudeCalculator("draw_and_gain_resources", (_behavior, options) =>

@@ -80,6 +80,32 @@ function handleDestroyEntity(state: GameState, instr: Extract<GameInstruction, {
   destroyUnitInternal(state, target.id, `${instr.sourceLabel} destroyed ${target.id}.`);
 }
 
+function handleChangeEntityOwner(state: GameState, instr: Extract<GameInstruction, { type: "CHANGE_ENTITY_OWNER" }>): void {
+  const target = state.entities[instr.targetEntityId];
+  if (!target || target.kind !== "unit") {
+    state.log.push({ turn: state.turn, text: `${instr.sourceLabel}: target unit not found.` });
+    return;
+  }
+
+  if (target.ownerId === instr.newOwnerId) {
+    state.log.push({
+      turn: state.turn,
+      text: `${instr.sourceLabel}: ${target.id} was already controlled by ${instr.newOwnerId}.`,
+    });
+    return;
+  }
+
+  const previousOwnerId = target.ownerId;
+  target.ownerId = instr.newOwnerId;
+  if (state.selectedEntityId === target.id) {
+    state.selectedEntityId = null;
+  }
+  state.log.push({
+    turn: state.turn,
+    text: `${instr.sourceLabel}: ${target.id} changed control from ${previousOwnerId} to ${instr.newOwnerId}.`,
+  });
+}
+
 function handleDeployUnit(state: GameState, instr: Extract<GameInstruction, { type: "DEPLOY_UNIT" }>): void {
   deployUnitFromCard(state, {
     controllerId: instr.controllerId,
@@ -162,6 +188,7 @@ function handleLog(state: GameState, instr: Extract<GameInstruction, { type: "LO
 
 registerInstructionHandler("DEAL_DAMAGE", handleDealDamage);
 registerInstructionHandler("DESTROY_ENTITY", handleDestroyEntity);
+registerInstructionHandler("CHANGE_ENTITY_OWNER", handleChangeEntityOwner);
 registerInstructionHandler("DEPLOY_UNIT", handleDeployUnit);
 registerInstructionHandler("RUN_MECHANIC_INSTRUCTION", handleRunMechanicInstruction);
 registerInstructionHandler("APPLY_CONTINUOUS_EFFECT", handleApplyContinuousEffect);

@@ -98,6 +98,7 @@ describe("starter decks", () => {
     expect(countCopies(fluxCards, "surge_matrix")).toBe(2);
     expect(countCopies(fluxCards, "arc_bloom")).toBe(2);
     expect(countCopies(fluxCards, "phase_coil")).toBe(2);
+    expect(countCopies(fluxCards, "signal_hijack")).toBe(2);
     expect(countCopies(fluxCards, "arc_repeater_card")).toBe(2);
     expect(countCopies(fluxCards, "surge_archivist_card")).toBe(2);
     expect(countCopies(fluxCards, "overcharge_savant_card")).toBe(2);

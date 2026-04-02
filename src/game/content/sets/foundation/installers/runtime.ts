@@ -7,6 +7,7 @@ import {
   scoreDestroyDamagedUnitsSpell,
   scoreDestroySpellTarget,
   scoreDrawAndGainResourcesSpell,
+  scoreGainControlSpellTarget,
   scoreGlobalBuffSpell,
   scoreHexAreaDamageSpell,
   scoreMassDamageSpell,
@@ -146,6 +147,17 @@ function registerFoundationSpellScoring(): void {
       return -Infinity;
     }
     return scoreDestroySpellTarget(state, botPlayerId, entity);
+  });
+
+  registerSpellScoringResolver("gain_control_of_unit", ({ state, botPlayerId, targeting }) => {
+    if (!targeting.targetEntityId) {
+      return -Infinity;
+    }
+    const entity = state.entities[targeting.targetEntityId];
+    if (!entity || entity.kind !== "unit") {
+      return -Infinity;
+    }
+    return scoreGainControlSpellTarget(state, botPlayerId, entity);
   });
 
   registerSpellScoringResolver("modify_unit_until_end_of_turn", ({ state, botPlayerId, targeting }) => {
@@ -459,6 +471,28 @@ function registerFoundationStackResolveAnimations(): void {
       coord: target.coord,
       visual: "destroy",
       label: event.label,
+    };
+  });
+
+  registerStackResolveAnimationBuilder("gain_control_of_unit", ({ event, before, state, baseId }) => {
+    const targetId = event.targetEntityId;
+    if (!targetId) {
+      return null;
+    }
+    const target = before.entities[targetId] ?? state.entities[targetId];
+    if (!target) {
+      return null;
+    }
+
+    return {
+      id: baseId,
+      kind: "spell_resolve",
+      playerId: event.controllerId,
+      ageSeconds: 0,
+      durationSeconds: 0.9,
+      coord: target.coord,
+      visual: "buff",
+      label: "Hijack",
     };
   });
 

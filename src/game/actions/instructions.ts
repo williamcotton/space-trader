@@ -13,6 +13,7 @@ import type { CounterDestination } from "../content/stackEffects";
 export type GameInstruction =
   | { type: "DEAL_DAMAGE"; targetEntityId: EntityId; amount: number; sourceLabel: string }
   | { type: "DESTROY_ENTITY"; targetEntityId: EntityId; sourceLabel: string }
+  | { type: "CHANGE_ENTITY_OWNER"; targetEntityId: EntityId; newOwnerId: PlayerId; sourceLabel: string }
   | { type: "DEPLOY_UNIT"; cardId: string; controllerId: PlayerId; entityId?: string; spawnCoord?: HexCoord }
   | {
       type: "RUN_MECHANIC_INSTRUCTION";

@@ -59,9 +59,10 @@ const FLUX_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["surge_matrix", 2],
   ["arc_bloom", 2],
   ["phase_coil", 2],
+  ["signal_hijack", 2],
   ["overload_finish", 4],
   ["arc_repeater_card", 2],
-  ["relay_savant_card", 4],
+  ["relay_savant_card", 2],
   ["ion_surge_archive", 4],
   ["meteor_chain", 2],
 ];

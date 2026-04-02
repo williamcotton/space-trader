@@ -101,6 +101,43 @@ describe("executeInstructions", () => {
     });
   });
 
+  describe("CHANGE_ENTITY_OWNER", () => {
+    it("transfers a unit to a new owner and clears selection", () => {
+      const state = createState();
+      const unit = getUnit(state, "unit_player_2_scout");
+      state.selectedEntityId = unit.id;
+
+      executeInstructions(state, [
+        {
+          type: "CHANGE_ENTITY_OWNER",
+          targetEntityId: unit.id,
+          newOwnerId: "player_1",
+          sourceLabel: "Signal Hijack",
+        },
+      ]);
+
+      expect(getUnit(state, unit.id).ownerId).toBe("player_1");
+      expect(state.selectedEntityId).toBeNull();
+    });
+
+    it("logs when the target unit does not exist", () => {
+      const state = createState();
+      const logBefore = state.log.length;
+
+      executeInstructions(state, [
+        {
+          type: "CHANGE_ENTITY_OWNER",
+          targetEntityId: "missing_unit",
+          newOwnerId: "player_1",
+          sourceLabel: "Signal Hijack",
+        },
+      ]);
+
+      expect(state.log.length).toBeGreaterThan(logBefore);
+      expect(state.log[state.log.length - 1].text).toContain("target unit not found");
+    });
+  });
+
   describe("DEPLOY_UNIT", () => {
     it("creates a unit entity on the board", () => {
       const state = createState();
