@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { getResourceTheme } from "../game/presentation";
+import { getPlayerLabel } from "../game/presentation";
 import { getGameRuntime } from "../game/runtime";
 import type { PlayerId } from "../game/model/ids";
 import { MAX_HAND_SIZE } from "../game/model/state";
@@ -64,7 +65,7 @@ export function HandTray() {
   const runtime = getGameRuntime();
   const snapshot = useGameSnapshot(readSnapshot);
   const priorityPrompt = snapshot.showingPriorityHand
-    ? `Response window: showing ${snapshot.visiblePlayerId} because they currently hold priority.`
+    ? `Response window: showing ${getPlayerLabel(snapshot.visiblePlayerId)} because they currently hold priority.`
     : null;
   const discardPrompt = snapshot.discardPhase
     ? `Discard ${snapshot.requiredDiscards} card${snapshot.requiredDiscards === 1 ? "" : "s"} to reach ${MAX_HAND_SIZE}.`
@@ -74,14 +75,14 @@ export function HandTray() {
     <section className="hand-tray" aria-label="Hand tray">
       <header className="hand-tray-header">
         <span>
-          Hand - {snapshot.visiblePlayerId}
+          {getPlayerLabel(snapshot.visiblePlayerId)} Hand
           {snapshot.showingPriorityHand ? " · Priority" : ""}
           {priorityPrompt ? <span className="hand-tray-targeting-hint"> {priorityPrompt}</span> : null}
           {discardPrompt ? <span className="hand-tray-targeting-hint"> {discardPrompt}</span> : null}
           {snapshot.pendingTargetingPrompt ? <span className="hand-tray-targeting-hint"> {snapshot.pendingTargetingPrompt}</span> : null}
         </span>
         <span>
-          Hand {snapshot.cards.length} | Deck {snapshot.deckCount}
+          {snapshot.cards.length} in hand · {snapshot.deckCount} in deck
         </span>
       </header>
       <div className="hand-tray-cards">

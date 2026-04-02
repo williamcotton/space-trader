@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getRegisteredFactionIds } from "../game/content/registry";
 import type { Faction } from "../game/model/enums";
-import { formatFactionName } from "../game/presentation";
+import { formatFactionName, getPlayerLabel } from "../game/presentation";
 import { getMultiplayerClient } from "../network/client";
 import { useMultiplayerSnapshot } from "../network/useMultiplayerSnapshot";
 
@@ -44,7 +44,7 @@ export function MultiplayerControls() {
   const queuedDescription = snapshot.status === "queued"
     ? `${snapshot.queuedPlayers} queued · ${formatFactionName(snapshot.queuedFaction ?? snapshot.selectedFaction)}`
     : snapshot.localPlayerId
-      ? `You are ${snapshot.localPlayerId}`
+      ? `You are ${getPlayerLabel(snapshot.localPlayerId)}`
       : null;
   const canFindMatch = snapshot.status !== "queued" && snapshot.status !== "in_match" && snapshot.status !== "connecting";
   const canQuitMatch = snapshot.status === "in_match" || snapshot.status === "reconnecting";
@@ -59,30 +59,36 @@ export function MultiplayerControls() {
           {queuedDescription ? <span className="multiplayer-bar-meta">{queuedDescription}</span> : null}
         </div>
         <div className="multiplayer-bar-controls">
-          <input
-            className="multiplayer-input"
-            type="text"
-            value={serverUrl}
-            onChange={(event) => setServerUrl(event.target.value)}
-            onBlur={() => client.setServerUrl(serverUrl)}
-            placeholder="http://127.0.0.1:4310"
-          />
-          <select
-            className="multiplayer-select"
-            value={faction}
-            onChange={(event) => {
-              const nextFaction = event.target.value as Faction;
-              setFaction(nextFaction);
-              client.setSelectedFaction(nextFaction);
-            }}
-            disabled={snapshot.status === "queued" || snapshot.status === "in_match"}
-          >
-            {factionIds.map((factionId) => (
-              <option key={factionId} value={factionId}>
-                {formatFactionName(factionId)}
-              </option>
-            ))}
-          </select>
+          <label className="multiplayer-field multiplayer-field-url">
+            <span className="multiplayer-field-label">Server</span>
+            <input
+              className="multiplayer-input"
+              type="text"
+              value={serverUrl}
+              onChange={(event) => setServerUrl(event.target.value)}
+              onBlur={() => client.setServerUrl(serverUrl)}
+              placeholder="http://127.0.0.1:4310"
+            />
+          </label>
+          <label className="multiplayer-field multiplayer-field-faction">
+            <span className="multiplayer-field-label">Faction</span>
+            <select
+              className="multiplayer-select"
+              value={faction}
+              onChange={(event) => {
+                const nextFaction = event.target.value as Faction;
+                setFaction(nextFaction);
+                client.setSelectedFaction(nextFaction);
+              }}
+              disabled={snapshot.status === "queued" || snapshot.status === "in_match"}
+            >
+              {factionIds.map((factionId) => (
+                <option key={factionId} value={factionId}>
+                  {formatFactionName(factionId)}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             className="multiplayer-button primary"
