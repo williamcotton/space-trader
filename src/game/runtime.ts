@@ -25,6 +25,7 @@ import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
 import { canAttackEntityDirectly } from "./rules/directInteraction";
 import { canUnitDeclareAttack } from "./rules/directInteraction";
+import { getEffectiveUnitAttackRange } from "./systems/unitStats";
 import { getAutoFlowCommand } from "./turn/autoFlow";
 import {
   PRIORITY_STOP_LABELS,
@@ -686,7 +687,10 @@ export class GameRuntime {
       if (entity.ownerId === activePlayerId) {
         return false;
       }
-      return canAttackEntityDirectly(this.state, activePlayerId, entity) && hexDistance(attacker.coord, entity.coord) <= attacker.attackRange;
+      return (
+        canAttackEntityDirectly(this.state, activePlayerId, entity) &&
+        hexDistance(attacker.coord, entity.coord) <= getEffectiveUnitAttackRange(this.state, attacker)
+      );
     });
 
     if (!target) {

@@ -26,6 +26,8 @@ import type {
   HexAreaDamagePlayEffectConfig,
   MassDamageOptions,
   MassDamagePlayEffectConfig,
+  ModifyTargetUnitOptions,
+  ModifyTargetUnitPlayEffectConfig,
   ResourcesByUnitCountOptions,
   ResourcesByUnitCountPlayEffectConfig,
 } from "../foundation/playEffects";
@@ -34,8 +36,9 @@ import type {
   CardPlayProfile,
   CardSourceDestination,
   HexTargetPredicate,
+  TargetPredicate,
 } from "../../cards/types";
-import { PREDATION_KEYWORD } from "./mechanics/keywordIds";
+import { EMPLACED_KEYWORD, PREDATION_KEYWORD } from "./mechanics/keywordIds";
 
 function getStartOfControllersNextTurn(state: Readonly<GameState>, controllerId: PlayerId): number {
   return state.activePlayerId === controllerId ? state.turn + 2 : state.turn + 1;
@@ -115,6 +118,20 @@ function createDestroyDamagedUnitsEffectConfig(options: DestroyDamagedUnitsOptio
 function createGainControlUnitEffectConfig(_options: GainControlUnitOptions = {}): GainControlUnitPlayEffectConfig {
   return {
     type: "gain_control_of_unit",
+  };
+}
+
+function createModifyTargetUnitEffectConfig(options: ModifyTargetUnitOptions): ModifyTargetUnitPlayEffectConfig {
+  return {
+    type: "modify_target_unit",
+    attackBonus: options.attackBonus ?? 0,
+    armorBonus: options.armorBonus ?? 0,
+    siegeBonus: options.siegeBonus ?? 0,
+    moveRangeBonus: options.moveRangeBonus ?? 0,
+    attackRangeBonus: options.attackRangeBonus ?? 0,
+    grantedKeywords: options.grantedKeywords ? [...options.grantedKeywords] : undefined,
+    setMoveRange: options.setMoveRange,
+    duration: options.duration ?? "end_of_turn",
   };
 }
 
@@ -242,6 +259,20 @@ function gainControlUnitTacticPlay(
     isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId !== pid,
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createGainControlUnitEffectConfig(options),
+  });
+}
+
+function modifyTargetUnitTacticPlay(
+  options: ModifyTargetUnitOptions & {
+    isValidTarget: TargetPredicate;
+    sourceDestinationOnResolve?: CardSourceDestination;
+  }
+): CardPlayProfile {
+  return tacticPlay("modify_target_unit", {
+    targetMode: "entity",
+    isValidTarget: options.isValidTarget,
+    sourceDestinationOnResolve: options.sourceDestinationOnResolve,
+    effectConfig: createModifyTargetUnitEffectConfig(options),
   });
 }
 
@@ -923,6 +954,30 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
     cost: { credits: 4, flux: 2 },
     text: "Gain control of target enemy unit.",
     play: gainControlUnitTacticPlay(),
+  },
+  bulwark_refit: {
+    id: "bulwark_refit",
+    name: "Bulwark Refit",
+    faction: "alloy_clan",
+    kind: "tactic",
+    speed: "main",
+    cost: { credits: 1, alloy: 2 },
+    text: "Target allied resource unit gets +2 SG, +1 ARM, and gains Emplaced permanently. Its Move Range becomes 0. (Resource units with Emplaced can attack.)",
+    play: modifyTargetUnitTacticPlay({
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId === pid && target.role === "resource",
+      siegeBonus: 2,
+      armorBonus: 1,
+      grantedKeywords: [EMPLACED_KEYWORD],
+      setMoveRange: 0,
+      duration: "permanent",
+    }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Bulwark Refit",
+        accent: "alloy",
+      },
+    },
   },
   overgrowth_wave: {
     id: "overgrowth_wave",

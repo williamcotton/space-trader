@@ -9,6 +9,7 @@ import {
   canUnitMove,
 } from "../../rules/directInteraction";
 import { resolveCombatAttack } from "../../systems/combat";
+import { getEffectiveUnitAttackRange } from "../../systems/unitStats";
 import { getOpponentPlayer } from "../../turn/stack";
 import {
   AI_WEIGHTS,
@@ -25,7 +26,7 @@ function chooseAttackCommand(state: GameState, botPlayerId: PlayerId, unit: Unit
 
   const targets = getEnemyEntities(state, botPlayerId)
     .filter((target) => canAttackEntityDirectly(state, botPlayerId, target))
-    .filter((target) => hexDistance(unit.coord, target.coord) <= unit.attackRange)
+    .filter((target) => hexDistance(unit.coord, target.coord) <= getEffectiveUnitAttackRange(state, unit))
     .map((target) => {
       const preview = resolveCombatAttack(state, unit, target);
       const killScore = preview.targetDestroyed ? AI_WEIGHTS.attackKillScore : 0;

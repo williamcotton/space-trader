@@ -5,8 +5,15 @@ import { getEntityAtCoord, getSelectedUnit } from "../game/model/queries";
 import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleTheme } from "../game/presentation";
 import { getCardDefinition } from "../game/content/cards/catalog";
 import { getGameRuntime } from "../game/runtime";
+import { canUnitDeclareAttack } from "../game/rules/directInteraction";
 import { resolveCombatAttack } from "../game/systems/combat";
-import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage } from "../game/systems/unitStats";
+import {
+  getEffectiveUnitArmor,
+  getEffectiveUnitAttackDamage,
+  getEffectiveUnitAttackRange,
+  getEffectiveUnitMoveRange,
+  getEffectiveUnitSiegeDamageBonus,
+} from "../game/systems/unitStats";
 import { useRuntimeViewSnapshot } from "./useRuntimeViewSnapshot";
 
 type SelectedUnitSnapshot = {
@@ -37,6 +44,8 @@ type HoverCombatSnapshot = {
   distance: number;
   attackRange: number;
   canAttackNow: boolean;
+  baseAttack: number;
+  siegeAttack: number;
   rawAttack: number;
   defense: number;
   supplyPenalty: number;
@@ -65,7 +74,12 @@ function readSnapshot(): TacticalHudSnapshot {
     const hoveredEntity = getEntityAtCoord(state, hoveredHex, selected.id);
     if (hoveredEntity && hoveredEntity.ownerId !== selected.ownerId) {
       const distance = hexDistance(selected.coord, hoveredEntity.coord);
-      const canAttackNow = state.phase === "tactical" && selected.attacksRemaining > 0 && distance <= selected.attackRange;
+      const attackRange = getEffectiveUnitAttackRange(state, selected);
+      const canAttackNow =
+        state.phase === "tactical" &&
+        selected.attacksRemaining > 0 &&
+        canUnitDeclareAttack(state, selected) &&
+        distance <= attackRange;
       const preview = resolveCombatAttack(state, selected, hoveredEntity);
       hoverCombat = {
         targetId: hoveredEntity.id,
@@ -73,8 +87,10 @@ function readSnapshot(): TacticalHudSnapshot {
         targetKind: hoveredEntity.kind,
         targetOwnerLabel: getPlayerLabel(hoveredEntity.ownerId),
         distance,
-        attackRange: selected.attackRange,
+        attackRange,
         canAttackNow,
+        baseAttack: preview.baseAttack,
+        siegeAttack: preview.siegeAttack,
         rawAttack: preview.rawAttack,
         defense: preview.defense,
         supplyPenalty: preview.supplyPenalty,
@@ -99,10 +115,10 @@ function readSnapshot(): TacticalHudSnapshot {
           hp: selected.hp,
           armor: getEffectiveUnitArmor(state, selected),
           attackDamage: getEffectiveUnitAttackDamage(state, selected),
-          siegeDamageBonus: selected.siegeDamageBonus,
-          attackRange: selected.attackRange,
+          siegeDamageBonus: getEffectiveUnitSiegeDamageBonus(state, selected),
+          attackRange: getEffectiveUnitAttackRange(state, selected),
           movesRemaining: selected.movesRemaining,
-          moveRange: selected.moveRange,
+          moveRange: getEffectiveUnitMoveRange(state, selected),
           attacksRemaining: selected.attacksRemaining,
           attackActionsPerTurn: selected.attackActionsPerTurn,
           hasSummoningSickness: selected.hasSummoningSickness,
@@ -237,11 +253,13 @@ export function GameHudPanels() {
               </span>
               <span className="game-hud-stat-chip">
                 <small>SUPPLY</small>
-                <strong>{snapshot.hoverCombat.distanceFromFriendlyBase}</strong>
+                <strong>{snapshot.hoverCombat.supplyPenalty}</strong>
               </span>
             </div>
             <p className="game-hud-detail-line">
-              Raw {snapshot.hoverCombat.rawAttack} - Def {snapshot.hoverCombat.defense} - Supply {snapshot.hoverCombat.supplyPenalty}
+              {snapshot.hoverCombat.targetKind === "base"
+                ? `Base ${snapshot.hoverCombat.baseAttack} - Def ${snapshot.hoverCombat.defense} - Supply ${snapshot.hoverCombat.supplyPenalty}, then + SG ${snapshot.hoverCombat.siegeAttack} (distance ${snapshot.hoverCombat.distanceFromFriendlyBase})`
+                : `Raw ${snapshot.hoverCombat.rawAttack} - Def ${snapshot.hoverCombat.defense} - Supply ${snapshot.hoverCombat.supplyPenalty} (distance ${snapshot.hoverCombat.distanceFromFriendlyBase})`}
             </p>
             <p className="game-hud-meta-line">Target {snapshot.hoverCombat.targetId}</p>
           </>

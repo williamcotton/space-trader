@@ -11,6 +11,7 @@ import {
 } from "./directInteraction";
 import { canAffordCardCost, hasEntityAtCoord } from "../model/queries";
 import { validatePlayCardCommand } from "./cardPlayLegality";
+import { getEffectiveUnitAttackRange } from "../systems/unitStats";
 
 export type CommandValidationResult = {
   ok: boolean;
@@ -185,7 +186,7 @@ function validateAttackUnit(state: GameState, command: Extract<GameCommand, { ty
   if (keywordBlockReason) return { ok: false, reason: keywordBlockReason };
 
   const distance = hexDistance(attacker.coord, target.coord);
-  if (distance > attacker.attackRange) return { ok: false, reason: "Target is out of attack range." };
+  if (distance > getEffectiveUnitAttackRange(state, attacker)) return { ok: false, reason: "Target is out of attack range." };
 
   return { ok: true };
 }

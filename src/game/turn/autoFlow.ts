@@ -9,6 +9,7 @@ import {
   canUnitMove,
 } from "../rules/directInteraction";
 import { hasEntityAtCoord } from "../model/queries";
+import { getEffectiveUnitAttackRange } from "../systems/unitStats";
 import { hasAnyPlayableCard } from "./playableCards";
 
 function hasAvailableMove(state: GameState, unit: UnitEntity): boolean {
@@ -43,7 +44,7 @@ function hasAvailableAttack(state: GameState, unit: UnitEntity): boolean {
   return Object.values(state.entities).some((entity) =>
     entity.ownerId !== unit.ownerId &&
     canAttackEntityDirectly(state, unit.ownerId, entity) &&
-    hexDistance(unit.coord, entity.coord) <= unit.attackRange
+    hexDistance(unit.coord, entity.coord) <= getEffectiveUnitAttackRange(state, unit)
   );
 }
 

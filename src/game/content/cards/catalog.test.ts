@@ -61,4 +61,13 @@ describe("card catalog balance guardrails", () => {
     expect(cards.signal_hijack.play.stackEffectId).toBe("gain_control_of_unit");
     expect(cards.signal_hijack.text).toContain("Gain control of target enemy unit");
   });
+
+  it("defines Bulwark Refit as the Alloy siege conversion tactic", () => {
+    const cards = getCardCatalog();
+    expect(cards.bulwark_refit.cost).toEqual({ credits: 1, alloy: 2 });
+    expect(cards.bulwark_refit.faction).toBe("alloy_clan");
+    expect(cards.bulwark_refit.play.stackEffectId).toBe("modify_target_unit");
+    expect(cards.bulwark_refit.text).toContain("Emplaced");
+    expect(cards.bulwark_refit.text).toContain("Move Range becomes 0");
+  });
 });

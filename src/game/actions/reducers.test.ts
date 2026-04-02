@@ -10,7 +10,7 @@ import { getTacticsCastThisTurn } from "../content/sets/alpha/mechanics/surge";
 import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
 import { validateCommand } from "../rules/validators";
 import { canUnitDeclareAttack } from "../rules/directInteraction";
-import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage, getEffectiveUnitSiegeDamageBonus } from "../systems/unitStats";
+import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage, getEffectiveUnitMoveRange, getEffectiveUnitSiegeDamageBonus } from "../systems/unitStats";
 
 function setupState() {
   return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
@@ -1935,6 +1935,76 @@ describe("dispatchCommand", () => {
       entityId: stolen.id,
     });
     expect(select.ok).toBe(true);
+  });
+
+  it("Bulwark Refit permanently fortifies, arms, and immobilizes an allied resource unit", () => {
+    const state = createInitialGameState({
+      map: requireMapDefinition("frontier_belt"),
+      factions: {
+        player_1: "alloy_clan",
+        player_2: "flux_collective",
+      },
+    });
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 1;
+    state.players.player_1.resources.alloy = 2;
+
+    const cardInstanceId = addCardToHand(state, "player_1", "bulwark_refit");
+    const target = state.entities.unit_player_1_harvester;
+    if (!target || target.kind !== "unit") {
+      throw new Error("Expected allied resource unit for Bulwark Refit.");
+    }
+    target.movesRemaining = 4;
+
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetEntityId: target.id,
+    });
+    expect(play.ok).toBe(true);
+
+    resolveStackByPassing(state);
+
+    const fortified = state.entities[target.id];
+    expect(fortified?.kind).toBe("unit");
+    if (!fortified || fortified.kind !== "unit") {
+      throw new Error("Expected fortified unit after Bulwark Refit.");
+    }
+    expect(getEffectiveUnitSiegeDamageBonus(state, fortified)).toBe(fortified.siegeDamageBonus + 2);
+    expect(getEffectiveUnitArmor(state, fortified)).toBe(fortified.armor + 1);
+    expect(getEffectiveUnitMoveRange(state, fortified)).toBe(0);
+    expect(fortified.movesRemaining).toBe(0);
+    expect(canUnitDeclareAttack(state, fortified)).toBe(true);
+
+    advanceToPhase(state, "end");
+    const toOpponent = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(toOpponent.ok).toBe(true);
+
+    advanceToPhase(state, "end");
+    const backToPlayerOne = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_2",
+    });
+    expect(backToPlayerOne.ok).toBe(true);
+    expect(state.activePlayerId).toBe("player_1");
+
+    const nextTurnFortified = state.entities[target.id];
+    expect(nextTurnFortified?.kind).toBe("unit");
+    if (!nextTurnFortified || nextTurnFortified.kind !== "unit") {
+      throw new Error("Expected fortified unit on next turn.");
+    }
+    expect(getEffectiveUnitSiegeDamageBonus(state, nextTurnFortified)).toBe(nextTurnFortified.siegeDamageBonus + 2);
+    expect(getEffectiveUnitArmor(state, nextTurnFortified)).toBe(nextTurnFortified.armor + 1);
+    expect(getEffectiveUnitMoveRange(state, nextTurnFortified)).toBe(0);
+    expect(nextTurnFortified.movesRemaining).toBe(0);
+    expect(canUnitDeclareAttack(state, nextTurnFortified)).toBe(true);
   });
 
   it("Bloom generates biomass the first time bloom units are buffed each turn", () => {

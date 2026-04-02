@@ -27,6 +27,17 @@ export type DestroyDamagedUnitsOptions = {
 
 export type GainControlUnitOptions = Record<string, never>;
 
+export type ModifyTargetUnitOptions = {
+  attackBonus?: number;
+  armorBonus?: number;
+  siegeBonus?: number;
+  moveRangeBonus?: number;
+  attackRangeBonus?: number;
+  grantedKeywords?: CardKeyword[];
+  setMoveRange?: number;
+  duration?: "end_of_turn" | "permanent";
+};
+
 export type DrawAndGainResourcesOptions = {
   drawCount?: number;
   resources?: CardCost;
@@ -68,6 +79,18 @@ export type DestroyDamagedUnitsPlayEffectConfig = CardPlayEffectConfig & {
 
 export type GainControlUnitPlayEffectConfig = CardPlayEffectConfig & {
   type: "gain_control_of_unit";
+};
+
+export type ModifyTargetUnitPlayEffectConfig = CardPlayEffectConfig & {
+  type: "modify_target_unit";
+  attackBonus?: number;
+  armorBonus?: number;
+  siegeBonus?: number;
+  moveRangeBonus?: number;
+  attackRangeBonus?: number;
+  grantedKeywords?: CardKeyword[];
+  setMoveRange?: number;
+  duration?: "end_of_turn" | "permanent";
 };
 
 export type DrawAndGainResourcesPlayEffectConfig = CardPlayEffectConfig & {
@@ -286,6 +309,140 @@ export function createGainControlUnitInstructions(_options: GainControlUnitOptio
       newOwnerId: context.controllerId,
       sourceLabel: context.item.label,
     }];
+  };
+}
+
+export function createModifyTargetUnitInstructions(options: ModifyTargetUnitOptions) {
+  const attackBonus = options.attackBonus ?? 0;
+  const armorBonus = options.armorBonus ?? 0;
+  const siegeBonus = options.siegeBonus ?? 0;
+  const moveRangeBonus = options.moveRangeBonus ?? 0;
+  const attackRangeBonus = options.attackRangeBonus ?? 0;
+  const grantedKeywords = options.grantedKeywords ?? [];
+  const duration = options.duration ?? "end_of_turn";
+
+  return (context: InstructionContext): GameInstruction[] => {
+    if (!context.targetEntityId) {
+      return [{ type: "LOG", text: `Resolved ${context.item.label}: no battlefield target configured.` }];
+    }
+
+    const target = context.state.entities[context.targetEntityId];
+    if (!target || target.kind !== "unit") {
+      return [{ type: "LOG", text: `Resolved ${context.item.label}: target unit not found.` }];
+    }
+
+    const expiry =
+      duration === "permanent"
+        ? { type: "permanent" as const }
+        : { type: "end_of_turn" as const, turn: context.state.turn };
+    const layer = duration === "permanent" ? LAYER.STATIC : LAYER.TEMPORARY;
+    const instructions: GameInstruction[] = [];
+
+    const pushModifier = (
+      suffix: string,
+      stat: "attackDamage" | "armor" | "siegeDamageBonus" | "moveRange" | "attackRange",
+      amount: number
+    ): void => {
+      if (amount === 0) {
+        return;
+      }
+
+      instructions.push({
+        type: "APPLY_CONTINUOUS_EFFECT",
+        effectId: `ce_${context.item.id}_${target.id}_${suffix}`,
+        sourceEntityId: null,
+        sourceCardId: context.item.sourceCardId,
+        controllerId: context.controllerId,
+        payload: { type: "stat_modifier", stat, amount },
+        target: { type: "specific_entity", entityId: target.id },
+        expiry,
+        layer,
+      });
+    };
+
+    pushModifier("atk", "attackDamage", attackBonus);
+    pushModifier("arm", "armor", armorBonus);
+    pushModifier("sg", "siegeDamageBonus", siegeBonus);
+    pushModifier("mov", "moveRange", moveRangeBonus);
+    pushModifier("rng", "attackRange", attackRangeBonus);
+
+    for (const keyword of grantedKeywords) {
+      instructions.push({
+        type: "APPLY_CONTINUOUS_EFFECT",
+        effectId: `ce_${context.item.id}_${target.id}_kw_${keyword}`,
+        sourceEntityId: null,
+        sourceCardId: context.item.sourceCardId,
+        controllerId: context.controllerId,
+        payload: { type: "keyword_grant", keyword },
+        target: { type: "specific_entity", entityId: target.id },
+        expiry,
+        layer: LAYER.ABILITY,
+      });
+    }
+
+    if (typeof options.setMoveRange === "number") {
+      instructions.push({
+        type: "APPLY_CONTINUOUS_EFFECT",
+        effectId: `ce_${context.item.id}_${target.id}_mov_set`,
+        sourceEntityId: null,
+        sourceCardId: context.item.sourceCardId,
+        controllerId: context.controllerId,
+        payload: { type: "stat_set", stat: "moveRange", value: Math.max(0, options.setMoveRange) },
+        target: { type: "specific_entity", entityId: target.id },
+        expiry,
+        layer,
+      });
+    }
+
+    if (instructions.length === 0) {
+      return [{ type: "LOG", text: `Resolved ${context.item.label}: no stat changes were configured.` }];
+    }
+
+    const shouldTriggerBloom =
+      attackBonus > 0 ||
+      armorBonus > 0 ||
+      siegeBonus > 0 ||
+      moveRangeBonus > 0 ||
+      attackRangeBonus > 0 ||
+      grantedKeywords.length > 0;
+    if (shouldTriggerBloom) {
+      const bloomInstruction = createOptionalBloomInstruction(context, [target], {
+        excludeEffectIdPrefix: `ce_${context.item.id}_`,
+      });
+      if (bloomInstruction) {
+        instructions.push(bloomInstruction);
+      }
+    }
+
+    const changeParts: string[] = [];
+    if (attackBonus !== 0) {
+      changeParts.push(`${attackBonus > 0 ? "+" : ""}${attackBonus} ATK`);
+    }
+    if (armorBonus !== 0) {
+      changeParts.push(`${armorBonus > 0 ? "+" : ""}${armorBonus} ARM`);
+    }
+    if (siegeBonus !== 0) {
+      changeParts.push(`${siegeBonus > 0 ? "+" : ""}${siegeBonus} SG`);
+    }
+    if (moveRangeBonus !== 0) {
+      changeParts.push(`${moveRangeBonus > 0 ? "+" : ""}${moveRangeBonus} MOV`);
+    }
+    if (attackRangeBonus !== 0) {
+      changeParts.push(`${attackRangeBonus > 0 ? "+" : ""}${attackRangeBonus} RNG`);
+    }
+    for (const keyword of grantedKeywords) {
+      changeParts.push(`gain ${keyword}`);
+    }
+    if (typeof options.setMoveRange === "number") {
+      changeParts.push(`Move Range becomes ${Math.max(0, options.setMoveRange)}`);
+    }
+
+    instructions.push({
+      type: "LOG",
+      text: `Resolved ${context.item.label}: ${target.id} gets ${changeParts.join(" and ")}${duration === "permanent" ? " permanently" : " until end of turn"}.`,
+    });
+
+    return instructions;
   };
 }
 

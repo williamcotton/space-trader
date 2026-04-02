@@ -1,6 +1,7 @@
 import type { SetMechanicModule } from "../../../mechanics/types";
 import { installBastionMechanic } from "./bastion";
 import { installBloomMechanic } from "./bloom";
+import { installEmplacedMechanic } from "./emplaced";
 import { installRelayMechanic } from "./relay";
 import { installSalvageMechanic } from "./salvage";
 import { installPredationMechanic } from "./predation";
@@ -17,6 +18,7 @@ export const ALPHA_SET_MECHANICS: SetMechanicModule[] = [
   { id: "bloom", install: installBloomMechanic },
   { id: "salvage", install: installSalvageMechanic },
   { id: "predation", install: installPredationMechanic },
+  { id: "emplaced", install: installEmplacedMechanic },
   { id: "bastion", install: installBastionMechanic },
   { id: "uncounterable", install: installUncounterableMechanic },
 ];

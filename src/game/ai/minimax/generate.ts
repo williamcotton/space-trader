@@ -7,6 +7,7 @@ import type { GameState, HexCoord, UnitEntity } from "../../model/state";
 import { canAttackEntityDirectly, canUnitDeclareAttack, canUnitMove } from "../../rules/directInteraction";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../../systems/harvesting";
 import { resolveCombatAttack } from "../../systems/combat";
+import { getEffectiveUnitAttackRange } from "../../systems/unitStats";
 import { getOpponentPlayer } from "../../turn/stack";
 import {
   rankDiscardCardCommands,
@@ -184,6 +185,7 @@ function scoreAttackPlan(state: Readonly<GameState>, unit: UnitEntity, targetId:
 
 function scoreMovePlan(state: Readonly<GameState>, playerId: PlayerId, unit: UnitEntity, coord: HexCoord): number {
   const objective = chooseObjectiveCoord(state, playerId, unit);
+  const attackRange = getEffectiveUnitAttackRange(state as GameState, unit);
   let score = 0;
 
   if (objective) {
@@ -221,12 +223,12 @@ function scoreMovePlan(state: Readonly<GameState>, playerId: PlayerId, unit: Uni
   if (unit.role === "combat") {
     const attackTargets = getEnemyEntities(state as GameState, playerId).filter((target) =>
       canAttackEntityDirectly(state, playerId, target) &&
-      hexDistance(coord, target.coord) <= unit.attackRange
+      hexDistance(coord, target.coord) <= attackRange
     );
     score += attackTargets.length * 32;
 
     const enemyBase = getPlayerBase(state as GameState, getOpponentPlayer(playerId));
-    if (enemyBase && canAttackEntityDirectly(state, playerId, enemyBase) && hexDistance(coord, enemyBase.coord) <= unit.attackRange) {
+    if (enemyBase && canAttackEntityDirectly(state, playerId, enemyBase) && hexDistance(coord, enemyBase.coord) <= attackRange) {
       score += 90;
     }
   }
@@ -254,9 +256,11 @@ function buildAttackPlans(
     return [];
   }
 
+  const attackRange = getEffectiveUnitAttackRange(state as GameState, unit);
+
   return getEnemyEntities(state as GameState, playerId)
     .filter((target) => canAttackEntityDirectly(state, playerId, target))
-    .filter((target) => hexDistance(unit.coord, target.coord) <= unit.attackRange)
+    .filter((target) => hexDistance(unit.coord, target.coord) <= attackRange)
     .map((target) =>
       createPlan(
         [

@@ -1,11 +1,11 @@
 import { MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord, type UnitEntity } from "../../../../model/state";
 import type { PlayerId } from "../../../../model/ids";
 import type { ResourceType } from "../../../../model/enums";
-import { hexDistance } from "../../../../model/hex";
-import { getEnemyEntities, getPlayerUnits } from "../../../../model/queries";
+import { areSameHex, hexDistance } from "../../../../model/hex";
+import { getEnemyEntities, getPlayerBase, getPlayerUnits } from "../../../../model/queries";
 import { canAttackEntityDirectly, canUnitAttack, canUnitDeclareAttack } from "../../../../rules/directInteraction";
 import { getOpponentPlayer } from "../../../../turn/stack";
-import { getEffectiveUnitAttackDamage } from "../../../../systems/unitStats";
+import { getEffectiveUnitAttackDamage, getEffectiveUnitAttackRange, getEffectiveUnitMoveRange } from "../../../../systems/unitStats";
 import { getRegisteredCurrencyResourceId, getRegisteredResourceIds } from "../../../registry";
 import { applyUnitBuffScoreContributions } from "../../../../registries/aiMechanics";
 import { resolveCombatAttack } from "../../../../systems/combat";
@@ -39,6 +39,23 @@ const AI_WEIGHTS = {
   gainControlAttackDamageMult: 18,
   gainControlKillBonus: 72,
   gainControlBasePressureBonus: 24,
+  modifyAttackBase: 28,
+  modifyAttackDamageMult: 20,
+  modifyAttackKillBonus: 70,
+  modifyArmorBase: 24,
+  modifyArmorPreventedDmgMult: 14,
+  modifyArmorPreventKillBonus: 66,
+  modifySiegeBase: 18,
+  modifySiegePressureMult: 28,
+  modifySiegeReadyBonus: 92,
+  modifySiegeNearBonus: 46,
+  modifyMoveLossBasePenalty: 16,
+  modifyMoveLossResourcePenalty: 44,
+  modifyMoveLossCargoPenalty: 120,
+  modifyMoveLossNodePenalty: 34,
+  modifyMoveLossDistancePenalty: 12,
+  modifySiegeTowerReadyDiscount: 112,
+  modifySiegeTowerNearDiscount: 52,
   braceBase: 26,
   bracePreventedDmgMult: 15,
   bracePreventKillBonus: 80,
@@ -82,7 +99,7 @@ function scoreEnemyEntityThreat(state: GameState, botPlayerId: PlayerId, target:
   score +=
     target.attackDamage * AI_WEIGHTS.threatAttackMult +
     target.armor * AI_WEIGHTS.threatArmorMult +
-    target.attackRange * AI_WEIGHTS.threatRangeMult;
+    getEffectiveUnitAttackRange(state, target) * AI_WEIGHTS.threatRangeMult;
 
   const botBase = state.entities[state.players[botPlayerId].baseEntityId];
   if (botBase && botBase.kind === "base") {
@@ -167,7 +184,7 @@ export function scoreGainControlSpellTarget(state: GameState, botPlayerId: Playe
   let score =
     AI_WEIGHTS.gainControlBase +
     scoreEnemyEntityThreat(state, botPlayerId, target) +
-    scoreFriendlyUnitValue(target);
+    scoreFriendlyUnitValue(state, target);
 
   score +=
     target.role === "combat"
@@ -182,7 +199,7 @@ export function scoreGainControlSpellTarget(state: GameState, botPlayerId: Playe
     const bestAttackTarget = getEnemyEntities(state, botPlayerId)
       .filter((entity) => entity.id !== target.id)
       .filter((entity) => canAttackEntityDirectly(state, botPlayerId, entity))
-      .filter((entity) => hexDistance(target.coord, entity.coord) <= target.attackRange)
+      .filter((entity) => hexDistance(target.coord, entity.coord) <= getEffectiveUnitAttackRange(state, target))
       .map((entity) => ({
         entity,
         preview: resolveCombatAttack(state, target, entity),
@@ -207,6 +224,154 @@ export function scoreGainControlSpellTarget(state: GameState, botPlayerId: Playe
   return score;
 }
 
+export function scoreModifyTargetUnitSpellTarget(
+  state: GameState,
+  botPlayerId: PlayerId,
+  target: UnitEntity,
+  options: {
+    attackBonus?: number;
+    armorBonus?: number;
+    siegeBonus?: number;
+    moveRangeBonus?: number;
+    attackRangeBonus?: number;
+    grantedKeywords?: string[];
+    setMoveRange?: number;
+  }
+): number {
+  if (target.ownerId !== botPlayerId) {
+    return -Infinity;
+  }
+
+  const attackBonus = options.attackBonus ?? 0;
+  const armorBonus = options.armorBonus ?? 0;
+  const siegeBonus = options.siegeBonus ?? 0;
+  const moveRangeBonus = options.moveRangeBonus ?? 0;
+  const grantedKeywords = options.grantedKeywords ?? [];
+  const currentAttackRange = getEffectiveUnitAttackRange(state, target);
+  const currentMoveRange = getEffectiveUnitMoveRange(state, target);
+  const nextMoveRange =
+    typeof options.setMoveRange === "number"
+      ? Math.max(0, options.setMoveRange)
+      : Math.max(0, currentMoveRange + moveRangeBonus);
+  const opponentId = getOpponentPlayer(botPlayerId);
+  const ownBase = getPlayerBase(state, botPlayerId);
+  const enemyBase = getPlayerBase(state, opponentId);
+
+  let score = 0;
+  let hasMeaningfulOpportunity = false;
+  const mechanicContributions = applyUnitBuffScoreContributions({
+    state,
+    botPlayerId,
+    affectedUnits: [target],
+    options: {
+      attackBonus,
+      armorBonus,
+      grantedKeywords,
+    },
+  });
+  score += mechanicContributions.scoreDelta;
+  if (mechanicContributions.hasMeaningfulOpportunity) {
+    hasMeaningfulOpportunity = true;
+  }
+
+  if (attackBonus > 0 && target.attacksRemaining > 0 && canUnitDeclareAttack(state, target)) {
+    const bestTarget = getEnemyEntities(state, botPlayerId)
+      .filter((entity) => canAttackEntityDirectly(state, botPlayerId, entity))
+      .filter((entity) => hexDistance(target.coord, entity.coord) <= currentAttackRange)
+      .map((entity) => ({
+        entity,
+        preview: resolveCombatAttack(state, target, entity),
+      }))
+      .sort((a, b) =>
+        (b.preview.finalDamage + Number(b.preview.targetDestroyed) * AI_WEIGHTS.modifyAttackKillBonus) -
+        (a.preview.finalDamage + Number(a.preview.targetDestroyed) * AI_WEIGHTS.modifyAttackKillBonus) ||
+        a.entity.id.localeCompare(b.entity.id)
+      )[0];
+
+    if (bestTarget) {
+      const currentAttack = getEffectiveUnitAttackDamage(state, target);
+      const buffedAttack = currentAttack + attackBonus;
+      score += AI_WEIGHTS.modifyAttackBase;
+      score += (Math.min(bestTarget.entity.hp, buffedAttack) - Math.min(bestTarget.entity.hp, currentAttack)) * AI_WEIGHTS.modifyAttackDamageMult;
+      if (currentAttack < bestTarget.entity.hp && buffedAttack >= bestTarget.entity.hp) {
+        score += AI_WEIGHTS.modifyAttackKillBonus;
+      }
+      hasMeaningfulOpportunity = true;
+    }
+  }
+
+  if (armorBonus > 0) {
+    const threateningEnemies = getPlayerUnits(state, opponentId).filter(
+      (enemy) =>
+        canUnitDeclareAttack(state, enemy) &&
+        enemy.attacksRemaining > 0 &&
+        canAttackEntityDirectly(state, enemy.ownerId, target) &&
+        hexDistance(enemy.coord, target.coord) <= getEffectiveUnitAttackRange(state, enemy)
+    );
+
+    for (const enemy of threateningEnemies) {
+      const before = resolveCombatAttack(state, enemy, target);
+      const reducedDamage = Math.max(1, before.rawAttack - (before.defense + armorBonus) - before.supplyPenalty);
+      const preventedDamage = before.finalDamage - reducedDamage;
+      if (preventedDamage <= 0) {
+        continue;
+      }
+
+      score += AI_WEIGHTS.modifyArmorBase + preventedDamage * AI_WEIGHTS.modifyArmorPreventedDmgMult;
+      if (before.targetDestroyed && target.hp > reducedDamage) {
+        score += AI_WEIGHTS.modifyArmorPreventKillBonus;
+      }
+      hasMeaningfulOpportunity = true;
+    }
+  }
+
+  if (siegeBonus > 0 && enemyBase && canAttackEntityDirectly(state, botPlayerId, enemyBase)) {
+    const distanceToEnemyBase = hexDistance(target.coord, enemyBase.coord);
+    const distanceOverRange = Math.max(0, distanceToEnemyBase - currentAttackRange);
+    score += AI_WEIGHTS.modifySiegeBase + siegeBonus * AI_WEIGHTS.modifySiegePressureMult;
+    if (distanceOverRange === 0) {
+      score += AI_WEIGHTS.modifySiegeReadyBonus;
+      hasMeaningfulOpportunity = true;
+    } else if (distanceOverRange <= 2) {
+      score += AI_WEIGHTS.modifySiegeNearBonus;
+      hasMeaningfulOpportunity = true;
+    }
+  }
+
+  if (nextMoveRange < currentMoveRange) {
+    let penalty = (currentMoveRange - nextMoveRange) * AI_WEIGHTS.modifyMoveLossBasePenalty;
+    if (target.role === "resource") {
+      penalty += AI_WEIGHTS.modifyMoveLossResourcePenalty;
+    }
+    if (target.carries) {
+      penalty += AI_WEIGHTS.modifyMoveLossCargoPenalty;
+    }
+    if (target.role === "resource" && state.map.resourceNodes.some((node) => node.controlledBy === botPlayerId && areSameHex(node.coord, target.coord))) {
+      penalty += AI_WEIGHTS.modifyMoveLossNodePenalty;
+    }
+
+    if (enemyBase) {
+      const distanceToEnemyBase = hexDistance(target.coord, enemyBase.coord);
+      if (siegeBonus > 0 && distanceToEnemyBase <= currentAttackRange) {
+        penalty -= AI_WEIGHTS.modifySiegeTowerReadyDiscount;
+      } else if (siegeBonus > 0 && distanceToEnemyBase <= currentAttackRange + 2) {
+        penalty -= AI_WEIGHTS.modifySiegeTowerNearDiscount;
+      } else {
+        penalty += distanceToEnemyBase * AI_WEIGHTS.modifyMoveLossDistancePenalty;
+      }
+    }
+
+    if (ownBase && target.role === "resource" && !target.carries && siegeBonus <= 0 && hexDistance(target.coord, ownBase.coord) <= 2) {
+      penalty += AI_WEIGHTS.modifyMoveLossNodePenalty;
+    }
+
+    score -= penalty;
+    hasMeaningfulOpportunity = true;
+  }
+
+  return hasMeaningfulOpportunity ? score : -Infinity;
+}
+
 export function scoreBaseDamageSpell(
   state: GameState,
   botPlayerId: PlayerId,
@@ -227,7 +392,7 @@ export function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId
       enemy.role === "combat" &&
       canUnitAttack(enemy) &&
       enemy.attacksRemaining > 0 &&
-      hexDistance(enemy.coord, target.coord) <= enemy.attackRange
+      hexDistance(enemy.coord, target.coord) <= getEffectiveUnitAttackRange(state, enemy)
     );
   });
 
@@ -276,7 +441,7 @@ export function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId
   );
 }
 
-function scoreFriendlyUnitValue(unit: UnitEntity): number {
+function scoreFriendlyUnitValue(state: GameState, unit: UnitEntity): number {
   const roleBase =
     unit.role === "combat"
       ? AI_WEIGHTS.threatCombatBase
@@ -284,7 +449,7 @@ function scoreFriendlyUnitValue(unit: UnitEntity): number {
         ? AI_WEIGHTS.threatResourceBase
         : AI_WEIGHTS.threatUtilityBase;
 
-  return roleBase + unit.attackDamage * 3 + unit.armor * 3 + unit.attackRange * 2;
+  return roleBase + unit.attackDamage * 3 + unit.armor * 3 + getEffectiveUnitAttackRange(state, unit) * 2;
 }
 
 function scoreUnitBuffOpportunity(
@@ -324,7 +489,7 @@ function scoreUnitBuffOpportunity(
           canUnitDeclareAttack(state, enemy) &&
           enemy.attacksRemaining > 0 &&
           canAttackEntityDirectly(state, enemy.ownerId, unit) &&
-          hexDistance(enemy.coord, unit.coord) <= enemy.attackRange
+          hexDistance(enemy.coord, unit.coord) <= getEffectiveUnitAttackRange(state, enemy)
       );
 
       for (const enemy of threateningEnemies) {
@@ -349,7 +514,7 @@ function scoreUnitBuffOpportunity(
 
     const inRangeTargets = getEnemyEntities(state, botPlayerId)
       .filter((target) => canAttackEntityDirectly(state, botPlayerId, target))
-      .filter((target) => hexDistance(unit.coord, target.coord) <= unit.attackRange)
+      .filter((target) => hexDistance(unit.coord, target.coord) <= getEffectiveUnitAttackRange(state, unit))
       .sort((a, b) => a.id.localeCompare(b.id));
 
     const bestTarget = inRangeTargets[0];
@@ -431,7 +596,7 @@ export function scoreMassDamageSpell(
     const appliedDamage = Math.min(options.amount, unit.hp);
     const kill = options.amount >= unit.hp;
     if (unit.ownerId === botPlayerId) {
-      score -= AI_WEIGHTS.friendlyUnitBasePenalty + scoreFriendlyUnitValue(unit) * 0.6;
+      score -= AI_WEIGHTS.friendlyUnitBasePenalty + scoreFriendlyUnitValue(state, unit) * 0.6;
       score -= appliedDamage * AI_WEIGHTS.friendlyDamagePenaltyMult;
       if (kill) {
         score -= AI_WEIGHTS.friendlyKillPenalty + (unit.role === "combat" ? AI_WEIGHTS.friendlyCombatPenalty : 0);
@@ -471,7 +636,7 @@ export function scoreDestroyDamagedUnitsSpell(
 
   for (const unit of targets) {
     if (unit.ownerId === botPlayerId) {
-      score -= AI_WEIGHTS.friendlyKillPenalty + scoreFriendlyUnitValue(unit);
+      score -= AI_WEIGHTS.friendlyKillPenalty + scoreFriendlyUnitValue(state, unit);
     } else {
       enemyTargets += 1;
       score +=

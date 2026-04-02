@@ -84,6 +84,7 @@ describe("starter decks", () => {
     const biomassCards = getStarterDeckCardIds("biomass_swarm");
 
     expect(countCopies(alloyCards, "patchwork_barrier")).toBe(4);
+    expect(countCopies(alloyCards, "bulwark_refit")).toBe(2);
     expect(countCopies(alloyCards, "scorched_protocol")).toBe(4);
     expect(countCopies(alloyCards, "war_protocol")).toBe(2);
     expect(countCopies(alloyCards, "iron_formation")).toBe(2);

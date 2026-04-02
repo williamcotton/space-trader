@@ -6,24 +6,24 @@ import { canAttackEntityDirectly, canUnitAttack } from "../../../../rules/direct
 import { resolveCombatAttack } from "../../../../systems/combat";
 import { getEffectiveUnitAttackRange } from "../../../../systems/unitStats";
 import { unitHasActiveKeyword } from "../../../../systems/keywords";
-import { PREDATION_KEYWORD } from "./keywordIds";
+import { EMPLACED_KEYWORD } from "./keywordIds";
 
 const AI_WEIGHTS = {
-  baseOpportunity: 24,
+  baseOpportunity: 22,
   damageMult: 18,
-  killBonus: 72,
-  baseAttackBonus: 28,
-  enemyResourceBonus: 18,
-  enemyUtilityBonus: 10,
+  killBonus: 68,
+  baseAttackBonus: 34,
+  enemyResourceBonus: 14,
+  enemyUtilityBonus: 8,
 } as const;
 
-export function installPredationMechanic(): void {
-  registerUnitAttackPermissionChecker("predation_resource_attack", (state, unit) =>
-    unit.role === "resource" && unitHasActiveKeyword(state, unit, PREDATION_KEYWORD)
+export function installEmplacedMechanic(): void {
+  registerUnitAttackPermissionChecker("emplaced_resource_attack", (state, unit) =>
+    unit.role === "resource" && unitHasActiveKeyword(state, unit, EMPLACED_KEYWORD)
   );
 
-  registerUnitBuffScoreContributor("predation_attack_permission", ({ state, botPlayerId, affectedUnits, options }) => {
-    if (!options.grantedKeywords?.includes(PREDATION_KEYWORD)) {
+  registerUnitBuffScoreContributor("emplaced_attack_permission", ({ state, botPlayerId, affectedUnits, options }) => {
+    if (!options.grantedKeywords?.includes(EMPLACED_KEYWORD)) {
       return null;
     }
 

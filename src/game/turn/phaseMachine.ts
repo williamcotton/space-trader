@@ -1,7 +1,7 @@
 import type { GamePhase } from "../model/enums";
 import { MAX_HAND_SIZE, type GameState } from "../model/state";
 import type { PlayerId } from "../model/ids";
-import { clearTemporaryUnitModifiers } from "../systems/unitStats";
+import { clearTemporaryUnitModifiers, getEffectiveUnitMoveRange } from "../systems/unitStats";
 import { resetTurnMechanicState } from "../mechanics";
 
 const PHASE_SEQUENCE: GamePhase[] = ["start", "economy", "main", "tactical", "end", "discard"];
@@ -20,7 +20,7 @@ function resetUnitActionBudgetsForPlayer(state: GameState, playerId: PlayerId): 
       continue;
     }
 
-    entity.movesRemaining = entity.moveRange;
+    entity.movesRemaining = getEffectiveUnitMoveRange(state, entity);
     entity.attacksRemaining = entity.attackActionsPerTurn;
     entity.hasSummoningSickness = false;
   }

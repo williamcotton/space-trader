@@ -11,6 +11,7 @@ import {
   scoreGlobalBuffSpell,
   scoreHexAreaDamageSpell,
   scoreMassDamageSpell,
+  scoreModifyTargetUnitSpellTarget,
   scoreResourcesByUnitCountSpell,
 } from "../ai/spellScoring";
 import { getCardDefinition, getResolvedCardPlayEffectConfigs } from "../../../cards/catalog";
@@ -169,6 +170,31 @@ function registerFoundationSpellScoring(): void {
       return -Infinity;
     }
     return scoreBraceProtocolTarget(state, botPlayerId, entity);
+  });
+
+  registerSpellScoringResolver("modify_target_unit", ({ state, botPlayerId, targeting, effectConfigs }) => {
+    if (!targeting.targetEntityId) {
+      return -Infinity;
+    }
+    const entity = state.entities[targeting.targetEntityId];
+    if (!entity || entity.kind !== "unit") {
+      return -Infinity;
+    }
+    return combineConfiguredSpellScores(
+      effectConfigs
+        .filter((effectConfig) => effectConfig.type === "modify_target_unit")
+        .map((effectConfig) =>
+          scoreModifyTargetUnitSpellTarget(state, botPlayerId, entity, {
+            attackBonus: typeof effectConfig.attackBonus === "number" ? effectConfig.attackBonus : undefined,
+            armorBonus: typeof effectConfig.armorBonus === "number" ? effectConfig.armorBonus : undefined,
+            siegeBonus: typeof effectConfig.siegeBonus === "number" ? effectConfig.siegeBonus : undefined,
+            moveRangeBonus: typeof effectConfig.moveRangeBonus === "number" ? effectConfig.moveRangeBonus : undefined,
+            attackRangeBonus: typeof effectConfig.attackRangeBonus === "number" ? effectConfig.attackRangeBonus : undefined,
+            grantedKeywords: Array.isArray(effectConfig.grantedKeywords) ? effectConfig.grantedKeywords : undefined,
+            setMoveRange: typeof effectConfig.setMoveRange === "number" ? effectConfig.setMoveRange : undefined,
+          })
+        )
+    );
   });
 
   registerSpellScoringResolver("mass_damage", ({ state, botPlayerId, targeting, effectConfigs }) => {
@@ -493,6 +519,62 @@ function registerFoundationStackResolveAnimations(): void {
       coord: target.coord,
       visual: "buff",
       label: "Hijack",
+    };
+  });
+
+  registerStackResolveAnimationBuilder("modify_target_unit", ({ event, before, state, baseId, sourceCard }) => {
+    const targetId = event.targetEntityId;
+    if (!targetId) {
+      return null;
+    }
+    const target = before.entities[targetId] ?? state.entities[targetId];
+    if (!target) {
+      return null;
+    }
+
+    const changeParts = getResolvedCardPlayEffectConfigs(sourceCard, event.activeModifierIds ?? [])
+      .filter((effectConfig) => effectConfig.type === "modify_target_unit")
+      .flatMap((effectConfig) => {
+        const parts: string[] = [];
+        if (Number(effectConfig.attackBonus ?? 0) !== 0) {
+          const amount = Number(effectConfig.attackBonus ?? 0);
+          parts.push(`${amount > 0 ? "+" : ""}${amount} ATK`);
+        }
+        if (Number(effectConfig.armorBonus ?? 0) !== 0) {
+          const amount = Number(effectConfig.armorBonus ?? 0);
+          parts.push(`${amount > 0 ? "+" : ""}${amount} ARM`);
+        }
+        if (Number(effectConfig.siegeBonus ?? 0) !== 0) {
+          const amount = Number(effectConfig.siegeBonus ?? 0);
+          parts.push(`${amount > 0 ? "+" : ""}${amount} SG`);
+        }
+        if (typeof effectConfig.setMoveRange === "number") {
+          parts.push(`MOV ${Number(effectConfig.setMoveRange)}`);
+        } else if (Number(effectConfig.moveRangeBonus ?? 0) !== 0) {
+          const amount = Number(effectConfig.moveRangeBonus ?? 0);
+          parts.push(`${amount > 0 ? "+" : ""}${amount} MOV`);
+        }
+        if (Number(effectConfig.attackRangeBonus ?? 0) !== 0) {
+          const amount = Number(effectConfig.attackRangeBonus ?? 0);
+          parts.push(`${amount > 0 ? "+" : ""}${amount} RNG`);
+        }
+        if (Array.isArray(effectConfig.grantedKeywords)) {
+          for (const keyword of effectConfig.grantedKeywords) {
+            parts.push(String(keyword));
+          }
+        }
+        return parts;
+      });
+
+    return {
+      id: baseId,
+      kind: "spell_resolve",
+      playerId: event.controllerId,
+      ageSeconds: 0,
+      durationSeconds: 0.86,
+      coord: target.coord,
+      visual: "buff",
+      label: changeParts.length > 0 ? changeParts.join(" · ") : event.label,
     };
   });
 

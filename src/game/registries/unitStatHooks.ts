@@ -3,7 +3,7 @@ import type { GameState, UnitEntity } from "../model/state";
 export type UnitStatHook = (
   state: Readonly<GameState>,
   unit: UnitEntity,
-  stat: "attackDamage" | "armor" | "siegeDamageBonus"
+  stat: "attackDamage" | "armor" | "siegeDamageBonus" | "moveRange" | "attackRange" | "hp" | "maxHp"
 ) => number;
 
 const unitStatHooks = new Map<string, UnitStatHook>();
@@ -15,7 +15,7 @@ export function registerUnitStatHook(id: string, hook: UnitStatHook): void {
 export function getRegisteredUnitStatAdjustments(
   state: Readonly<GameState>,
   unit: UnitEntity,
-  stat: "attackDamage" | "armor" | "siegeDamageBonus"
+  stat: "attackDamage" | "armor" | "siegeDamageBonus" | "moveRange" | "attackRange" | "hp" | "maxHp"
 ): number {
   let total = 0;
   for (const hook of unitStatHooks.values()) {

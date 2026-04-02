@@ -24,8 +24,9 @@ function defineStarterDeck(entries: readonly DeckEntry[]): string[] {
 const ALLOY_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["expedition_harvester_card", 4],
   ["brace_protocol", 4],
+  ["bulwark_refit", 2],
   ["patchwork_barrier", 4],
-  ["rivet_volley", 4],
+  ["rivet_volley", 2],
   ["slag_barrage", 4],
   ["war_protocol", 2],
   ["iron_formation", 2],

@@ -24,12 +24,18 @@ export type StatModifier = {
   amount: number;
 };
 
+export type StatSetter = {
+  type: "stat_set";
+  stat: "attackDamage" | "armor" | "siegeDamageBonus" | "moveRange" | "attackRange" | "hp" | "maxHp";
+  value: number;
+};
+
 export type KeywordGrant = {
   type: "keyword_grant";
   keyword: string;
 };
 
-export type ContinuousEffectPayload = StatModifier | KeywordGrant | ReplacementEffectPayload;
+export type ContinuousEffectPayload = StatModifier | StatSetter | KeywordGrant | ReplacementEffectPayload;
 
 // --- Expiry conditions (all serializable) ---
 
@@ -139,19 +145,22 @@ export function getEffectiveKeywordsForUnit(
 export function getEffectiveStatValue(
   state: Readonly<GameState>,
   unit: UnitEntity,
-  stat: "attackDamage" | "armor" | "siegeDamageBonus"
+  stat: "attackDamage" | "armor" | "siegeDamageBonus" | "moveRange" | "attackRange" | "hp" | "maxHp"
 ): number {
   const base = unit[stat];
 
   const effects = getActiveEffectsForEntity(state, unit.id)
     .filter(
-      (e) => e.payload.type === "stat_modifier" && e.payload.stat === stat
+      (e) => (e.payload.type === "stat_modifier" || e.payload.type === "stat_set") && e.payload.stat === stat
     )
     .sort((a, b) => a.layer - b.layer || a.timestamp - b.timestamp);
 
   let value = effects.reduce((value, effect) => {
     if (effect.payload.type === "stat_modifier") {
       return value + effect.payload.amount;
+    }
+    if (effect.payload.type === "stat_set") {
+      return effect.payload.value;
     }
     return value;
   }, base);

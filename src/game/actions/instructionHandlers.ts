@@ -5,6 +5,7 @@ import {
   nextEffectTimestamp,
   removeEffectsForEntity,
 } from "../systems/continuousEffects";
+import { getEffectiveUnitMoveRange } from "../systems/unitStats";
 import { removeStackItemById } from "../turn/stack";
 import { deployUnitFromCard } from "./deployment";
 import type { GameInstruction } from "./instructions";
@@ -146,6 +147,17 @@ function handleApplyContinuousEffect(
     layer: instr.layer,
     timestamp: ts,
   });
+
+  if (
+    instr.target.type === "specific_entity" &&
+    (instr.payload.type === "stat_modifier" || instr.payload.type === "stat_set") &&
+    instr.payload.stat === "moveRange"
+  ) {
+    const target = state.entities[instr.target.entityId];
+    if (target && target.kind === "unit") {
+      target.movesRemaining = Math.min(target.movesRemaining, getEffectiveUnitMoveRange(state, target));
+    }
+  }
 }
 
 function handleDrawCards(state: GameState, instr: Extract<GameInstruction, { type: "DRAW_CARDS" }>): void {

@@ -6,6 +6,8 @@ import { getPlayerBase } from "../model/queries";
 export type CombatBreakdown = {
   attackerId: string;
   targetId: string;
+  baseAttack: number;
+  siegeAttack: number;
   rawAttack: number;
   defense: number;
   supplyPenalty: number;
@@ -50,11 +52,12 @@ export function resolveCombatAttack(state: GameState, attacker: UnitEntity, targ
   const effectiveSiegeDamageBonus = getEffectiveUnitSiegeDamageBonus(state, attacker);
   const effectiveTargetArmor = target.kind === "unit" ? getEffectiveUnitArmor(state, target) : 0;
 
-  const rawAttack =
+  const baseAttack =
     effectiveAttackDamage +
     getTemporaryAttackBuffs(state, attacker, target) +
-    getFactionAttackBonus(state, attacker) +
-    (target.kind === "base" ? effectiveSiegeDamageBonus : 0);
+    getFactionAttackBonus(state, attacker);
+  const siegeAttack = target.kind === "base" ? effectiveSiegeDamageBonus : 0;
+  const rawAttack = baseAttack + siegeAttack;
   const defense =
     effectiveTargetArmor +
     getTerrainDefenseBonus(state, target) +
@@ -62,13 +65,18 @@ export function resolveCombatAttack(state: GameState, attacker: UnitEntity, targ
     getFactionDefenseBonus(state, target);
 
   const supplyPenalty = getSupplyPenalty(distanceFromFriendlyBase);
-  const finalDamage = Math.max(1, rawAttack - defense - supplyPenalty);
+  const finalDamage =
+    target.kind === "base"
+      ? Math.max(1, baseAttack - defense - supplyPenalty) + siegeAttack
+      : Math.max(1, rawAttack - defense - supplyPenalty);
   const targetHpBefore = target.hp;
   const targetHpAfter = Math.max(0, targetHpBefore - finalDamage);
 
   return {
     attackerId: attacker.id,
     targetId: target.id,
+    baseAttack,
+    siegeAttack,
     rawAttack,
     defense,
     supplyPenalty,

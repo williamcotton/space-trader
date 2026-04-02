@@ -74,6 +74,32 @@ describe("resolveCombatAttack", () => {
     const result = resolveCombatAttack(state, attacker, target);
 
     expect(result.rawAttack).toBe(attacker.attackDamage + attacker.siegeDamageBonus);
+    expect(result.baseAttack).toBe(attacker.attackDamage);
+    expect(result.siegeAttack).toBe(attacker.siegeDamageBonus);
+    expect(result.finalDamage).toBe(3);
+    expect(result.targetHpAfter).toBe(target.hp - 3);
+  });
+
+  it("lets siege damage bypass supply when attacking bases", () => {
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
+    const attacker = state.entities.unit_player_1_scout;
+    const target = state.entities.base_player_2;
+    expect(attacker?.kind).toBe("unit");
+    expect(target?.kind).toBe("base");
+    if (!attacker || attacker.kind !== "unit" || !target || target.kind !== "base") {
+      throw new Error("Expected unit attacker and base target.");
+    }
+
+    attacker.coord = { q: 4, r: -2 }; // distance 8 => supply penalty 1
+    attacker.attackDamage = 1;
+    attacker.siegeDamageBonus = 2;
+    target.coord = { q: 5, r: -2 };
+
+    const result = resolveCombatAttack(state, attacker, target);
+
+    expect(result.baseAttack).toBe(1);
+    expect(result.siegeAttack).toBe(2);
+    expect(result.supplyPenalty).toBe(1);
     expect(result.finalDamage).toBe(3);
     expect(result.targetHpAfter).toBe(target.hp - 3);
   });

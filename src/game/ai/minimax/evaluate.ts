@@ -5,6 +5,7 @@ import type { PlayerId } from "../../model/ids";
 import { getConfiguredDepositAmount, type GameState, type UnitEntity } from "../../model/state";
 import { canAttackEntityDirectly, canUnitAttack } from "../../rules/directInteraction";
 import { getResourceNodeAtCoord, isBaseAdjacentDropoffTile } from "../../systems/harvesting";
+import { getEffectiveUnitAttackRange, getEffectiveUnitMoveRange } from "../../systems/unitStats";
 import { getOpponentPlayer } from "../../turn/stack";
 
 const WIN_SCORE = 1_000_000;
@@ -18,7 +19,9 @@ function getClosestDropoffDistance(state: Readonly<GameState>, playerId: PlayerI
   return Math.max(0, hexDistance(base.coord, unit.coord) - 1);
 }
 
-function getUnitMaterialScore(unit: UnitEntity): number {
+function getUnitMaterialScore(state: Readonly<GameState>, unit: UnitEntity): number {
+  const effectiveMoveRange = getEffectiveUnitMoveRange(state as GameState, unit);
+  const effectiveAttackRange = getEffectiveUnitAttackRange(state as GameState, unit);
   const roleBase =
     unit.role === "combat"
       ? 110
@@ -32,14 +35,15 @@ function getUnitMaterialScore(unit: UnitEntity): number {
     unit.attackDamage * 24 +
     unit.armor * 18 +
     unit.siegeDamageBonus * 12 +
-    unit.moveRange * 6 +
-    unit.attackRange * 12 +
+    effectiveMoveRange * 6 +
+    effectiveAttackRange * 12 +
     unit.attackActionsPerTurn * 16
   );
 }
 
 function scoreUnitPosition(state: Readonly<GameState>, playerId: PlayerId, unit: UnitEntity): number {
   const opponentId = getOpponentPlayer(playerId);
+  const attackRange = getEffectiveUnitAttackRange(state as GameState, unit);
   let score = 0;
 
   if (!unit.hasSummoningSickness) {
@@ -77,7 +81,7 @@ function scoreUnitPosition(state: Readonly<GameState>, playerId: PlayerId, unit:
     const enemyBase = getPlayerBase(state as GameState, opponentId);
     if (enemyBase) {
       score += Math.max(0, 9 - hexDistance(unit.coord, enemyBase.coord)) * 10;
-      if (canAttackEntityDirectly(state, playerId, enemyBase) && hexDistance(unit.coord, enemyBase.coord) <= unit.attackRange) {
+      if (canAttackEntityDirectly(state, playerId, enemyBase) && hexDistance(unit.coord, enemyBase.coord) <= attackRange) {
         score += 60;
       }
     }
@@ -85,7 +89,7 @@ function scoreUnitPosition(state: Readonly<GameState>, playerId: PlayerId, unit:
     if (canUnitAttack(unit) && unit.attacksRemaining > 0) {
       const attackableEnemies = getEnemyEntities(state as GameState, playerId).filter((target) =>
         canAttackEntityDirectly(state, playerId, target) &&
-        hexDistance(unit.coord, target.coord) <= unit.attackRange
+        hexDistance(unit.coord, target.coord) <= attackRange
       );
       score += attackableEnemies.length * 24;
     }
@@ -129,7 +133,7 @@ function scorePlayerState(state: Readonly<GameState>, playerId: PlayerId): numbe
 
   for (const unit of getPlayerUnits(state as GameState, playerId)) {
     const hpRatio = unit.maxHp > 0 ? unit.hp / unit.maxHp : 0;
-    score += getUnitMaterialScore(unit) * (0.35 + hpRatio * 0.65);
+    score += getUnitMaterialScore(state, unit) * (0.35 + hpRatio * 0.65);
     score += scoreUnitPosition(state, playerId, unit);
   }
 

@@ -6,7 +6,7 @@ import { getEnemyEntities, getPlayerUnits } from "../../../../model/queries";
 import { canAttackEntityDirectly, canUnitAttack, canUnitDeclareAttack } from "../../../../rules/directInteraction";
 import { getOpponentPlayer } from "../../../../turn/stack";
 import { getCascadeAffectedHexes } from "../../../../systems/cascade";
-import { getEffectiveUnitAttackDamage } from "../../../../systems/unitStats";
+import { getEffectiveUnitAttackDamage, getEffectiveUnitAttackRange } from "../../../../systems/unitStats";
 import { getRegisteredCurrencyResourceId, getRegisteredResourceIds } from "../../../registry";
 import {
   applyUnitBuffScoreContributions,
@@ -78,7 +78,7 @@ function scoreEnemyEntityThreat(state: GameState, botPlayerId: PlayerId, target:
   score +=
     target.attackDamage * AI_WEIGHTS.threatAttackMult +
     target.armor * AI_WEIGHTS.threatArmorMult +
-    target.attackRange * AI_WEIGHTS.threatRangeMult;
+    getEffectiveUnitAttackRange(state, target) * AI_WEIGHTS.threatRangeMult;
 
   const botBase = state.entities[state.players[botPlayerId].baseEntityId];
   if (botBase && botBase.kind === "base") {
@@ -179,7 +179,7 @@ export function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId
       enemy.role === "combat" &&
       canUnitAttack(enemy) &&
       enemy.attacksRemaining > 0 &&
-      hexDistance(enemy.coord, target.coord) <= enemy.attackRange
+      hexDistance(enemy.coord, target.coord) <= getEffectiveUnitAttackRange(state, enemy)
     );
   });
 
@@ -228,7 +228,7 @@ export function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId
   );
 }
 
-function scoreFriendlyUnitValue(unit: UnitEntity): number {
+function scoreFriendlyUnitValue(state: GameState, unit: UnitEntity): number {
   const roleBase =
     unit.role === "combat"
       ? AI_WEIGHTS.threatCombatBase
@@ -236,7 +236,7 @@ function scoreFriendlyUnitValue(unit: UnitEntity): number {
         ? AI_WEIGHTS.threatResourceBase
         : AI_WEIGHTS.threatUtilityBase;
 
-  return roleBase + unit.attackDamage * 3 + unit.armor * 3 + unit.attackRange * 2;
+  return roleBase + unit.attackDamage * 3 + unit.armor * 3 + getEffectiveUnitAttackRange(state, unit) * 2;
 }
 
 function scoreUnitBuffOpportunity(
@@ -281,7 +281,7 @@ function scoreUnitBuffOpportunity(
           canUnitDeclareAttack(state, enemy) &&
           enemy.attacksRemaining > 0 &&
           canAttackEntityDirectly(state, enemy.ownerId, unit) &&
-          hexDistance(enemy.coord, unit.coord) <= enemy.attackRange
+          hexDistance(enemy.coord, unit.coord) <= getEffectiveUnitAttackRange(state, enemy)
       );
 
       for (const enemy of threateningEnemies) {
@@ -306,7 +306,7 @@ function scoreUnitBuffOpportunity(
 
     const inRangeTargets = getEnemyEntities(state, botPlayerId)
       .filter((target) => canAttackEntityDirectly(state, botPlayerId, target))
-      .filter((target) => hexDistance(unit.coord, target.coord) <= unit.attackRange)
+      .filter((target) => hexDistance(unit.coord, target.coord) <= getEffectiveUnitAttackRange(state, unit))
       .sort((a, b) => a.id.localeCompare(b.id));
 
     const bestTarget = inRangeTargets[0];
@@ -432,7 +432,7 @@ export function scoreMassDamageSpell(
     const appliedDamage = Math.min(options.amount, unit.hp);
     const kill = options.amount >= unit.hp;
     if (unit.ownerId === botPlayerId) {
-      score -= AI_WEIGHTS.friendlyUnitBasePenalty + scoreFriendlyUnitValue(unit) * 0.6;
+      score -= AI_WEIGHTS.friendlyUnitBasePenalty + scoreFriendlyUnitValue(state, unit) * 0.6;
       score -= appliedDamage * AI_WEIGHTS.friendlyDamagePenaltyMult;
       if (kill) {
         score -= AI_WEIGHTS.friendlyKillPenalty + (unit.role === "combat" ? AI_WEIGHTS.friendlyCombatPenalty : 0);
@@ -472,7 +472,7 @@ export function scoreDestroyDamagedUnitsSpell(
 
   for (const unit of targets) {
     if (unit.ownerId === botPlayerId) {
-      score -= AI_WEIGHTS.friendlyKillPenalty + scoreFriendlyUnitValue(unit);
+      score -= AI_WEIGHTS.friendlyKillPenalty + scoreFriendlyUnitValue(state, unit);
     } else {
       enemyTargets += 1;
       score +=

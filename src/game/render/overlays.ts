@@ -4,6 +4,7 @@ import { getSelectedUnit } from "../model/queries";
 import { spatialGetEntity } from "../derived";
 import type { GameFrame } from "../types";
 import { canUnitDeclareAttack } from "../rules/directInteraction";
+import { getEffectiveUnitAttackRange } from "../systems/unitStats";
 import { toPixel, clamp, drawDiamond, drawRegularPolygon, drawRoundedRect, drawHexOutline } from "./primitives";
 
 export function getStackAnchor(frame: GameFrame): { x: number; y: number } {
@@ -89,7 +90,7 @@ export function drawHoverHexAndTargetPreview(state: GameState, frame: GameFrame,
     state.phase === "tactical" &&
     selected.attacksRemaining > 0 &&
     canUnitDeclareAttack(state, selected) &&
-    distance <= selected.attackRange;
+    distance <= getEffectiveUnitAttackRange(state, selected);
 
   context.beginPath();
   context.moveTo(selectedPos.x, selectedPos.y);
