@@ -66,7 +66,7 @@ describe("getBoardClickCommand", () => {
     });
   });
 
-  it("issues a harvest command when a selected resource unit clicks its controlled node during tactical", () => {
+  it("keeps the selected resource unit selected when its controlled node is clicked during tactical", () => {
     const state = setupState();
     state.phase = "tactical";
     state.selectedEntityId = "unit_player_1_harvester";
@@ -76,10 +76,9 @@ describe("getBoardClickCommand", () => {
     node.controlledBy = "player_1";
 
     expect(getBoardClickCommand(state, { ...node.coord })).toEqual({
-      type: "HARVEST_NODE",
+      type: "CLEAR_SELECTION",
       playerId: "player_1",
-      entityId: "unit_player_1_harvester",
-      nodeId: node.id,
+      reason: "clicked_selected_unit",
     });
   });
 
@@ -330,7 +329,7 @@ describe("GameRuntime", () => {
     expect(submitted).toEqual(["SELECT_ENTITY"]);
   });
 
-  it("submits harvest for the local player during a networked tactical turn", () => {
+  it("reselects the unit instead of harvesting on repeated click during a networked tactical turn", () => {
     const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
     const submitted: string[] = [];
     runtime.startNetworkMatch(createMatchStartPayload(), (command) => {
@@ -349,6 +348,26 @@ describe("GameRuntime", () => {
     const point = axialToPixel(harvester.coord, metrics.origin, metrics.size);
 
     runtime.selectUnitFromScreenPoint(point.x, point.y);
+
+    expect(submitted).toEqual(["SELECT_ENTITY"]);
+  });
+
+  it("submits harvest for the local player when requested explicitly during a networked tactical turn", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    const submitted: string[] = [];
+    runtime.startNetworkMatch(createMatchStartPayload(), (command) => {
+      submitted.push(command.type);
+    }, { showIntroAnimation: false });
+    runtime.state.phase = "tactical";
+    runtime.state.activePlayerId = "player_1";
+    runtime.state.priorityPlayerId = "player_1";
+    const harvester = runtime.state.entities.unit_player_1_harvester;
+    const node = runtime.state.map.resourceNodes[0];
+    harvester.coord = { ...node.coord };
+    node.controlledBy = "player_1";
+    runtime.state.selectedEntityId = harvester.id;
+
+    runtime.harvestSelectedUnit();
 
     expect(submitted).toEqual(["HARVEST_NODE"]);
   });

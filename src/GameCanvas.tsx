@@ -149,7 +149,7 @@ export function GameCanvas() {
       }
 
       if (key === "h") {
-        runtime.debugHarvestSelectedUnit();
+        runtime.harvestSelectedUnit();
         return;
       }
 

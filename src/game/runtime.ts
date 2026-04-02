@@ -13,7 +13,7 @@ import {
   getRegisteredRuntimeProfile,
   getRegisteredResourceIds,
 } from "./content/registry";
-import { areSameHex, hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
+import { hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
 import { findEntityAtHex } from "./model/queries";
 import { createInitialGameState } from "./model/state";
 import type { Faction } from "./model/enums";
@@ -220,22 +220,6 @@ function getBoardClickCommandForPlayer(
   }
 
   const selectedUnit = getSelectedUnitForPlayer(state, playerId);
-  if (
-    selectedUnit &&
-    state.phase === "tactical" &&
-    areSameHex(selectedUnit.coord, clickedHex) &&
-    canUnitHarvestNode(selectedUnit, playerId)
-  ) {
-    const node = getResourceNodeAtCoord(state, selectedUnit.coord);
-    if (node && node.controlledBy === playerId) {
-      return {
-        type: "HARVEST_NODE",
-        playerId,
-        entityId: selectedUnit.id,
-        nodeId: node.id,
-      };
-    }
-  }
 
   const clickedEntity = findEntityAtHex(state, clickedHex);
   if (clickedEntity?.kind === "unit" && clickedEntity.ownerId === playerId) {
@@ -841,6 +825,30 @@ export class GameRuntime {
     });
   }
 
+  harvestSelectedUnit(): DispatchResult | null {
+    const playerId = this.state.activePlayerId;
+    if (!this.canLocalPlayerActAs(playerId)) {
+      return null;
+    }
+
+    const selected = getSelectedUnitForPlayer(this.state, playerId);
+    if (!selected || !canUnitHarvestNode(selected, playerId)) {
+      return null;
+    }
+
+    const node = getResourceNodeAtCoord(this.state, selected.coord);
+    if (!node || node.controlledBy !== playerId) {
+      return null;
+    }
+
+    return this.dispatch({
+      type: "HARVEST_NODE",
+      playerId,
+      entityId: selected.id,
+      nodeId: node.id,
+    });
+  }
+
   debugAdvancePhase(): void {
     if (this.networkSession) {
       return;
@@ -938,31 +946,7 @@ export class GameRuntime {
   }
 
   debugHarvestSelectedUnit(): void {
-    if (this.networkSession) {
-      return;
-    }
-    const activePlayerId = this.state.activePlayerId;
-    const selectedId = this.state.selectedEntityId;
-    if (!selectedId) {
-      return;
-    }
-
-    const selected = this.state.entities[selectedId];
-    if (!selected || selected.kind !== "unit" || selected.ownerId !== activePlayerId || selected.role !== "resource") {
-      return;
-    }
-
-    const node = getResourceNodeAtCoord(this.state, selected.coord);
-    if (!node) {
-      return;
-    }
-
-    void this.dispatch({
-      type: "HARVEST_NODE",
-      playerId: activePlayerId,
-      entityId: selected.id,
-      nodeId: node.id,
-    });
+    this.harvestSelectedUnit();
   }
 
   playCardFromHand(
