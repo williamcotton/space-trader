@@ -5,7 +5,27 @@ import { ensureEntityPresentation } from "../presentation";
 import { BASE_STARTING_HP, OPENING_HAND_SIZE, createDefaultGameRules, createInitialZonesForPlayer } from "./state";
 import type { GameState } from "./state";
 
-export const CURRENT_STATE_VERSION = 24;
+export const CURRENT_STATE_VERSION = 25;
+
+function inferNextGeneratedIdCounter(state: GameState): number {
+  let maxSuffix = 0;
+
+  for (const entityId of Object.keys(state.entities)) {
+    const match = entityId.match(/_(\d+)$/);
+    if (match) {
+      maxSuffix = Math.max(maxSuffix, Number(match[1]));
+    }
+  }
+
+  for (const stackItem of state.stack) {
+    const match = stackItem.id.match(/_(\d+)$/);
+    if (match) {
+      maxSuffix = Math.max(maxSuffix, Number(match[1]));
+    }
+  }
+
+  return maxSuffix + 1;
+}
 
 function migratePhaseFourHarvesters(state: GameState): void {
   const playerOneHarvesterId = "unit_player_1_harvester";
@@ -78,6 +98,10 @@ export function migrateRuntimeState(state: GameState): void {
 
   if (typeof state.consecutivePriorityPasses !== "number") {
     state.consecutivePriorityPasses = 0;
+  }
+
+  if (typeof (state as GameState & { nextGeneratedIdCounter?: unknown }).nextGeneratedIdCounter !== "number") {
+    state.nextGeneratedIdCounter = inferNextGeneratedIdCounter(state);
   }
 
   if (!state.rules) {

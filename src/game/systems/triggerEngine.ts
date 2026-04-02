@@ -3,7 +3,7 @@ import { getCardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/stackEffects";
 import type { PlayerId } from "../model/ids";
 import type { GameState, UnitEntity } from "../model/state";
-import { createStackItemId, getOpponentPlayer } from "../turn/stack";
+import { getOpponentPlayer, reserveStackItemId } from "../turn/stack";
 import { getAutoTargetResolver } from "../registries/autoTargets";
 import { getTriggerConditionEvaluator } from "../registries/triggerConditions";
 
@@ -124,7 +124,7 @@ export function evaluateTriggersFromEvent(
       triggeredEvents.push({
         type: "STACK_ITEM_PUSHED",
         playerId: unit.ownerId,
-        itemId: createStackItemId(state.turn, state.log.length + triggeredEvents.length),
+        itemId: reserveStackItemId(state),
         label: `${unit.name} ${trigger.labelSuffix}`,
         controllerId: unit.ownerId,
         ownerId: unit.ownerId,

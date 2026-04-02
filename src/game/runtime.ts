@@ -25,6 +25,7 @@ import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
 import { canAttackEntityDirectly } from "./rules/directInteraction";
 import { canUnitDeclareAttack } from "./rules/directInteraction";
+import { canUnitHarvestNode, getResourceNodeAtCoord } from "./systems/harvesting";
 import { getEffectiveUnitAttackRange } from "./systems/unitStats";
 import { getAutoFlowCommand } from "./turn/autoFlow";
 import {
@@ -75,6 +76,8 @@ type RuntimeNetworkSession = {
   matchId: string;
   localPlayerId: PlayerId;
   submitCommand: (command: GameCommand) => void;
+  canSubmitCommand?: () => boolean;
+  getBlockedReason?: () => string | null;
 };
 
 function createRuntimeMatchId(matchPrefix: string): string {
@@ -177,13 +180,13 @@ function createDefaultRuntimeState(): GameState {
   return createRuntimeStateFromContent().state;
 }
 
-function getSelectedActiveUnit(state: GameState) {
+function getSelectedUnitForPlayer(state: GameState, playerId: PlayerId) {
   if (!state.selectedEntityId) {
     return null;
   }
 
   const entity = state.entities[state.selectedEntityId];
-  if (!entity || entity.kind !== "unit" || entity.ownerId !== state.activePlayerId) {
+  if (!entity || entity.kind !== "unit" || entity.ownerId !== playerId) {
     return null;
   }
 
@@ -191,6 +194,19 @@ function getSelectedActiveUnit(state: GameState) {
 }
 
 export function getBoardClickCommand(state: GameState, clickedHex: { q: number; r: number } | null): GameCommand | null {
+  return getBoardClickCommandForPlayer(state, state.activePlayerId, clickedHex);
+}
+
+function getBoardClickCommandForPlayer(
+  state: GameState,
+  playerId: PlayerId,
+  clickedHex: { q: number; r: number } | null,
+  options?: { toggleSelectedUnitOff?: boolean }
+): GameCommand | null {
+  if (playerId !== state.activePlayerId || playerId !== state.priorityPlayerId) {
+    return null;
+  }
+
   if (!clickedHex) {
     if (!state.selectedEntityId) {
       return null;
@@ -198,33 +214,50 @@ export function getBoardClickCommand(state: GameState, clickedHex: { q: number; 
 
     return {
       type: "CLEAR_SELECTION",
-      playerId: state.activePlayerId,
+      playerId,
       reason: "clicked_outside_map",
     };
   }
 
+  const selectedUnit = getSelectedUnitForPlayer(state, playerId);
+  if (
+    selectedUnit &&
+    state.phase === "tactical" &&
+    areSameHex(selectedUnit.coord, clickedHex) &&
+    canUnitHarvestNode(selectedUnit, playerId)
+  ) {
+    const node = getResourceNodeAtCoord(state, selectedUnit.coord);
+    if (node && node.controlledBy === playerId) {
+      return {
+        type: "HARVEST_NODE",
+        playerId,
+        entityId: selectedUnit.id,
+        nodeId: node.id,
+      };
+    }
+  }
+
   const clickedEntity = findEntityAtHex(state, clickedHex);
-  if (clickedEntity?.kind === "unit" && clickedEntity.ownerId === state.activePlayerId) {
-    if (state.selectedEntityId === clickedEntity.id) {
+  if (clickedEntity?.kind === "unit" && clickedEntity.ownerId === playerId) {
+    if (state.selectedEntityId === clickedEntity.id && options?.toggleSelectedUnitOff !== false) {
       return {
         type: "CLEAR_SELECTION",
-        playerId: state.activePlayerId,
+        playerId,
         reason: "clicked_selected_unit",
       };
     }
 
     return {
       type: "SELECT_ENTITY",
-      playerId: state.activePlayerId,
+      playerId,
       entityId: clickedEntity.id,
     };
   }
 
-  const selectedUnit = getSelectedActiveUnit(state);
   if (selectedUnit && !clickedEntity && state.phase === "tactical") {
     return {
       type: "MOVE_UNIT",
-      playerId: state.activePlayerId,
+      playerId,
       entityId: selectedUnit.id,
       to: clickedHex,
     };
@@ -236,7 +269,7 @@ export function getBoardClickCommand(state: GameState, clickedHex: { q: number; 
 
   return {
     type: "CLEAR_SELECTION",
-    playerId: state.activePlayerId,
+    playerId,
     reason: "clicked_empty_or_enemy_tile",
   };
 }
@@ -515,6 +548,16 @@ export class GameRuntime {
 
   dispatch(command: GameCommand): DispatchResult {
     if (this.networkSession) {
+      if (this.networkSession.canSubmitCommand && !this.networkSession.canSubmitCommand()) {
+        const reason = this.networkSession.getBlockedReason?.() ?? "Waiting for the server to confirm your previous action.";
+        this.state.lastRejectedReason = reason;
+        this.notifyListeners();
+        return {
+          ok: false,
+          reason,
+          events: [],
+        };
+      }
       try {
         this.state.lastRejectedReason = null;
         this.networkSession.submitCommand(command);
@@ -615,12 +658,18 @@ export class GameRuntime {
   startNetworkMatch(
     payload: MatchStartPayload,
     submitCommand: (command: GameCommand) => void,
-    options?: { showIntroAnimation?: boolean }
+    options?: {
+      showIntroAnimation?: boolean;
+      canSubmitCommand?: () => boolean;
+      getBlockedReason?: () => string | null;
+    }
   ): void {
     this.networkSession = {
       matchId: payload.matchId,
       localPlayerId: payload.localPlayerId,
       submitCommand,
+      canSubmitCommand: options?.canSubmitCommand,
+      getBlockedReason: options?.getBlockedReason,
     };
 
     const { state: newState, runtimeProfileId, loadedSetIds } = createRuntimeStateFromContent({
@@ -699,10 +748,6 @@ export class GameRuntime {
     this.pendingCardTargeting = null;
   }
 
-  private findResourceNodeAtHex(coord: { q: number; r: number }): GameState["map"]["resourceNodes"][number] | undefined {
-    return this.state.map.resourceNodes.find((node) => areSameHex(node.coord, coord));
-  }
-
   private getHexAtScreenPoint(pixelX: number, pixelY: number): { q: number; r: number } | null {
     const metrics = getHexMetrics(this.viewport, this.state.map);
     const hoveredHex = pixelToAxial({ x: pixelX, y: pixelY }, metrics.origin, metrics.size);
@@ -763,7 +808,10 @@ export class GameRuntime {
       return;
     }
 
-    const command = getBoardClickCommand(this.state, hoveredHex);
+    const actingPlayerId = this.networkSession?.localPlayerId ?? this.state.activePlayerId;
+    const command = getBoardClickCommandForPlayer(this.state, actingPlayerId, hoveredHex, {
+      toggleSelectedUnitOff: !this.networkSession,
+    });
     if (!command) {
       this.notifyListeners();
       return;
@@ -904,7 +952,7 @@ export class GameRuntime {
       return;
     }
 
-    const node = this.findResourceNodeAtHex(selected.coord);
+    const node = getResourceNodeAtCoord(this.state, selected.coord);
     if (!node) {
       return;
     }
@@ -925,14 +973,15 @@ export class GameRuntime {
   ): DispatchResult {
     if (this.state.phase === "discard") {
       this.pendingCardTargeting = null;
+      const discardPlayerId = this.networkSession?.localPlayerId ?? this.state.activePlayerId;
       return this.dispatch({
         type: "DISCARD_CARD",
-        playerId: this.state.activePlayerId,
+        playerId: discardPlayerId,
         cardInstanceId,
       });
     }
 
-    const playerId = this.state.priorityPlayerId ?? this.state.activePlayerId;
+    const playerId = this.networkSession?.localPlayerId ?? this.state.priorityPlayerId ?? this.state.activePlayerId;
     const handCard = this.state.zones[playerId].hand.find((card) => card.instanceId === cardInstanceId);
     const definition = handCard ? getCardDefinition(handCard.cardId) : undefined;
     const cardName = definition?.name ?? handCard?.cardId ?? cardInstanceId;

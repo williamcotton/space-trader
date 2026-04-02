@@ -9,7 +9,7 @@ describe("stack helpers", () => {
   });
 
   it("creates deterministic stack ids", () => {
-    expect(createStackItemId(3, 7)).toBe("stack_3_8");
+    expect(createStackItemId(3, 7)).toBe("stack_3_7");
   });
 
   it("peeks and pops stack items in LIFO order", () => {

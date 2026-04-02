@@ -11,6 +11,7 @@ import {
   type JoinQueueRequest,
   type LeaveQueueRequest,
   type OpenSessionRequest,
+  type QuitMatchRequest,
   type SubmitCommandRequest,
 } from "../../src/network/protocol";
 
@@ -138,6 +139,31 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       ok: true,
       accepted: true,
     });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/match/quit") {
+    const body = await readJsonBody<QuitMatchRequest>(request);
+    const session = body.token ? sessionStore.get(body.token) : null;
+    if (!session) {
+      writeJson(response, 404, { reason: "Unknown session." });
+      return;
+    }
+    if (!session.matchId || session.matchId !== body.matchId) {
+      writeJson(response, 409, { reason: "Session is not bound to that match." });
+      return;
+    }
+    const room = roomStore.get(session.matchId);
+    if (!room) {
+      writeJson(response, 404, { reason: "Match room not found." });
+      return;
+    }
+    const result = room.abandon(body.token);
+    if (!result.ok) {
+      writeJson(response, 409, { reason: result.reason });
+      return;
+    }
+    writeJson(response, 200, { ok: true });
     return;
   }
 

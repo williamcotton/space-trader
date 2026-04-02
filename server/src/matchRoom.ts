@@ -3,6 +3,7 @@ import type { GameCommand } from "../../src/game/actions/commands";
 import type { Faction } from "../../src/game/model/enums";
 import type { PlayerId } from "../../src/game/model/ids";
 import type { GameState } from "../../src/game/model/state";
+import { hexDistance } from "../../src/game/model/hex";
 import { getAutoFlowCommand } from "../../src/game/turn/autoFlow";
 import type { MatchCommandEnvelope, MatchStartPayload } from "../../src/network/protocol";
 import { MULTIPLAYER_PROTOCOL_VERSION } from "../../src/network/protocol";
@@ -86,15 +87,22 @@ export class MatchRoom {
 
     const result = dispatchCommand(this.state, command);
     if (!result.ok) {
+      const reason = this.describeRejectedCommand(command, result.reason);
+      // eslint-disable-next-line no-console
+      console.error("Rejected multiplayer command", {
+        matchId: this.matchId,
+        command,
+        reason,
+      });
       this.sessionStore.send(token, {
         type: "match_rejected",
         matchId: this.matchId,
-        reason: result.reason,
+        reason,
         rejectedCommand: command,
       });
       return {
         ok: false,
-        reason: result.reason,
+        reason,
       };
     }
 
@@ -129,6 +137,24 @@ export class MatchRoom {
       matchId: this.matchId,
       playerId,
     });
+  }
+
+  abandon(token: string): { ok: true } | { ok: false; reason: string } {
+    if (this.finished) {
+      return {
+        ok: false,
+        reason: "Match already ended.",
+      };
+    }
+    const playerId = this.getPlayerIdForToken(token);
+    if (!playerId) {
+      return {
+        ok: false,
+        reason: "Session is not part of this match.",
+      };
+    }
+    this.finish("abandon");
+    return { ok: true };
   }
 
   private getPlayerIdForToken(token: string): PlayerId | null {
@@ -178,6 +204,20 @@ export class MatchRoom {
     });
   }
 
+  private describeRejectedCommand(command: GameCommand, baseReason: string): string {
+    if (command.type !== "MOVE_UNIT") {
+      return baseReason;
+    }
+
+    const entity = this.state.entities[command.entityId];
+    if (!entity || entity.kind !== "unit") {
+      return baseReason;
+    }
+
+    const distance = hexDistance(entity.coord, command.to);
+    return `${baseReason} [match=${this.matchId} unit=${entity.id} from=(${entity.coord.q},${entity.coord.r}) to=(${command.to.q},${command.to.r}) distance=${distance} movesRemaining=${entity.movesRemaining} moveRange=${entity.moveRange} selected=${this.state.selectedEntityId ?? "none"} phase=${this.state.phase} active=${this.state.activePlayerId} priority=${this.state.priorityPlayerId ?? "none"}]`;
+  }
+
   private drainAutoFlow(): void {
     while (!this.finished) {
       if (this.state.winner) {
@@ -218,4 +258,3 @@ export class MatchRoom {
     this.onFinished(this.matchId);
   }
 }
-

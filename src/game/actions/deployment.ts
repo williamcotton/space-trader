@@ -14,12 +14,19 @@ type DeployUnitFromCardOptions = {
 };
 
 export function createSummonedUnitId(
-  state: Readonly<Pick<GameState, "entities" | "log" | "turn">>,
+  state: Pick<GameState, "nextGeneratedIdCounter">,
   playerId: PlayerId,
-  cardId: string
+  cardId: string,
+  sourceCardInstanceId?: string
 ): string {
-  const suffix = Object.keys(state.entities).length + state.log.length + state.turn;
-  return `unit_${playerId}_${cardId}_${suffix}`;
+  if (sourceCardInstanceId) {
+    const suffix = sourceCardInstanceId.match(/_(\d+)$/)?.[1] ?? sourceCardInstanceId.replace(/[^a-zA-Z0-9_]/g, "_");
+    return `unit_${playerId}_${cardId}_${suffix}`;
+  }
+
+  const suffix = state.nextGeneratedIdCounter;
+  state.nextGeneratedIdCounter += 1;
+  return `unit_${playerId}_${cardId}_gen_${suffix}`;
 }
 
 function attachDeployedUnitAuras(

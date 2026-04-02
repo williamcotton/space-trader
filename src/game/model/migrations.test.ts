@@ -60,4 +60,57 @@ describe("migrateRuntimeState", () => {
     expect(getSalvageTriggersThisTurn(state, "player_2")).toBe(0);
     expect(state.stack[0]?.activeModifierIds).toEqual([]);
   });
+
+  it("infers a safe next generated id counter for older states", () => {
+    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
+    state.stack.push({
+      id: "stack_2_14",
+      label: "Legacy",
+      controllerId: "player_1",
+      ownerId: "player_1",
+      effectId: "noop_log",
+      effectMagnitude: 0,
+      activeModifierIds: [],
+      targetStackItemId: null,
+      targetEntityId: null,
+      targetHex: null,
+      objectKind: "spell",
+      counterable: false,
+      defaultCounterDestination: "none",
+      sourceCardInstanceId: null,
+      sourceCardId: null,
+      sourceCardOwnerId: null,
+      pendingUnitEntityId: null,
+    });
+    state.entities.unit_player_1_flux_runner_card_37 = {
+      id: "unit_player_1_flux_runner_card_37",
+      kind: "unit",
+      name: "Flux Runner",
+      ownerId: "player_1",
+      role: "combat",
+      hp: 6,
+      maxHp: 6,
+      attackDamage: 2,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 3,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      coord: { q: 0, r: 0 },
+      keywords: [],
+      carries: null,
+      sourceCardId: "flux_runner_card",
+      hasSummoningSickness: false,
+      movesRemaining: 3,
+      attacksRemaining: 1,
+      temporaryAttackBonus: 0,
+      temporaryArmorBonus: 0,
+    };
+
+    Reflect.deleteProperty(state as typeof state & { nextGeneratedIdCounter?: unknown }, "nextGeneratedIdCounter");
+
+    migrateRuntimeState(state);
+
+    expect(state.nextGeneratedIdCounter).toBe(38);
+  });
 });

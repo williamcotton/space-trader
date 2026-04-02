@@ -61,14 +61,16 @@ export class Matchmaker {
         continue;
       }
 
+      const playerOneFaction = playerOneSession.queuedFaction;
+      const playerTwoFaction = playerTwoSession.queuedFaction;
       const seed = createMatchSeed();
       const matchId = `net_${Date.now().toString(36)}_${seed.toString(36)}`;
       const bundle = createMatchState({
         matchId,
         seed,
         factions: {
-          player_1: playerOneSession.queuedFaction,
-          player_2: playerTwoSession.queuedFaction,
+          player_1: playerOneFaction,
+          player_2: playerTwoFaction,
         },
       });
 
@@ -82,8 +84,8 @@ export class Matchmaker {
         runtimeProfileId: bundle.runtimeProfileId,
         mapId: bundle.mapId,
         factions: {
-          player_1: playerOneSession.queuedFaction,
-          player_2: playerTwoSession.queuedFaction,
+          player_1: playerOneFaction,
+          player_2: playerTwoFaction,
         },
         state: bundle.state,
         playerTokens: {
@@ -109,4 +111,3 @@ export class Matchmaker {
     }
   }
 }
-

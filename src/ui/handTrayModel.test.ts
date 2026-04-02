@@ -40,4 +40,18 @@ describe("getVisibleHandState", () => {
       showingPriorityHand: false,
     });
   });
+
+  it("always shows the local player's hand in networked matches", () => {
+    expect(
+      getVisibleHandState({
+        phase: "main",
+        activePlayerId: "player_2",
+        priorityPlayerId: "player_1",
+        networkLocalPlayerId: "player_2",
+      })
+    ).toEqual({
+      visiblePlayerId: "player_2",
+      showingPriorityHand: false,
+    });
+  });
 });

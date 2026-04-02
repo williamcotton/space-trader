@@ -9,6 +9,8 @@ import {
   type JoinQueueResponse,
   type LeaveQueueRequest,
   type LeaveQueueResponse,
+  type QuitMatchRequest,
+  type QuitMatchResponse,
   type MatchCommandEnvelope,
   type MatchResyncPayload,
   type MatchStartPayload,
@@ -32,6 +34,7 @@ export type MultiplayerSnapshot = {
   serverUrl: string;
   status: MultiplayerStatus;
   token: string | null;
+  selectedFaction: Faction;
   queuedFaction: Faction | null;
   queuedPlayers: number;
   matchId: string | null;
@@ -39,22 +42,65 @@ export type MultiplayerSnapshot = {
   error: string | null;
 };
 
+const WINDOW_TOKEN_SCOPE_PREFIX = "space_trader_window_";
+const DEFAULT_MULTIPLAYER_FACTION = "alloy_clan" as Faction;
+const MULTIPLAYER_PREFERRED_FACTION_STORAGE_KEY = "space_trader_multiplayer_faction";
+
+function getWindowTokenScope(): string {
+  if (typeof window === "undefined") {
+    return "server";
+  }
+
+  if (!window.name.startsWith(WINDOW_TOKEN_SCOPE_PREFIX)) {
+    const generatedId =
+      typeof window.crypto?.randomUUID === "function"
+        ? window.crypto.randomUUID()
+        : `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    window.name = `${WINDOW_TOKEN_SCOPE_PREFIX}${generatedId}`;
+  }
+
+  return window.name;
+}
+
+function getScopedTokenStorageKey(): string {
+  return `${MULTIPLAYER_TOKEN_STORAGE_KEY}:${getWindowTokenScope()}`;
+}
+
+function getScopedPreferredFactionStorageKey(): string {
+  return `${MULTIPLAYER_PREFERRED_FACTION_STORAGE_KEY}:${getWindowTokenScope()}`;
+}
+
 function readStoredToken(): string | null {
   if (typeof window === "undefined") {
     return null;
   }
-  return window.localStorage.getItem(MULTIPLAYER_TOKEN_STORAGE_KEY);
+  return window.sessionStorage.getItem(getScopedTokenStorageKey());
 }
 
 function writeStoredToken(token: string | null): void {
   if (typeof window === "undefined") {
     return;
   }
+  const key = getScopedTokenStorageKey();
   if (token) {
-    window.localStorage.setItem(MULTIPLAYER_TOKEN_STORAGE_KEY, token);
+    window.sessionStorage.setItem(key, token);
     return;
   }
-  window.localStorage.removeItem(MULTIPLAYER_TOKEN_STORAGE_KEY);
+  window.sessionStorage.removeItem(key);
+}
+
+function readStoredPreferredFaction(): Faction {
+  if (typeof window === "undefined") {
+    return DEFAULT_MULTIPLAYER_FACTION;
+  }
+  return (window.sessionStorage.getItem(getScopedPreferredFactionStorageKey()) as Faction | null) ?? DEFAULT_MULTIPLAYER_FACTION;
+}
+
+function writeStoredPreferredFaction(faction: Faction): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.sessionStorage.setItem(getScopedPreferredFactionStorageKey(), faction);
 }
 
 class MultiplayerClient {
@@ -63,6 +109,7 @@ class MultiplayerClient {
     serverUrl: DEFAULT_MULTIPLAYER_SERVER_URL,
     status: "offline",
     token: readStoredToken(),
+    selectedFaction: readStoredPreferredFaction(),
     queuedFaction: null,
     queuedPlayers: 0,
     matchId: null,
@@ -70,9 +117,16 @@ class MultiplayerClient {
     error: null,
   };
   private eventSource: EventSource | null = null;
+  private eventSourceConnected = false;
   private openSessionPromise: Promise<void> | null = null;
+  private resyncPromise: Promise<void> | null = null;
+  private commandQueue: Promise<void> = Promise.resolve();
+  private commandQueueGeneration = 0;
   private activeMatchStart: MatchStartPayload | null = null;
   private lastAppliedSequence = 0;
+  private lastHandledRejectionSignature: string | null = null;
+  private lastHandledRejectionAt = 0;
+  private pendingLocalCommandSignatures: string[] = [];
 
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
@@ -83,6 +137,30 @@ class MultiplayerClient {
     return this.snapshot;
   }
 
+  private getCommandSignature(command: GameCommand): string {
+    return JSON.stringify(command);
+  }
+
+  private hasPendingLocalCommand(): boolean {
+    return this.pendingLocalCommandSignatures.length > 0;
+  }
+
+  private getPendingCommandBlockedReason(): string | null {
+    return this.hasPendingLocalCommand() ? "Waiting for the server to confirm your previous action." : null;
+  }
+
+  private trackSubmittedLocalCommand(command: GameCommand): void {
+    this.pendingLocalCommandSignatures.push(this.getCommandSignature(command));
+  }
+
+  private clearTrackedLocalCommand(command: GameCommand): void {
+    const signature = this.getCommandSignature(command);
+    const index = this.pendingLocalCommandSignatures.indexOf(signature);
+    if (index >= 0) {
+      this.pendingLocalCommandSignatures.splice(index, 1);
+    }
+  }
+
   setServerUrl(serverUrl: string): void {
     const normalized = serverUrl.trim() || DEFAULT_MULTIPLAYER_SERVER_URL;
     if (normalized === this.snapshot.serverUrl) {
@@ -91,6 +169,18 @@ class MultiplayerClient {
     this.snapshot = {
       ...this.snapshot,
       serverUrl: normalized,
+    };
+    this.notify();
+  }
+
+  setSelectedFaction(faction: Faction): void {
+    if (this.snapshot.selectedFaction === faction) {
+      return;
+    }
+    writeStoredPreferredFaction(faction);
+    this.snapshot = {
+      ...this.snapshot,
+      selectedFaction: faction,
     };
     this.notify();
   }
@@ -121,7 +211,7 @@ class MultiplayerClient {
         error: null,
       };
       writeStoredToken(response.token);
-      this.openEventStream(response.token);
+      await this.openEventStream(response.token);
       this.notify();
     })();
 
@@ -135,19 +225,35 @@ class MultiplayerClient {
     }
   }
 
-  async joinQueue(faction: Faction): Promise<void> {
+  async joinQueue(faction = this.snapshot.selectedFaction): Promise<void> {
     await this.ensureSession();
     const token = this.snapshot.token;
     if (!token) {
       throw new Error("Missing multiplayer session token.");
     }
+    writeStoredPreferredFaction(faction);
     await this.postJson<JoinQueueRequest, JoinQueueResponse>("/api/queue/join", {
       token,
       faction,
     });
+    if (this.activeMatchStart) {
+      this.snapshot = {
+        ...this.snapshot,
+        status: "in_match",
+        selectedFaction: faction,
+        queuedFaction: null,
+        queuedPlayers: 0,
+        matchId: this.activeMatchStart.matchId,
+        localPlayerId: this.activeMatchStart.localPlayerId,
+        error: null,
+      };
+      this.notify();
+      return;
+    }
     this.snapshot = {
       ...this.snapshot,
       status: "queued",
+      selectedFaction: faction,
       queuedFaction: faction,
       error: null,
     };
@@ -172,19 +278,63 @@ class MultiplayerClient {
     this.notify();
   }
 
-  disconnect(): void {
+  async quitMatch(): Promise<void> {
+    const token = this.snapshot.token;
+    const matchId = this.activeMatchStart?.matchId;
+    if (token && matchId) {
+      try {
+        await this.postJson<QuitMatchRequest, QuitMatchResponse>("/api/match/quit", {
+          token,
+          matchId,
+        });
+      } catch {
+        // Intentionally ignored. The local client still needs to leave network mode
+        // and stop trying to reconnect even if the server cannot be reached.
+      }
+    }
+
     if (this.eventSource) {
       this.eventSource.close();
       this.eventSource = null;
     }
     this.activeMatchStart = null;
     this.lastAppliedSequence = 0;
+    this.resetCommandQueue();
+    this.pendingLocalCommandSignatures = [];
+    writeStoredToken(null);
+    const runtime = getGameRuntime();
+    runtime.leaveNetworkMatch("Left multiplayer match.");
+    this.snapshot = {
+      ...this.snapshot,
+      status: "offline",
+      token: null,
+      queuedFaction: null,
+      queuedPlayers: 0,
+      matchId: null,
+      localPlayerId: null,
+      error: null,
+    };
+    this.notify();
+  }
+
+  disconnect(): void {
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+    this.eventSourceConnected = false;
+    this.activeMatchStart = null;
+    this.lastAppliedSequence = 0;
+    this.resetCommandQueue();
+    this.pendingLocalCommandSignatures = [];
+    writeStoredToken(null);
     const runtime = getGameRuntime();
     runtime.leaveNetworkMatch("Disconnected from multiplayer session.");
     runtime.resetWithContent();
     this.snapshot = {
       ...this.snapshot,
       status: "offline",
+      token: null,
       queuedFaction: null,
       queuedPlayers: 0,
       matchId: null,
@@ -195,14 +345,39 @@ class MultiplayerClient {
   }
 
   submitRuntimeCommand = (command: GameCommand): void => {
-    void this.submitCommand(command);
+    const expectedMatchId = this.activeMatchStart?.matchId ?? null;
+    const generation = this.commandQueueGeneration;
+    this.trackSubmittedLocalCommand(command);
+
+    this.commandQueue = this.commandQueue
+      .catch(() => undefined)
+      .then(async () => {
+        if (!expectedMatchId || generation !== this.commandQueueGeneration) {
+          this.clearTrackedLocalCommand(command);
+          return;
+        }
+        if (this.activeMatchStart?.matchId !== expectedMatchId) {
+          this.clearTrackedLocalCommand(command);
+          return;
+        }
+        try {
+          await this.submitCommand(command, expectedMatchId);
+        } catch (error) {
+          this.clearTrackedLocalCommand(command);
+          const message = error instanceof Error ? error.message : "Failed to submit multiplayer command.";
+          this.handleCommandSubmissionError(message, command);
+        }
+      });
   };
 
-  private async submitCommand(command: GameCommand): Promise<void> {
+  private async submitCommand(command: GameCommand, expectedMatchId?: string): Promise<void> {
     const token = this.snapshot.token;
-    const matchId = this.activeMatchStart?.matchId;
+    const matchId = expectedMatchId ?? this.activeMatchStart?.matchId;
     if (!token || !matchId) {
       throw new Error("Missing active multiplayer match.");
+    }
+    if (this.activeMatchStart?.matchId !== matchId) {
+      return;
     }
     const response = await this.postJson<SubmitCommandRequest, SubmitCommandResponse>("/api/command", {
       token,
@@ -214,37 +389,56 @@ class MultiplayerClient {
     }
   }
 
-  private openEventStream(token: string): void {
+  private openEventStream(token: string): Promise<void> {
     if (this.eventSource) {
       this.eventSource.close();
     }
+    this.eventSourceConnected = false;
 
     const url = new URL("/api/events", this.snapshot.serverUrl);
     url.searchParams.set("token", token);
     const eventSource = new EventSource(url.toString());
-    eventSource.onopen = () => {
-      this.snapshot = {
-        ...this.snapshot,
-        status: this.activeMatchStart ? "in_match" : this.snapshot.queuedFaction ? "queued" : "connected",
-        error: null,
-      };
-      this.notify();
-    };
-    eventSource.onerror = () => {
-      if (this.snapshot.status === "offline") {
-        return;
-      }
-      this.snapshot = {
-        ...this.snapshot,
-        status: "reconnecting",
-      };
-      this.notify();
-    };
-    eventSource.onmessage = (event) => {
-      const payload = JSON.parse(event.data) as MultiplayerServerEvent;
-      this.handleServerEvent(payload);
-    };
     this.eventSource = eventSource;
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      eventSource.onopen = () => {
+        this.eventSourceConnected = true;
+        this.snapshot = {
+          ...this.snapshot,
+          status: this.activeMatchStart ? "in_match" : this.snapshot.queuedFaction ? "queued" : "connected",
+          error: null,
+        };
+        this.notify();
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+      eventSource.onerror = () => {
+        if (this.snapshot.status === "offline") {
+          return;
+        }
+        if (!this.eventSourceConnected && !settled) {
+          settled = true;
+          eventSource.close();
+          if (this.eventSource === eventSource) {
+            this.eventSource = null;
+          }
+          reject(new Error("Failed to open multiplayer event stream."));
+          return;
+        }
+        this.snapshot = {
+          ...this.snapshot,
+          status: "reconnecting",
+        };
+        this.notify();
+      };
+      eventSource.onmessage = (event) => {
+        const payload = JSON.parse(event.data) as MultiplayerServerEvent;
+        this.handleServerEvent(payload);
+      };
+    });
   }
 
   private handleServerEvent(event: MultiplayerServerEvent): void {
@@ -263,6 +457,7 @@ class MultiplayerClient {
         this.snapshot = {
           ...this.snapshot,
           status: event.status === "queued" ? "queued" : this.activeMatchStart ? "in_match" : "connected",
+          selectedFaction: event.queuedFaction ?? this.snapshot.selectedFaction,
           queuedFaction: event.queuedFaction,
           queuedPlayers: event.queuedPlayers,
         };
@@ -278,12 +473,7 @@ class MultiplayerClient {
         this.handleMatchCommand(event.payload, true);
         return;
       case "match_rejected":
-        getGameRuntime().recordNetworkRejection(event.reason, event.rejectedCommand);
-        this.snapshot = {
-          ...this.snapshot,
-          error: event.reason,
-        };
-        this.notify();
+        this.handleCommandSubmissionError(event.reason, event.rejectedCommand);
         return;
       case "player_disconnected":
         getGameRuntime().recordNetworkRejection(`${event.playerId} disconnected.`);
@@ -297,6 +487,8 @@ class MultiplayerClient {
         );
         this.activeMatchStart = null;
         this.lastAppliedSequence = 0;
+        this.resetCommandQueue();
+        this.pendingLocalCommandSignatures = [];
         this.snapshot = {
           ...this.snapshot,
           status: "connected",
@@ -317,13 +509,20 @@ class MultiplayerClient {
   }
 
   private handleMatchStart(payload: MatchStartPayload, showIntroAnimation: boolean): void {
+    this.resetCommandQueue();
+    this.pendingLocalCommandSignatures = [];
     this.activeMatchStart = payload;
     this.lastAppliedSequence = 0;
     const runtime = getGameRuntime();
-    runtime.startNetworkMatch(payload, this.submitRuntimeCommand, { showIntroAnimation });
+    runtime.startNetworkMatch(payload, this.submitRuntimeCommand, {
+      showIntroAnimation,
+      canSubmitCommand: () => !this.hasPendingLocalCommand(),
+      getBlockedReason: () => this.getPendingCommandBlockedReason(),
+    });
     this.snapshot = {
       ...this.snapshot,
       status: "in_match",
+      selectedFaction: payload.factions[payload.localPlayerId],
       queuedFaction: null,
       queuedPlayers: 0,
       matchId: payload.matchId,
@@ -334,6 +533,7 @@ class MultiplayerClient {
   }
 
   private handleMatchResync(payload: MatchResyncPayload): void {
+    this.resetCommandQueue();
     this.handleMatchStart(payload.matchStart, false);
     const runtime = getGameRuntime();
     for (const envelope of payload.commands.sort((a, b) => a.sequence - b.sequence)) {
@@ -354,9 +554,65 @@ class MultiplayerClient {
     if (payload.sequence <= this.lastAppliedSequence) {
       return;
     }
+    if (payload.command.playerId === this.activeMatchStart.localPlayerId) {
+      this.clearTrackedLocalCommand(payload.command);
+    }
     const runtime = getGameRuntime();
     runtime.applyAuthoritativeCommand(payload.command, { animate });
     this.lastAppliedSequence = payload.sequence;
+  }
+
+  private handleCommandSubmissionError(reason: string, rejectedCommand: GameCommand): void {
+    const signature = `${reason}::${JSON.stringify(rejectedCommand)}`;
+    const now = Date.now();
+    if (this.lastHandledRejectionSignature === signature && now - this.lastHandledRejectionAt < 250) {
+      return;
+    }
+    this.lastHandledRejectionSignature = signature;
+    this.lastHandledRejectionAt = now;
+
+    // eslint-disable-next-line no-console
+    console.error("Multiplayer command rejected", {
+      reason,
+      command: rejectedCommand,
+      matchId: this.activeMatchStart?.matchId ?? null,
+      localPlayerId: this.activeMatchStart?.localPlayerId ?? null,
+      lastAppliedSequence: this.lastAppliedSequence,
+    });
+
+    getGameRuntime().recordNetworkRejection(reason, rejectedCommand);
+    this.snapshot = {
+      ...this.snapshot,
+      error: reason,
+    };
+    this.notify();
+    this.requestAuthoritativeResync();
+  }
+
+  private requestAuthoritativeResync(): void {
+    const token = this.snapshot.token;
+    if (!token || !this.activeMatchStart || this.resyncPromise) {
+      return;
+    }
+
+    this.snapshot = {
+      ...this.snapshot,
+      status: "reconnecting",
+    };
+    this.notify();
+
+    this.resyncPromise = this.openEventStream(token)
+      .catch((error) => {
+        this.handleError(error instanceof Error ? error.message : "Failed to resync multiplayer match.");
+      })
+      .finally(() => {
+        this.resyncPromise = null;
+      });
+  }
+
+  private resetCommandQueue(): void {
+    this.commandQueueGeneration += 1;
+    this.commandQueue = Promise.resolve();
   }
 
   private handleError(message: string): void {

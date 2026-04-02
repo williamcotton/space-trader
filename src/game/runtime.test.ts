@@ -66,6 +66,23 @@ describe("getBoardClickCommand", () => {
     });
   });
 
+  it("issues a harvest command when a selected resource unit clicks its controlled node during tactical", () => {
+    const state = setupState();
+    state.phase = "tactical";
+    state.selectedEntityId = "unit_player_1_harvester";
+    const harvester = state.entities.unit_player_1_harvester;
+    const node = state.map.resourceNodes[0];
+    harvester.coord = { ...node.coord };
+    node.controlledBy = "player_1";
+
+    expect(getBoardClickCommand(state, { ...node.coord })).toEqual({
+      type: "HARVEST_NODE",
+      playerId: "player_1",
+      entityId: "unit_player_1_harvester",
+      nodeId: node.id,
+    });
+  });
+
   it("clears selection on empty-hex click outside tactical", () => {
     const state = setupState();
     state.phase = "main";
@@ -227,6 +244,113 @@ describe("GameRuntime", () => {
     runtime.endPhase();
 
     expect(submitted).toEqual([]);
+  });
+
+  it("blocks local network actions while awaiting authoritative confirmation", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    const submitted: string[] = [];
+    runtime.startNetworkMatch(createMatchStartPayload(), (command) => {
+      submitted.push(command.type);
+    }, {
+      showIntroAnimation: false,
+      canSubmitCommand: () => false,
+      getBlockedReason: () => "Waiting for the server to confirm your previous action.",
+    });
+
+    const result = runtime.endPhase();
+
+    expect(result?.ok).toBe(false);
+    expect(result && !result.ok ? result.reason : null).toBe("Waiting for the server to confirm your previous action.");
+    expect(submitted).toEqual([]);
+  });
+
+  it("submits unit selection for the local player during a networked tactical turn", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    const submitted: string[] = [];
+    runtime.startNetworkMatch(createMatchStartPayload(), (command) => {
+      submitted.push(command.type);
+    }, { showIntroAnimation: false });
+    runtime.state.phase = "tactical";
+    runtime.state.activePlayerId = "player_1";
+    runtime.state.priorityPlayerId = "player_1";
+    runtime.setViewport(1024, 768);
+    const target = runtime.state.entities.unit_player_1_scout;
+    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
+    const point = axialToPixel(target.coord, metrics.origin, metrics.size);
+
+    runtime.selectUnitFromScreenPoint(point.x, point.y);
+
+    expect(submitted).toEqual(["SELECT_ENTITY"]);
+  });
+
+  it("submits unit selection for player 2 during a networked tactical turn", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    const submitted: string[] = [];
+    runtime.startNetworkMatch(createMatchStartPayload({
+      localPlayerId: "player_2",
+      factions: {
+        player_1: "alloy_clan",
+        player_2: "flux_collective",
+      },
+    }), (command) => {
+      submitted.push(command.type);
+    }, { showIntroAnimation: false });
+    runtime.state.phase = "tactical";
+    runtime.state.activePlayerId = "player_2";
+    runtime.state.priorityPlayerId = "player_2";
+    runtime.setViewport(1024, 768);
+    const target = runtime.state.entities.unit_player_2_scout;
+    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
+    const point = axialToPixel(target.coord, metrics.origin, metrics.size);
+
+    runtime.selectUnitFromScreenPoint(point.x, point.y);
+
+    expect(submitted).toEqual(["SELECT_ENTITY"]);
+  });
+
+  it("reasserts selection instead of toggling clear on repeated friendly clicks in network matches", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    const submitted: string[] = [];
+    runtime.startNetworkMatch(createMatchStartPayload({
+      localPlayerId: "player_2",
+    }), (command) => {
+      submitted.push(command.type);
+    }, { showIntroAnimation: false });
+    runtime.state.phase = "start";
+    runtime.state.activePlayerId = "player_2";
+    runtime.state.priorityPlayerId = "player_2";
+    runtime.state.selectedEntityId = "unit_player_2_scout";
+    runtime.setViewport(1024, 768);
+    const target = runtime.state.entities.unit_player_2_scout;
+    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
+    const point = axialToPixel(target.coord, metrics.origin, metrics.size);
+
+    runtime.selectUnitFromScreenPoint(point.x, point.y);
+
+    expect(submitted).toEqual(["SELECT_ENTITY"]);
+  });
+
+  it("submits harvest for the local player during a networked tactical turn", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    const submitted: string[] = [];
+    runtime.startNetworkMatch(createMatchStartPayload(), (command) => {
+      submitted.push(command.type);
+    }, { showIntroAnimation: false });
+    runtime.state.phase = "tactical";
+    runtime.state.activePlayerId = "player_1";
+    runtime.state.priorityPlayerId = "player_1";
+    const harvester = runtime.state.entities.unit_player_1_harvester;
+    const node = runtime.state.map.resourceNodes[0];
+    harvester.coord = { ...node.coord };
+    node.controlledBy = "player_1";
+    runtime.state.selectedEntityId = harvester.id;
+    runtime.setViewport(1024, 768);
+    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
+    const point = axialToPixel(harvester.coord, metrics.origin, metrics.size);
+
+    runtime.selectUnitFromScreenPoint(point.x, point.y);
+
+    expect(submitted).toEqual(["HARVEST_NODE"]);
   });
 
   it("runs autoflow from scheduled automation without stepping the render loop", async () => {

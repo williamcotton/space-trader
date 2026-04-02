@@ -95,6 +95,39 @@ function resolveStackByPassing(state: ReturnType<typeof setupState>): void {
 }
 
 describe("dispatchCommand", () => {
+  it("keeps stack and reserved unit ids stable even if local log history differs", () => {
+    const stateA = setupState();
+    const stateB = setupState();
+
+    stateB.log.push({
+      turn: stateB.turn,
+      text: "Client-only network log.",
+    });
+
+    advanceToPhase(stateA, "main");
+    advanceToPhase(stateB, "main");
+
+    const cardInstanceIdA = moveCardFromDeckToHand(stateA, "player_1", "frontline_scout_card");
+    const cardInstanceIdB = moveCardFromDeckToHand(stateB, "player_1", "frontline_scout_card");
+
+    const resultA = dispatchCommand(stateA, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId: cardInstanceIdA,
+    });
+    const resultB = dispatchCommand(stateB, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId: cardInstanceIdB,
+    });
+
+    expect(resultA.ok).toBe(true);
+    expect(resultB.ok).toBe(true);
+    expect(stateA.stack[0]?.id).toBe(stateB.stack[0]?.id);
+    expect(stateA.stack[0]?.pendingUnitEntityId).toBe(stateB.stack[0]?.pendingUnitEntityId);
+    expect(stateA.stack[0]?.pendingUnitEntityId).toContain("frontline_scout_card");
+  });
+
   it("supports first unit selection + movement path", () => {
     const state = setupState();
     const unitId = "unit_player_1_scout";

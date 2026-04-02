@@ -41,6 +41,7 @@ function readSnapshot(): HandSnapshot {
     phase: state.phase,
     activePlayerId: state.activePlayerId,
     priorityPlayerId: state.priorityPlayerId,
+    networkLocalPlayerId: runtime.getNetworkLocalPlayerId(),
   });
 
   const cards = [...state.zones[visiblePlayerId].hand].reverse().map((card) =>

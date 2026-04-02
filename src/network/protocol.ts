@@ -128,6 +128,15 @@ export type LeaveQueueResponse = {
   ok: true;
 };
 
+export type QuitMatchRequest = {
+  token: string;
+  matchId: string;
+};
+
+export type QuitMatchResponse = {
+  ok: true;
+};
+
 export type SubmitCommandRequest = {
   token: string;
   matchId: string;
@@ -143,4 +152,3 @@ export type SubmitCommandResponse =
       ok: false;
       reason: string;
     };
-

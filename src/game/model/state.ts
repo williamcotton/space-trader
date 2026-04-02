@@ -150,6 +150,7 @@ export type MechanicStateBuckets = {
 
 export interface GameState {
   stateVersion: number;
+  nextGeneratedIdCounter: number;
   matchId: string;
   turn: number;
   phase: GamePhase;
@@ -474,7 +475,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   const initialMatchId = options.matchId ?? `match_${matchIdPrefix}`;
 
   const state = {
-    stateVersion: 24,
+    stateVersion: 25,
+    nextGeneratedIdCounter: 1,
     matchId: initialMatchId,
     turn: 1,
     phase: "start",

@@ -2,7 +2,7 @@ import type { GameCommand } from "../commands";
 import type { GameEvent } from "../events";
 import { getCardDefinition, type CardCost } from "../../content/cards/catalog";
 import { getStackEffectDefinition, getStackEffectMagnitude, type CounterDestination } from "../../content/stackEffects";
-import { createStackItemId, getOpponentPlayer, popTopStackItem } from "../../turn/stack";
+import { getOpponentPlayer, popTopStackItem, reserveStackItemId } from "../../turn/stack";
 import type { PlayerId } from "../../model/ids";
 import type { ResourceType } from "../../model/enums";
 import { syncPlayerZoneCounts, type CardInstance, type GameState } from "../../model/state";
@@ -116,7 +116,7 @@ export function handleRespondStack(
     {
       type: "STACK_ITEM_PUSHED",
       playerId: command.playerId,
-      itemId: createStackItemId(state.turn, state.log.length),
+      itemId: reserveStackItemId(state),
       label: command.label,
       controllerId: command.playerId,
       ownerId: command.playerId,
@@ -166,7 +166,7 @@ export function handlePlayCard(
       cardId: handCard.cardId,
       cardName: card.name,
       cost: card.cost,
-      stackItemId: createStackItemId(state.turn, state.log.length),
+      stackItemId: reserveStackItemId(state),
       effectId,
       effectMagnitude: getStackEffectMagnitude(effectId, handCard.cardId, activeModifierIds),
       activeModifierIds,
@@ -177,7 +177,9 @@ export function handlePlayCard(
       counterable: resolveCardCounterable(card, effectDefinition, effectDefinition.object.counterable),
       defaultCounterDestination: effectDefinition.object.defaultCounterDestination,
       nextPriorityPlayerId: getOpponentPlayer(command.playerId),
-      pendingUnitEntityId: card.play.reserveEntityId ? createSummonedUnitId(state, command.playerId, card.id) : null,
+      pendingUnitEntityId: card.play.reserveEntityId
+        ? createSummonedUnitId(state, command.playerId, card.id, handCard.instanceId)
+        : null,
     },
   ];
 

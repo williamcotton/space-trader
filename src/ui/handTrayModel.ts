@@ -5,6 +5,7 @@ type VisibleHandContext = {
   phase: GamePhase;
   activePlayerId: PlayerId;
   priorityPlayerId: PlayerId | null;
+  networkLocalPlayerId?: PlayerId | null;
 };
 
 export type VisibleHandState = {
@@ -16,7 +17,15 @@ export function getVisibleHandState({
   phase,
   activePlayerId,
   priorityPlayerId,
+  networkLocalPlayerId,
 }: VisibleHandContext): VisibleHandState {
+  if (networkLocalPlayerId) {
+    return {
+      visiblePlayerId: networkLocalPlayerId,
+      showingPriorityHand: false,
+    };
+  }
+
   if (phase === "discard") {
     return {
       visiblePlayerId: activePlayerId,

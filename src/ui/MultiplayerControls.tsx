@@ -5,8 +5,6 @@ import { formatFactionName } from "../game/presentation";
 import { getMultiplayerClient } from "../network/client";
 import { useMultiplayerSnapshot } from "../network/useMultiplayerSnapshot";
 
-const DEFAULT_FACTION = "alloy_clan" as Faction;
-
 function describeStatus(status: ReturnType<typeof useMultiplayerSnapshot>["status"]): string {
   switch (status) {
     case "offline":
@@ -32,7 +30,7 @@ export function MultiplayerControls() {
   const client = getMultiplayerClient();
   const snapshot = useMultiplayerSnapshot();
   const [serverUrl, setServerUrl] = useState(snapshot.serverUrl);
-  const [faction, setFaction] = useState<Faction>(snapshot.queuedFaction ?? DEFAULT_FACTION);
+  const [faction, setFaction] = useState<Faction>(snapshot.selectedFaction);
   const factionIds = getRegisteredFactionIds();
 
   useEffect(() => {
@@ -40,16 +38,17 @@ export function MultiplayerControls() {
   }, [snapshot.serverUrl]);
 
   useEffect(() => {
-    if (snapshot.queuedFaction) {
-      setFaction(snapshot.queuedFaction);
-    }
-  }, [snapshot.queuedFaction]);
+    setFaction(snapshot.selectedFaction);
+  }, [snapshot.selectedFaction]);
 
   const queuedDescription = snapshot.status === "queued"
-    ? `${snapshot.queuedPlayers} queued`
+    ? `${snapshot.queuedPlayers} queued · ${formatFactionName(snapshot.queuedFaction ?? snapshot.selectedFaction)}`
     : snapshot.localPlayerId
       ? `You are ${snapshot.localPlayerId}`
       : null;
+  const canFindMatch = snapshot.status !== "queued" && snapshot.status !== "in_match" && snapshot.status !== "connecting";
+  const canQuitMatch = snapshot.status === "in_match" || snapshot.status === "reconnecting";
+  const canDisconnect = !canQuitMatch && snapshot.status !== "offline" && snapshot.status !== "connecting";
 
   return (
     <section className="multiplayer-bar" aria-label="Multiplayer controls">
@@ -71,7 +70,11 @@ export function MultiplayerControls() {
           <select
             className="multiplayer-select"
             value={faction}
-            onChange={(event) => setFaction(event.target.value as Faction)}
+            onChange={(event) => {
+              const nextFaction = event.target.value as Faction;
+              setFaction(nextFaction);
+              client.setSelectedFaction(nextFaction);
+            }}
             disabled={snapshot.status === "queued" || snapshot.status === "in_match"}
           >
             {factionIds.map((factionId) => (
@@ -83,7 +86,7 @@ export function MultiplayerControls() {
           <button
             type="button"
             className="multiplayer-button primary"
-            disabled={snapshot.status === "queued" || snapshot.status === "in_match" || snapshot.status === "connecting"}
+            disabled={!canFindMatch}
             onClick={() => {
               client.setServerUrl(serverUrl);
               void client.joinQueue(faction);
@@ -104,7 +107,17 @@ export function MultiplayerControls() {
           <button
             type="button"
             className="multiplayer-button"
-            disabled={snapshot.status === "offline" || snapshot.status === "connecting"}
+            disabled={!canQuitMatch}
+            onClick={() => {
+              void client.quitMatch();
+            }}
+          >
+            Quit Match
+          </button>
+          <button
+            type="button"
+            className="multiplayer-button"
+            disabled={!canDisconnect}
             onClick={() => client.disconnect()}
           >
             Disconnect
