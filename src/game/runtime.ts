@@ -849,6 +849,42 @@ export class GameRuntime {
     });
   }
 
+  attackSelectedUnitFirstTargetInRange(): DispatchResult | null {
+    const playerId = this.state.activePlayerId;
+    if (!this.canLocalPlayerActAs(playerId)) {
+      return null;
+    }
+
+    const attacker = getSelectedUnitForPlayer(this.state, playerId);
+    if (!attacker) {
+      return null;
+    }
+    if (!canUnitDeclareAttack(this.state, attacker) || attacker.attacksRemaining <= 0) {
+      return null;
+    }
+
+    const target = Object.values(this.state.entities).find((entity) => {
+      if (entity.ownerId === playerId) {
+        return false;
+      }
+      return (
+        canAttackEntityDirectly(this.state, playerId, entity) &&
+        hexDistance(attacker.coord, entity.coord) <= getEffectiveUnitAttackRange(this.state, attacker)
+      );
+    });
+
+    if (!target) {
+      return null;
+    }
+
+    return this.dispatch({
+      type: "ATTACK_UNIT",
+      playerId,
+      attackerId: attacker.id,
+      targetId: target.id,
+    });
+  }
+
   debugAdvancePhase(): void {
     if (this.networkSession) {
       return;
@@ -906,43 +942,7 @@ export class GameRuntime {
   }
 
   debugAttackFirstTargetInRange(): void {
-    if (this.networkSession) {
-      return;
-    }
-    const activePlayerId = this.state.activePlayerId;
-    const selectedId = this.state.selectedEntityId;
-    if (!selectedId) {
-      return;
-    }
-
-    const attacker = this.state.entities[selectedId];
-    if (!attacker || attacker.kind !== "unit") {
-      return;
-    }
-    if (!canUnitDeclareAttack(this.state, attacker) || attacker.attacksRemaining <= 0) {
-      return;
-    }
-
-    const target = Object.values(this.state.entities).find((entity) => {
-      if (entity.ownerId === activePlayerId) {
-        return false;
-      }
-      return (
-        canAttackEntityDirectly(this.state, activePlayerId, entity) &&
-        hexDistance(attacker.coord, entity.coord) <= getEffectiveUnitAttackRange(this.state, attacker)
-      );
-    });
-
-    if (!target) {
-      return;
-    }
-
-    void this.dispatch({
-      type: "ATTACK_UNIT",
-      playerId: activePlayerId,
-      attackerId: attacker.id,
-      targetId: target.id,
-    });
+    this.attackSelectedUnitFirstTargetInRange();
   }
 
   debugHarvestSelectedUnit(): void {

@@ -372,6 +372,54 @@ describe("GameRuntime", () => {
     expect(submitted).toEqual(["HARVEST_NODE"]);
   });
 
+  it("attacks the first target in range for the selected unit locally", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    runtime.state.phase = "tactical";
+    runtime.state.activePlayerId = "player_1";
+    runtime.state.priorityPlayerId = "player_1";
+    const attacker = runtime.state.entities.unit_player_1_scout;
+    const target = runtime.state.entities.unit_player_2_harvester;
+    if (attacker.kind !== "unit" || target.kind !== "unit") {
+      throw new Error("Expected unit attacker and target for attack shortcut test.");
+    }
+    attacker.coord = { q: 0, r: 0 };
+    attacker.hasSummoningSickness = false;
+    attacker.attacksRemaining = 1;
+    target.coord = { q: 0, r: 1 };
+    runtime.state.selectedEntityId = attacker.id;
+    const hpBefore = target.hp;
+
+    const result = runtime.attackSelectedUnitFirstTargetInRange();
+
+    expect(result?.ok).toBe(true);
+    expect(runtime.state.entities.unit_player_2_harvester?.hp).toBeLessThan(hpBefore);
+  });
+
+  it("submits attack for the local player when requested explicitly during a networked tactical turn", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    const submitted: string[] = [];
+    runtime.startNetworkMatch(createMatchStartPayload(), (command) => {
+      submitted.push(command.type);
+    }, { showIntroAnimation: false });
+    runtime.state.phase = "tactical";
+    runtime.state.activePlayerId = "player_1";
+    runtime.state.priorityPlayerId = "player_1";
+    const attacker = runtime.state.entities.unit_player_1_scout;
+    const target = runtime.state.entities.unit_player_2_harvester;
+    if (attacker.kind !== "unit" || target.kind !== "unit") {
+      throw new Error("Expected unit attacker and target for network attack shortcut test.");
+    }
+    attacker.coord = { q: 0, r: 0 };
+    attacker.hasSummoningSickness = false;
+    attacker.attacksRemaining = 1;
+    target.coord = { q: 0, r: 1 };
+    runtime.state.selectedEntityId = attacker.id;
+
+    runtime.attackSelectedUnitFirstTargetInRange();
+
+    expect(submitted).toEqual(["ATTACK_UNIT"]);
+  });
+
   it("runs autoflow from scheduled automation without stepping the render loop", async () => {
     vi.useFakeTimers();
     const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });

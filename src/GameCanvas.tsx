@@ -150,7 +150,7 @@ export function GameCanvas() {
       }
 
       if (key === "a") {
-        runtime.debugAttackFirstTargetInRange();
+        runtime.attackSelectedUnitFirstTargetInRange();
         return;
       }
 
