@@ -1,44 +1,33 @@
-# Layers Refactor: Cached Derived Continuous Effects
+# Layers Refactor: Pure Pipeline + State-Scoped Continuous Effect Resolution
 
-## Purpose
+## Context
 
-This document replaces the earlier over-abstracted proposal with a narrower refactor plan that matches the current engine.
+The current continuous effects code resolves effective stats and keywords on-demand. That keeps gameplay correct in every simulation context, but it repeats the same work across combat, validators, AI, mechanics, and rendering.
 
-The real goal is:
+The right refactor is not "render rebuilds a global cache, and gameplay reads from it." That would make simulation correctness depend on whether `runtime.step()` has run, which conflicts with the current architecture:
 
-- reduce repeated continuous-effect work in the live runtime
-- keep the current public stat/keyword APIs stable
-- prepare for future layer growth without pretending we already need a full MTG-style layer engine
+- authoritative mutable `GameState` lives in the runtime / simulation layer
+- commands and instructions must observe correct gameplay state immediately
+- rendering is not allowed to decide gameplay outcomes
 
-This is not a proposal to redesign ownership, copy effects, or swap effects yet.
+So the goal is:
 
-## Current System
+- introduce a pure layer pipeline for continuous-effect resolution
+- reuse that pipeline for both UI-derived snapshots and simulation queries
+- keep caches scoped to a specific `GameState` read pass, never process-global
+- preserve correctness for reducers, auto-flow, AI search, tests, and multiplayer
 
-The live continuous-effect system is in [src/game/systems/continuousEffects.ts](/Users/administrator/Projects/space-trader/src/game/systems/continuousEffects.ts).
+## Non-Goals
 
-Today it works like this:
+- No module-level `currentDerivedState` ref
+- No gameplay reads that depend on render timing
+- No cache keyed only by `entityId`
+- No CONTROL / COPY / SWAP semantics in this refactor
+- No requirement that every existing consumer change at once
 
-- `ContinuousEffect` has:
-  - `payload`
-  - `target`
-  - `expiry`
-  - `layer`
-  - `timestamp`
-- `doesEffectApplyToEntity(...)` checks whether an effect applies to one entity
-- `getActiveEffectsForEntity(...)` filters all active effects for one entity
-- `getEffectiveStatValue(...)`:
-  - starts from the unit's base stat
-  - filters applicable effects
-  - filters again to matching stat modifiers/setters
-  - sorts by `layer` then `timestamp`
-  - reduces over the base stat
-  - adds registered unit stat hook adjustments last
-- `getEffectiveKeywordsForUnit(...)`:
-  - starts from base keywords
-  - unions in matching `keyword_grant` effects
-  - supports the `excludeEffectIdPrefix` escape hatch used by some mechanics
+## Layer Model
 
-Current layer constants are:
+Keep the existing authored layer ids unchanged for live content compatibility:
 
 ```typescript
 export const LAYER = {
@@ -51,427 +40,265 @@ export const LAYER = {
 } as const;
 ```
 
-In practice, current gameplay content mainly uses:
+Internally, resolve units through this ordered pipeline:
 
-- `ABILITY`
-- `STATIC`
-- `TEMPORARY`
-- `COUNTER`
+1. `BASE`
+2. `TYPE`
+3. `ABILITY`
+4. `STATIC`
+5. `TEMPORARY`
+6. `COUNTER`
+7. `HOOKS` (internal-only post-pass for registered unit stat hooks)
 
-The current engine is therefore not a full layer pipeline. It is:
+Notes:
 
-- per-query effect filtering
-- per-query stat sorting and reduction
-- separate keyword union logic
-- separate unit stat hook application at the end
+- `HOOKS` is not a content-authored layer constant; it is an internal final stage.
+- `BASE` and `TYPE` remain effectively pass-through for now unless existing content uses them.
+- Future MTG-style `COPY`, `CONTROL`, or `SWAP` work needs a separate design because those mechanics can change which later effects apply. This plan does not pretend that current applicability rules are enough for that.
 
-## Current Derived State
+## Plan
 
-[src/game/derived.ts](/Users/administrator/Projects/space-trader/src/game/derived.ts) currently caches:
+### Step 1: Create a pure resolution module
 
-- `spatialIndex`
-- `moveRangeOverlay`
+**New file: `src/game/systems/effectPipeline.ts`**
 
-It does not currently cache:
+Introduce a pure pipeline that can resolve either one unit or the full board from any `GameState`.
 
-- effective stats
-- effective keywords
-- effect applicability buckets
-
-That is the natural expansion point for this refactor.
-
-## Problems Worth Solving
-
-The current system has two real issues.
-
-### 1. Repeated on-demand work
-
-Many runtime consumers repeatedly ask for the same effective values:
-
-- combat
-- validators
-- auto-flow
-- render overlays
-- AI scoring
-- AI search
-- mechanic checks such as Bastion, Predation, Emplaced, Salvage, Relay, Bloom
-
-Each query re-filters and re-sorts continuous effects.
-
-### 2. Hooks are only "implicitly last"
-
-Today hooks are effectively applied after stat modifiers because [src/game/systems/unitStats.ts](/Users/administrator/Projects/space-trader/src/game/systems/unitStats.ts) adds hook adjustments after `getEffectiveStatValue(...)`.
-
-That is workable, but it is not represented as a formal derived pass, and it makes future ordering harder to reason about.
-
-## Problems Not Worth Solving Yet
-
-This refactor should explicitly avoid trying to solve these bigger problems now:
-
-- copy effects
-- temporary control changes as derived ownership
-- stat swaps
-- a full MTG rules-engine layer framework
-- a module-global derived state registry
-
-Those are larger features and should not be used to justify extra abstraction in the first pass.
-
-## Refactor Direction
-
-The recommended refactor is:
-
-1. compute effective stats and effective keywords once per derived-state rebuild
-2. store those results in `DerivedState`
-3. make existing stat/keyword accessors use the cache first
-4. keep on-demand fallback behavior for code paths that do not have a runtime-derived cache
-
-This keeps the current public engine surface stable while removing most repeated work from the live renderer/runtime.
-
-## Design Principles
-
-### Keep the current API stable
-
-Consumers should continue using:
-
-- `getEffectiveUnitAttackDamage(...)`
-- `getEffectiveUnitArmor(...)`
-- `getEffectiveUnitSiegeDamageBonus(...)`
-- `getEffectiveUnitMoveRange(...)`
-- `getEffectiveUnitAttackRange(...)`
-- `unitHasActiveKeyword(...)`
-
-The optimization should happen behind those APIs.
-
-### Cache in `DerivedState`, not in `GameState`
-
-`GameState` must stay serializable and deterministic for:
-
-- save/hot-state migration
-- multiplayer replay
-- AI cloning
-
-The cache belongs in [src/game/derived.ts](/Users/administrator/Projects/space-trader/src/game/derived.ts), not in authoritative match state.
-
-### Do not add fake future layers yet
-
-The engine should only encode layers that are doing real work now.
-
-For this refactor, the meaningful pipeline is:
-
-- keyword grants
-- persistent stat modifiers/setters
-- temporary stat modifiers/setters
-- counter-based modifiers
-- final hook adjustment pass
-
-### Preserve on-demand fallback
-
-Some code paths still need uncached behavior:
-
-- AI search over cloned states outside the runtime
-- targeted hypothetical keyword checks using `excludeEffectIdPrefix`
-- isolated tests that do not rebuild runtime derived state
-
-The new system must still be correct there.
-
-## Proposed Data Shape
-
-Extend `DerivedState` with cached effective values:
+Suggested types:
 
 ```typescript
-export type EffectiveUnitStats = {
-  attackDamage: number;
-  armor: number;
-  siegeDamageBonus: number;
-  moveRange: number;
-  attackRange: number;
-  hp: number;
-  maxHp: number;
+export type UnitStatName =
+  | "attackDamage"
+  | "armor"
+  | "siegeDamageBonus"
+  | "moveRange"
+  | "attackRange"
+  | "hp"
+  | "maxHp";
+
+export type EffectiveUnitStats = Record<UnitStatName, number>;
+
+export type ResolvedUnitSnapshot = {
+  stats: EffectiveUnitStats;
+  keywords: string[];
 };
 
-export type DerivedState = {
-  sourceVersion: number;
-  spatialIndex: SpatialIndex;
-  moveRangeOverlay: MoveRangeCell[];
-  effectiveStats: Map<EntityId, EffectiveUnitStats>;
-  effectiveKeywords: Map<EntityId, string[]>;
+export type ContinuousEffectSnapshot = {
+  stats: Map<EntityId, EffectiveUnitStats>;
+  keywords: Map<EntityId, string[]>;
 };
 ```
 
-This is enough for the current game.
-
-There is no need yet for:
-
-- derived ownership
-- derived card identity
-- per-layer debug traces
-- cached non-unit entity transforms
-
-## Proposed Computation Model
-
-Create one derived computation entry point:
+Core entry points:
 
 ```typescript
-computeEffectiveEntityState(state: Readonly<GameState>): {
-  effectiveStats: Map<EntityId, EffectiveUnitStats>;
-  effectiveKeywords: Map<EntityId, string[]>;
-}
+export function buildResolvedUnitSnapshot(
+  state: Readonly<GameState>,
+  unit: Readonly<UnitEntity>,
+  options?: {
+    excludeEffectIdPrefix?: string;
+  }
+): ResolvedUnitSnapshot;
+
+export function buildContinuousEffectSnapshot(
+  state: Readonly<GameState>
+): ContinuousEffectSnapshot;
 ```
 
-For each unit:
+Processing rules:
 
-1. collect applicable continuous effects
-2. bucket or sort them by `layer` then `timestamp`
-3. build effective keywords
-4. build effective stats from base stats plus stat effects
-5. apply registered unit stat hooks last
-6. clamp `moveRange` and `attackRange` to `>= 0`
-7. store final results in the output maps
+1. Start from the unit's printed/base stats and base keywords.
+2. Collect applicable effects using the existing `doesEffectApplyToEntity()` rules.
+3. Filter out `replacement_effect` payloads.
+4. Group by authored layer and sort by `timestamp`.
+5. Apply `ABILITY`, `STATIC`, `TEMPORARY`, and `COUNTER` in order.
+6. Run registered unit stat hooks last using the pipeline-resolved keywords.
+7. Clamp `moveRange` and `attackRange` to `>= 0`.
 
-That is enough for the current engine.
+Important constraint:
 
-## Hook Behavior
+- Applicability is still evaluated against the current base `GameState`. That is correct for the live rules set.
+- Do not add fake `CONTROL` / `COPY` support here yet.
 
-Hooks must remain a final pass, but the first refactor should not pretend hooks are a perfect formal layer yet.
+### Step 2: Make the pipeline the canonical logic in `continuousEffects.ts`
 
-Important current reality:
+**File: `src/game/systems/continuousEffects.ts`**
 
-- Bastion in [src/game/content/sets/alpha/mechanics/bastion.ts](/Users/administrator/Projects/space-trader/src/game/content/sets/alpha/mechanics/bastion.ts) calls `unitHasActiveKeyword(...)`
-- Predation and Emplaced attack-permission checks also depend on keyword queries
-
-So the first pass should:
-
-- compute effective keywords first
-- compute effective stats second
-- apply hook-based stat adjustments last
-
-If hook recursion becomes awkward, a later follow-up can change hook signatures to accept pre-resolved keyword/state inputs directly.
-
-That should be treated as a separate cleanup, not part of the first cache pass.
-
-## Phased Plan
-
-### Phase 1: Add Cached Effective Stats And Keywords
-
-Goal:
-
-- cache effective unit stats and keywords inside `DerivedState`
-- keep the rest of the engine API unchanged
+Refactor the public helpers to delegate to the pipeline instead of carrying a second independent implementation.
 
 Changes:
 
-- extend [src/game/derived.ts](/Users/administrator/Projects/space-trader/src/game/derived.ts)
-- add `EffectiveUnitStats`
-- add `effectiveStats` and `effectiveKeywords` maps
-- update `createEmptyDerivedState()`
-- update `rebuildDerivedState()` to compute those maps
+- Export `doesEffectApplyToEntity`
+- Keep `getEffectiveKeywordsForUnit()` public API unchanged
+- Keep `getEffectiveStatValue()` public API unchanged
+- Implement both via `buildResolvedUnitSnapshot()`
 
-New helper:
+Add targeted helpers for snapshot reads:
 
-- `computeEffectiveEntityState(...)`
+```typescript
+export function getEffectiveStatValueFromSnapshot(
+  snapshot: ContinuousEffectSnapshot,
+  unit: Readonly<UnitEntity>,
+  stat: UnitStatName
+): number;
 
-This helper should live either:
+export function getEffectiveKeywordsForUnitFromSnapshot(
+  snapshot: ContinuousEffectSnapshot,
+  unit: Readonly<UnitEntity>
+): string[];
+```
 
-- in [src/game/systems/continuousEffects.ts](/Users/administrator/Projects/space-trader/src/game/systems/continuousEffects.ts), if kept compact
-- or in a new focused module such as `src/game/systems/effectiveEntityState.ts`
+This gives one source of truth for effect semantics before any caching work is layered on top.
 
-I would prefer a focused new module over a grandly named future-framework file like `effectPipeline.ts`.
+### Step 3: Extend `DerivedState`, but keep it UI-scoped
 
-### Phase 2: Make Accessors Cache-First
+**File: `src/game/derived.ts`**
 
-Goal:
+Add:
 
-- let existing stat/keyword helpers use the cache when available
+- `effectiveStats: Map<EntityId, EffectiveUnitStats>`
+- `effectiveKeywords: Map<EntityId, string[]>`
 
-Changes:
+Update `rebuildDerivedState()` to call `buildContinuousEffectSnapshot(state)`.
 
-- update [src/game/systems/unitStats.ts](/Users/administrator/Projects/space-trader/src/game/systems/unitStats.ts)
-- update [src/game/systems/keywords.ts](/Users/administrator/Projects/space-trader/src/game/systems/keywords.ts)
+Important boundary:
 
-Behavior:
+- `DerivedState` remains a render/UI convenience snapshot.
+- Gameplay code must not read it through a global singleton.
+- No `derivedStateRef.ts`.
 
-- if a derived cache is available, read from it
-- otherwise fall back to current on-demand calculation
-- if `excludeEffectIdPrefix` is provided, bypass cache and use the current on-demand path
+This stays aligned with the architecture note that `src/game/derived.ts` is cached derived state keyed off runtime version, while gameplay authority remains in `GameState`.
 
-### Phase 3: Export Effect Applicability Helper
+### Step 4: Add an explicit state-scoped resolver for hot simulation paths
 
-Goal:
+**New code in `src/game/systems/effectPipeline.ts` or `src/game/systems/continuousEffects.ts`**
 
-- avoid duplicating effect-target logic in both old and new resolution paths
+Add a resolver object with memoization scoped to a single state/read phase:
 
-Changes:
+```typescript
+export type EffectResolver = {
+  getStats(unit: Readonly<UnitEntity>): EffectiveUnitStats;
+  getKeywords(
+    unit: Readonly<UnitEntity>,
+    options?: { excludeEffectIdPrefix?: string }
+  ): string[];
+};
 
-- export `doesEffectApplyToEntity(...)` from [src/game/systems/continuousEffects.ts](/Users/administrator/Projects/space-trader/src/game/systems/continuousEffects.ts)
+export function createEffectResolver(
+  state: Readonly<GameState>
+): EffectResolver;
+```
 
-No logic change should happen here.
+Rules:
 
-### Phase 4: Runtime Integration
+- Memoize by `entityId` inside the resolver instance only
+- Never store the resolver globally
+- When `excludeEffectIdPrefix` is present, bypass memoization for that query
+- Callers create a fresh resolver when they need repeated reads against the current state
 
-Goal:
+This gives the performance win without cross-state contamination.
 
-- ensure the live runtime always rebuilds and uses the richer derived cache
+### Step 5: Adopt the resolver in the actual hot paths
 
-Changes:
+The original plan's "zero consumer changes" goal should be dropped. To get meaningful wins safely, thread the resolver explicitly where repeated reads happen inside a single call graph.
 
-- [src/game/runtime.ts](/Users/administrator/Projects/space-trader/src/game/runtime.ts) already rebuilds derived state when `stateVersion` changes
-- that rebuild should simply produce the richer derived object
+Priority consumers:
 
-Important design decision:
+- `src/game/turn/autoFlow.ts`
+- `src/game/rules/validators.ts`
+- `src/game/systems/combat.ts`
+- `src/game/ai/minimax/evaluate.ts`
+- `src/game/ai/minimax/generate.ts`
+- `src/game/content/sets/foundation/ai/spellScoring.ts`
+- `src/game/content/sets/alpha/ai/spellScoring.ts`
+- `src/game/render/overlays.ts` if needed
 
-- do not add a module-global `derivedStateRef`
+Implementation options:
 
-Reason:
+- Either pass `resolver` through local helper functions
+- Or add an optional `resolver` parameter to `unitStats.ts` / `keywords.ts` wrappers
 
-- it couples unrelated runtimes
-- it is brittle under HMR
-- it is awkward for tests
-- it is unnecessary when the runtime already owns `derivedState`
+Recommended approach:
 
-If a helper truly needs derived state outside the render frame, prefer an explicit optional parameter over a process-global singleton.
+- keep existing wrapper signatures valid
+- add optional `resolver` support through an options bag
+- migrate only the hot loops in this refactor
 
-### Phase 5: Tests
+### Step 6: Preserve immediate simulation correctness
 
-Goal:
+Explicitly verify the cases that the original plan would have broken:
 
-- prove the cached path matches current behavior
+- applying a `moveRange` effect and clamping `movesRemaining` in the same instruction flow
+- resetting turn action budgets during phase advance
+- auto-flow deciding immediately after a command resolves
+- main-thread bot fallback evaluating the current state before the next render frame
 
-Add or update tests for:
+This is the key architectural rule for the refactor:
+
+- simulation reads must always be correct immediately after state mutation
+- render-time derived snapshots are an optimization for UI, not gameplay authority
+
+### Step 7: Tests
+
+**New file: `src/game/systems/effectPipeline.test.ts`**
+
+Add pipeline unit tests:
 
 - base stats with no effects
-- stat modifiers
-- stat setters
-- layer ordering by `layer`, then `timestamp`
-- keyword grants
-- adjacent-allies aura targeting
-- clamping negative `moveRange` / `attackRange`
-- hooks still applying after regular stat effects
-- `excludeEffectIdPrefix` still bypassing cache correctly
-- derived rebuild populating the new maps
+- `keyword_grant` application
+- `stat_modifier` and `stat_set`
+- timestamp ordering within a layer
+- layer ordering across `ABILITY`, `STATIC`, `TEMPORARY`, `COUNTER`
+- `adjacent_allies` targeting
+- `moveRange` / `attackRange` clamping
+- hooks seeing resolved keywords
+- replacement effects excluded from the stat/keyword pipeline
 
-Also verify that existing tests in:
+Add parity tests:
 
-- [src/game/systems/continuousEffects.test.ts](/Users/administrator/Projects/space-trader/src/game/systems/continuousEffects.test.ts)
-- [src/game/actions/reducers.test.ts](/Users/administrator/Projects/space-trader/src/game/actions/reducers.test.ts)
-- combat, validators, and mechanic tests
+- `buildResolvedUnitSnapshot()` matches `getEffectiveStatValue()` and `getEffectiveKeywordsForUnit()`
+- `buildContinuousEffectSnapshot()` matches per-unit getter results for every unit in a state
 
-continue to pass unchanged.
+Add isolation tests:
 
-### Phase 6: Optional Hook Cleanup
+- two runtimes in one process do not share cached results
+- minimax `structuredClone()` states do not accidentally reuse another state's cache
+- runtime reset / HMR rebuild produces fresh derived snapshots
 
-This phase is optional and should only happen if Phase 1 exposes awkward recursion or repeated cache misses.
+Keep and extend existing reducer/runtime tests for immediate correctness without requiring `runtime.step()`.
 
-Possible follow-up:
+### Step 8: Verification
 
-- update unit stat hook APIs so hooks can consume already-resolved keyword information directly
-- reduce internal calls from hooks back into generic keyword resolution
+Required verification:
 
-This is not required for the initial caching refactor.
+1. `npm test`
+2. `npm run typecheck`
+3. Manual local game: verify combat damage, buffs, and keyword mechanics behave identically
+4. Manual network game: verify command outcomes remain deterministic between client and server
+5. Manual bot game with worker enabled and disabled: confirm both paths agree
 
-## Files To Change
+## Files Changed
 
-### Phase 1
+| File | Change |
+|------|--------|
+| `src/game/systems/effectPipeline.ts` | **NEW** pure layer pipeline and state-scoped resolver |
+| `src/game/systems/effectPipeline.test.ts` | **NEW** pipeline, parity, and isolation tests |
+| `src/game/systems/continuousEffects.ts` | Make pipeline canonical; export `doesEffectApplyToEntity`; add snapshot helpers |
+| `src/game/derived.ts` | Store precomputed effective stats/keywords for UI/frame consumers |
+| `src/game/systems/unitStats.ts` | Optional resolver-aware wrappers, if needed for hot loops |
+| `src/game/systems/keywords.ts` | Optional resolver-aware wrappers, if needed for hot loops |
+| Hot consumers listed above | Explicit resolver plumbing where repeated reads justify it |
 
-- [src/game/derived.ts](/Users/administrator/Projects/space-trader/src/game/derived.ts)
-- either:
-  - [src/game/systems/continuousEffects.ts](/Users/administrator/Projects/space-trader/src/game/systems/continuousEffects.ts)
-  - or a new small focused helper module for effective entity resolution
+## Files Not Added
 
-### Phase 2
+- No `src/game/systems/derivedStateRef.ts`
+- No module-global gameplay cache
 
-- [src/game/systems/unitStats.ts](/Users/administrator/Projects/space-trader/src/game/systems/unitStats.ts)
-- [src/game/systems/keywords.ts](/Users/administrator/Projects/space-trader/src/game/systems/keywords.ts)
+## Key Design Decisions
 
-### Phase 3
-
-- [src/game/systems/continuousEffects.ts](/Users/administrator/Projects/space-trader/src/game/systems/continuousEffects.ts)
-
-### Phase 4
-
-- [src/game/runtime.ts](/Users/administrator/Projects/space-trader/src/game/runtime.ts)
-
-### Phase 5
-
-- new or updated tests in:
-  - [src/game/systems/continuousEffects.test.ts](/Users/administrator/Projects/space-trader/src/game/systems/continuousEffects.test.ts)
-  - [src/game/derived.test.ts](/Users/administrator/Projects/space-trader/src/game/derived.test.ts)
-  - optionally a new focused effect-resolution test file
-
-## Files Explicitly Not In Scope
-
-This refactor should not change:
-
-- multiplayer protocol
-- `GameState` serialization shape
-- ownership semantics
-- `signal_hijack` control-changing behavior
-- copy-effect support
-- stat-swap support
-- consumer call sites across combat, AI, validators, render, and mechanics
-
-## Risks
-
-### 1. Cache mismatch vs fallback path
-
-If cached and uncached resolution differ, behavior becomes inconsistent between:
-
-- runtime play
-- tests
-- AI search
-
-Mitigation:
-
-- keep the current on-demand logic as the reference path
-- compare cached results against uncached tests
-
-### 2. Hook recursion
-
-Some hooks call generic keyword helpers today.
-
-Mitigation:
-
-- treat hook cleanup as a later follow-up
-- do not overdesign Phase 1 around theoretical future layers
-
-### 3. Overstating performance gains
-
-This helps the live runtime most.
-
-It does not automatically accelerate:
-
-- minimax search
-- server-side command validation
-
-because those paths do not currently operate through the runtime's derived cache.
-
-## Acceptance Criteria
-
-The refactor is successful when:
-
-- runtime behavior is unchanged
-- public stat/keyword APIs remain unchanged
-- live runtime uses cached effective stats/keywords from derived state
-- fallback behavior still works outside the runtime cache
-- all existing tests pass
-- typecheck passes
-
-## Recommended Implementation Order
-
-1. extend `DerivedState`
-2. implement cached effective stat/keyword rebuild
-3. make `unitStats.ts` cache-first
-4. make `keywords.ts` cache-first with `excludeEffectIdPrefix` bypass
-5. export `doesEffectApplyToEntity(...)`
-6. add tests
-7. only then decide whether hook API cleanup is needed
-
-## Summary
-
-The right refactor is not "build a grand future layer framework."
-
-The right refactor is:
-
-- cache what the runtime already recomputes too often
-- keep current APIs stable
-- model only the layers the game actually uses now
-- leave COPY / CONTROL / SWAP for the day those mechanics really exist
+1. **Pure pipeline first**: effect semantics move into one testable place before optimization is spread through the codebase.
+2. **State-scoped caching only**: caches live inside a snapshot or resolver tied to one state/read phase.
+3. **Render and gameplay stay separate**: `DerivedState` can store precomputed effect data, but gameplay code cannot depend on render rebuild timing.
+4. **Explicit optimization beats hidden magic**: hot loops opt into a resolver instead of silently consulting a global singleton.
+5. **Future layers are deferred, not faked**: CONTROL / COPY / SWAP need a richer applicability model and should be designed separately.
+6. **Existing behavior remains authoritative**: reducers, AI, multiplayer, and tests must continue to work before the next animation frame runs.
