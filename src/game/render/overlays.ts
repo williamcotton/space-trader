@@ -3,7 +3,7 @@ import type { GameState } from "../model/state";
 import { getSelectedUnit } from "../model/queries";
 import { spatialGetEntity } from "../derived";
 import type { GameFrame } from "../types";
-import { canUnitDeclareAttack } from "../rules/directInteraction";
+import { canUnitDeclareAttack, getAttackableEntitiesForUnit } from "../rules/directInteraction";
 import { getEffectiveUnitAttackRange } from "../systems/unitStats";
 import { toPixel, clamp, drawDiamond, drawRegularPolygon, drawRoundedRect, drawHexOutline } from "./primitives";
 
@@ -78,19 +78,42 @@ export function drawHoverHexAndTargetPreview(state: GameState, frame: GameFrame,
   context.stroke();
 
   const selected = getSelectedUnit(state);
-  const hoveredEntity = spatialGetEntity(frame.derived.spatialIndex, state.entities, hoveredHex, selected?.id);
-  if (!selected || !hoveredEntity || hoveredEntity.ownerId === selected.ownerId) {
+  const pendingAttacker = frame.transients.pendingAttackTargeting
+    ? state.entities[frame.transients.pendingAttackTargeting.attackerId]
+    : null;
+  const previewUnit =
+    pendingAttacker && pendingAttacker.kind === "unit"
+      ? pendingAttacker
+      : selected;
+
+  if (pendingAttacker && pendingAttacker.kind === "unit") {
+    const validTargets = getAttackableEntitiesForUnit(state, pendingAttacker);
+    for (let index = 0; index < validTargets.length; index += 1) {
+      const target = validTargets[index];
+      const targetPos = toPixel(target.coord, originX, originY, hexSize);
+      const isHoveredTarget = target.coord.q === hoveredHex.q && target.coord.r === hoveredHex.r;
+      drawHexOutline(context, targetPos.x, targetPos.y, hexSize - (isHoveredTarget ? 1.8 : 3.6));
+      context.fillStyle = isHoveredTarget ? "rgba(255, 170, 98, 0.22)" : "rgba(255, 118, 118, 0.12)";
+      context.fill();
+      context.strokeStyle = isHoveredTarget ? "rgba(255, 196, 110, 0.94)" : "rgba(255, 126, 126, 0.64)";
+      context.lineWidth = isHoveredTarget ? 2.2 : 1.5;
+      context.stroke();
+    }
+  }
+
+  const hoveredEntity = spatialGetEntity(frame.derived.spatialIndex, state.entities, hoveredHex, previewUnit?.id);
+  if (!previewUnit || !hoveredEntity || hoveredEntity.ownerId === previewUnit.ownerId) {
     return;
   }
 
-  const selectedPos = toPixel(selected.coord, originX, originY, hexSize);
+  const selectedPos = toPixel(previewUnit.coord, originX, originY, hexSize);
   const targetPos = toPixel(hoveredEntity.coord, originX, originY, hexSize);
-  const distance = hexDistance(selected.coord, hoveredEntity.coord);
+  const distance = hexDistance(previewUnit.coord, hoveredEntity.coord);
   const canAttackNow =
     state.phase === "tactical" &&
-    selected.attacksRemaining > 0 &&
-    canUnitDeclareAttack(state, selected) &&
-    distance <= getEffectiveUnitAttackRange(state, selected);
+    previewUnit.attacksRemaining > 0 &&
+    canUnitDeclareAttack(state, previewUnit) &&
+    distance <= getEffectiveUnitAttackRange(state, previewUnit);
 
   context.beginPath();
   context.moveTo(selectedPos.x, selectedPos.y);

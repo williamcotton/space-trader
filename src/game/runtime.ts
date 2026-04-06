@@ -20,11 +20,12 @@ import type { Faction } from "./model/enums";
 import type { PlayerId } from "./model/ids";
 import { migrateRuntimeState } from "./model/migrations";
 import { buildMatchIntroAnimation, buildVictoryAnimation, captureAnimationSnapshot, buildAnimationsFromEvents, stepAnimations } from "./render/animations";
-import { configurePlayerThemes } from "./presentation";
+import { configurePlayerThemes, getEntityDisplayName } from "./presentation";
 import { getHexMetrics } from "./render/layout";
 import { renderGame, updateGame } from "./systems";
 import { canAttackEntityDirectly } from "./rules/directInteraction";
 import { canUnitDeclareAttack } from "./rules/directInteraction";
+import { getAttackableEntitiesForUnit } from "./rules/directInteraction";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "./systems/harvesting";
 import { getEffectiveUnitAttackRange } from "./systems/unitStats";
 import { getAutoFlowCommand } from "./turn/autoFlow";
@@ -61,6 +62,13 @@ type PendingCardTargeting = {
   cardName: string;
   targetMode: "entity" | "hex";
   targetStackItemId?: string;
+  prompt: string;
+};
+
+type PendingAttackTargeting = {
+  playerId: PlayerId;
+  attackerId: string;
+  attackerName: string;
   prompt: string;
 };
 
@@ -193,6 +201,10 @@ function getSelectedUnitForPlayer(state: GameState, playerId: PlayerId) {
   return entity;
 }
 
+function buildPendingAttackPrompt(attackerName: string): string {
+  return `Choose an attack target for ${attackerName}. Press A or Esc to cancel.`;
+}
+
 export function getBoardClickCommand(state: GameState, clickedHex: { q: number; r: number } | null): GameCommand | null {
   return getBoardClickCommandForPlayer(state, state.activePlayerId, clickedHex);
 }
@@ -280,6 +292,7 @@ export class GameRuntime {
   private priorityStopSettings: PlayerPriorityStopSettings = createDefaultPlayerPriorityStopSettings();
   private consumedPriorityStopKeys: Set<string> = new Set();
   private pendingCardTargeting: PendingCardTargeting | null = null;
+  private pendingAttackTargeting: PendingAttackTargeting | null = null;
   private listeners: Set<() => void> = new Set();
   private transientListeners: Set<() => void> = new Set();
   private stateVersion = 0;
@@ -368,6 +381,7 @@ export class GameRuntime {
     this.animations = [];
     this.botActionReadyAtMs = 0;
     this.pendingCardTargeting = null;
+    this.pendingAttackTargeting = null;
     this.hoveredHex = null;
     this.consumedPriorityStopKeys = new Set();
     this.derivedState = createEmptyDerivedState();
@@ -442,6 +456,11 @@ export class GameRuntime {
       this.pendingCardTargeting = null;
     } else if (!this.pendingCardTargeting.targetMode) {
       this.pendingCardTargeting = null;
+    }
+    if (!this.pendingAttackTargeting) {
+      this.pendingAttackTargeting = null;
+    } else if (!this.pendingAttackTargeting.attackerId || !this.pendingAttackTargeting.prompt) {
+      this.pendingAttackTargeting = null;
     }
     if (!this.listeners) {
       this.listeners = new Set();
@@ -565,6 +584,7 @@ export class GameRuntime {
   private dispatchCommand(command: GameCommand, options?: { scheduleAutomation?: boolean; animate?: boolean }): DispatchResult {
     const before = captureAnimationSnapshot(this.state);
     const result = dispatchCommand(this.state, command);
+    this.syncPendingAttackTargeting();
     if (result.ok && result.events.length > 0 && options?.animate !== false) {
       this.pushAnimations(buildAnimationsFromEvents(result.events, before, this.state));
     }
@@ -625,6 +645,10 @@ export class GameRuntime {
 
   getPendingCardTargeting(): PendingCardTargeting | null {
     return this.pendingCardTargeting ? { ...this.pendingCardTargeting } : null;
+  }
+
+  getPendingAttackTargeting(): PendingAttackTargeting | null {
+    return this.pendingAttackTargeting ? { ...this.pendingAttackTargeting } : null;
   }
 
   isNetworkedMatch(): boolean {
@@ -691,6 +715,7 @@ export class GameRuntime {
     }
     this.networkSession = null;
     this.pendingCardTargeting = null;
+    this.pendingAttackTargeting = null;
     this.clearAutomationTimer();
     if (reason) {
       this.state.log.push({
@@ -717,6 +742,39 @@ export class GameRuntime {
         : `Network error: ${reason}`,
     });
     this.notifyListeners();
+  }
+
+  private clearPendingAttackTargeting(options?: { notifyTransient?: boolean }): void {
+    if (!this.pendingAttackTargeting) {
+      return;
+    }
+    this.pendingAttackTargeting = null;
+    if (options?.notifyTransient !== false) {
+      this.notifyTransientListeners();
+    }
+  }
+
+  private syncPendingAttackTargeting(): void {
+    if (!this.pendingAttackTargeting) {
+      return;
+    }
+
+    const attacker = this.state.entities[this.pendingAttackTargeting.attackerId];
+    if (!attacker || attacker.kind !== "unit") {
+      this.pendingAttackTargeting = null;
+      return;
+    }
+
+    if (
+      attacker.ownerId !== this.pendingAttackTargeting.playerId ||
+      this.state.selectedEntityId !== attacker.id ||
+      this.state.phase !== "tactical" ||
+      this.state.activePlayerId !== attacker.ownerId ||
+      this.state.priorityPlayerId !== attacker.ownerId ||
+      getAttackableEntitiesForUnit(this.state, attacker).length === 0
+    ) {
+      this.pendingAttackTargeting = null;
+    }
   }
 
   private clearPendingCardTargeting(logText?: string): void {
@@ -792,6 +850,46 @@ export class GameRuntime {
       return;
     }
 
+    if (this.pendingAttackTargeting) {
+      const pending = this.pendingAttackTargeting;
+      const attacker = this.state.entities[pending.attackerId];
+      if (!attacker || attacker.kind !== "unit") {
+        this.clearPendingAttackTargeting();
+        return;
+      }
+
+      if (!hoveredHex) {
+        this.clearPendingAttackTargeting();
+        return;
+      }
+
+      const clickedEntity = findEntityAtHex(this.state, hoveredHex);
+      if (!clickedEntity) {
+        this.clearPendingAttackTargeting();
+        return;
+      }
+
+      if (clickedEntity.ownerId === pending.playerId) {
+        if (clickedEntity.id === attacker.id) {
+          this.clearPendingAttackTargeting();
+          return;
+        }
+
+        this.clearPendingAttackTargeting({ notifyTransient: false });
+      } else {
+        const result = this.dispatch({
+          type: "ATTACK_UNIT",
+          playerId: pending.playerId,
+          attackerId: pending.attackerId,
+          targetId: clickedEntity.id,
+        });
+        if (result.ok) {
+          this.clearPendingAttackTargeting();
+        }
+        return;
+      }
+    }
+
     const actingPlayerId = this.networkSession?.localPlayerId ?? this.state.activePlayerId;
     const command = getBoardClickCommandForPlayer(this.state, actingPlayerId, hoveredHex, {
       toggleSelectedUnitOff: !this.networkSession,
@@ -808,6 +906,7 @@ export class GameRuntime {
     if (!this.canLocalPlayerActAs(playerId)) {
       return null;
     }
+    this.clearPendingAttackTargeting({ notifyTransient: false });
     return this.dispatch({
       type: "END_PHASE",
       playerId,
@@ -819,10 +918,62 @@ export class GameRuntime {
     if (!playerId || !this.canLocalPlayerActAs(playerId)) {
       return null;
     }
+    this.clearPendingAttackTargeting({ notifyTransient: false });
     return this.dispatch({
       type: "PASS_PRIORITY",
       playerId,
     });
+  }
+
+  cancelPendingTargeting(): boolean {
+    if (this.pendingCardTargeting) {
+      this.clearPendingCardTargeting(`Cancelled targeting for ${this.pendingCardTargeting.cardName}.`);
+      this.notifyListeners();
+      return true;
+    }
+
+    if (this.pendingAttackTargeting) {
+      this.clearPendingAttackTargeting();
+      return true;
+    }
+
+    return false;
+  }
+
+  beginAttackTargetingForSelectedUnit(): boolean {
+    if (this.pendingCardTargeting) {
+      return false;
+    }
+
+    const playerId = this.state.activePlayerId;
+    if (!this.canLocalPlayerActAs(playerId) || this.state.priorityPlayerId !== playerId || this.state.phase !== "tactical") {
+      return false;
+    }
+
+    const attacker = getSelectedUnitForPlayer(this.state, playerId);
+    if (!attacker || !canUnitDeclareAttack(this.state, attacker) || attacker.attacksRemaining <= 0) {
+      return false;
+    }
+
+    const validTargets = getAttackableEntitiesForUnit(this.state, attacker);
+    if (validTargets.length === 0) {
+      return false;
+    }
+
+    if (this.pendingAttackTargeting?.attackerId === attacker.id) {
+      this.clearPendingAttackTargeting();
+      return false;
+    }
+
+    const attackerName = getEntityDisplayName(attacker, this.state);
+    this.pendingAttackTargeting = {
+      playerId,
+      attackerId: attacker.id,
+      attackerName,
+      prompt: buildPendingAttackPrompt(attackerName),
+    };
+    this.notifyTransientListeners();
+    return true;
   }
 
   harvestSelectedUnit(): DispatchResult | null {
@@ -841,6 +992,7 @@ export class GameRuntime {
       return null;
     }
 
+    this.clearPendingAttackTargeting({ notifyTransient: false });
     return this.dispatch({
       type: "HARVEST_NODE",
       playerId,
@@ -955,6 +1107,7 @@ export class GameRuntime {
     targetEntityId?: string,
     targetHex?: { q: number; r: number }
   ): DispatchResult {
+    this.clearPendingAttackTargeting({ notifyTransient: false });
     if (this.state.phase === "discard") {
       this.pendingCardTargeting = null;
       const discardPlayerId = this.networkSession?.localPlayerId ?? this.state.activePlayerId;
@@ -1456,6 +1609,12 @@ export class GameRuntime {
       transients: {
         animations: this.animations,
         hoveredHex: this.hoveredHex,
+        pendingAttackTargeting: this.pendingAttackTargeting
+          ? {
+              playerId: this.pendingAttackTargeting.playerId,
+              attackerId: this.pendingAttackTargeting.attackerId,
+            }
+          : null,
       },
       derived: this.derivedState,
     };

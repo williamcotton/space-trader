@@ -372,6 +372,65 @@ describe("GameRuntime", () => {
     expect(submitted).toEqual(["HARVEST_NODE"]);
   });
 
+  it("begins attack targeting and attacks the clicked enemy locally", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    runtime.state.phase = "tactical";
+    runtime.state.activePlayerId = "player_1";
+    runtime.state.priorityPlayerId = "player_1";
+    const attacker = runtime.state.entities.unit_player_1_scout;
+    const target = runtime.state.entities.unit_player_2_harvester;
+    if (attacker.kind !== "unit" || target.kind !== "unit") {
+      throw new Error("Expected unit attacker and target for attack targeting test.");
+    }
+    attacker.coord = { q: 0, r: 0 };
+    attacker.hasSummoningSickness = false;
+    attacker.attacksRemaining = 1;
+    target.coord = { q: 0, r: 1 };
+    runtime.state.selectedEntityId = attacker.id;
+    runtime.setViewport(1024, 768);
+    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
+    const point = axialToPixel(target.coord, metrics.origin, metrics.size);
+    const hpBefore = target.hp;
+
+    expect(runtime.beginAttackTargetingForSelectedUnit()).toBe(true);
+    expect(runtime.getPendingAttackTargeting()).not.toBeNull();
+
+    runtime.selectUnitFromScreenPoint(point.x, point.y);
+
+    expect(runtime.getPendingAttackTargeting()).toBeNull();
+    expect(runtime.state.entities.unit_player_2_harvester?.hp).toBeLessThan(hpBefore);
+  });
+
+  it("cancels attack targeting when an empty hex is clicked", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    runtime.state.phase = "tactical";
+    runtime.state.activePlayerId = "player_1";
+    runtime.state.priorityPlayerId = "player_1";
+    const attacker = runtime.state.entities.unit_player_1_scout;
+    const target = runtime.state.entities.unit_player_2_harvester;
+    if (attacker.kind !== "unit") {
+      throw new Error("Expected unit attacker for attack cancel test.");
+    }
+    attacker.coord = { q: 0, r: 0 };
+    attacker.hasSummoningSickness = false;
+    attacker.attacksRemaining = 1;
+    if (target.kind !== "unit") {
+      throw new Error("Expected enemy unit for attack cancel test.");
+    }
+    target.coord = { q: 0, r: 1 };
+    runtime.state.selectedEntityId = attacker.id;
+    runtime.setViewport(1024, 768);
+    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
+    const emptyPoint = axialToPixel({ q: -2, r: 0 }, metrics.origin, metrics.size);
+
+    expect(runtime.beginAttackTargetingForSelectedUnit()).toBe(true);
+
+    runtime.selectUnitFromScreenPoint(emptyPoint.x, emptyPoint.y);
+
+    expect(runtime.getPendingAttackTargeting()).toBeNull();
+    expect(runtime.state.selectedEntityId).toBe(attacker.id);
+  });
+
   it("attacks the first target in range for the selected unit locally", () => {
     const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
     runtime.state.phase = "tactical";
@@ -416,6 +475,43 @@ describe("GameRuntime", () => {
     runtime.state.selectedEntityId = attacker.id;
 
     runtime.attackSelectedUnitFirstTargetInRange();
+
+    expect(submitted).toEqual(["ATTACK_UNIT"]);
+  });
+
+  it("queues attack targeting first and only submits attack after target selection in network matches", () => {
+    const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
+    const submitted: string[] = [];
+    runtime.startNetworkMatch(createMatchStartPayload({
+      localPlayerId: "player_2",
+      factions: {
+        player_1: "alloy_clan",
+        player_2: "flux_collective",
+      },
+    }), (command) => {
+      submitted.push(command.type);
+    }, { showIntroAnimation: false });
+    runtime.state.phase = "tactical";
+    runtime.state.activePlayerId = "player_2";
+    runtime.state.priorityPlayerId = "player_2";
+    const attacker = runtime.state.entities.unit_player_2_scout;
+    const target = runtime.state.entities.unit_player_1_harvester;
+    if (attacker.kind !== "unit" || target.kind !== "unit") {
+      throw new Error("Expected unit attacker and target for network attack targeting test.");
+    }
+    attacker.coord = { q: 0, r: 0 };
+    attacker.hasSummoningSickness = false;
+    attacker.attacksRemaining = 1;
+    target.coord = { q: 0, r: 1 };
+    runtime.state.selectedEntityId = attacker.id;
+    runtime.setViewport(1024, 768);
+    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
+    const point = axialToPixel(target.coord, metrics.origin, metrics.size);
+
+    expect(runtime.beginAttackTargetingForSelectedUnit()).toBe(true);
+    expect(submitted).toEqual([]);
+
+    runtime.selectUnitFromScreenPoint(point.x, point.y);
 
     expect(submitted).toEqual(["ATTACK_UNIT"]);
   });

@@ -138,6 +138,23 @@ export function GameCanvas() {
   useEffect(() => {
     const runtime = runtimeRef.current;
     const onKeyDown = (event: KeyboardEvent): void => {
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (runtime.cancelPendingTargeting()) {
+          event.preventDefault();
+        }
+        return;
+      }
+
       const key = event.key.toLowerCase();
       if (key === "n") {
         runtime.endPhase();
@@ -150,7 +167,7 @@ export function GameCanvas() {
       }
 
       if (key === "a") {
-        runtime.attackSelectedUnitFirstTargetInRange();
+        runtime.beginAttackTargetingForSelectedUnit();
         return;
       }
 

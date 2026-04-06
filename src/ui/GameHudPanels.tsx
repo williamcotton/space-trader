@@ -5,7 +5,7 @@ import { getEntityAtCoord, getSelectedUnit } from "../game/model/queries";
 import { formatFactionName, getEntityDisplayName, getPlayerLabel, getUnitRoleTheme } from "../game/presentation";
 import { getCardDefinition } from "../game/content/cards/catalog";
 import { getGameRuntime } from "../game/runtime";
-import { canUnitDeclareAttack } from "../game/rules/directInteraction";
+import { canUnitDeclareAttack, getAttackableEntitiesForUnit } from "../game/rules/directInteraction";
 import { resolveCombatAttack } from "../game/systems/combat";
 import {
   getEffectiveUnitArmor,
@@ -61,6 +61,8 @@ type TacticalHudSnapshot = {
   selectedUnit: SelectedUnitSnapshot | null;
   hoveredHex: HexCoord | null;
   hoverCombat: HoverCombatSnapshot | null;
+  pendingAttackPrompt: string | null;
+  pendingAttackTargetCount: number;
 };
 
 function readSnapshot(): TacticalHudSnapshot {
@@ -68,19 +70,31 @@ function readSnapshot(): TacticalHudSnapshot {
   const state = runtime.state;
   const hoveredHex = runtime.getHoveredHex();
   const selected = getSelectedUnit(state);
+  const pendingAttackTargeting = runtime.getPendingAttackTargeting();
+  const pendingAttackAttacker = pendingAttackTargeting
+    ? state.entities[pendingAttackTargeting.attackerId]
+    : null;
+  const previewUnit =
+    pendingAttackAttacker && pendingAttackAttacker.kind === "unit"
+      ? pendingAttackAttacker
+      : selected;
+  const pendingAttackTargetCount =
+    pendingAttackAttacker && pendingAttackAttacker.kind === "unit"
+      ? getAttackableEntitiesForUnit(state, pendingAttackAttacker).length
+      : 0;
 
   let hoverCombat: HoverCombatSnapshot | null = null;
-  if (selected && hoveredHex && isWithinMapBounds(hoveredHex, state.map)) {
-    const hoveredEntity = getEntityAtCoord(state, hoveredHex, selected.id);
-    if (hoveredEntity && hoveredEntity.ownerId !== selected.ownerId) {
-      const distance = hexDistance(selected.coord, hoveredEntity.coord);
-      const attackRange = getEffectiveUnitAttackRange(state, selected);
+  if (previewUnit && hoveredHex && isWithinMapBounds(hoveredHex, state.map)) {
+    const hoveredEntity = getEntityAtCoord(state, hoveredHex, previewUnit.id);
+    if (hoveredEntity && hoveredEntity.ownerId !== previewUnit.ownerId) {
+      const distance = hexDistance(previewUnit.coord, hoveredEntity.coord);
+      const attackRange = getEffectiveUnitAttackRange(state, previewUnit);
       const canAttackNow =
         state.phase === "tactical" &&
-        selected.attacksRemaining > 0 &&
-        canUnitDeclareAttack(state, selected) &&
+        previewUnit.attacksRemaining > 0 &&
+        canUnitDeclareAttack(state, previewUnit) &&
         distance <= attackRange;
-      const preview = resolveCombatAttack(state, selected, hoveredEntity);
+      const preview = resolveCombatAttack(state, previewUnit, hoveredEntity);
       hoverCombat = {
         targetId: hoveredEntity.id,
         targetName: getEntityDisplayName(hoveredEntity, state),
@@ -105,6 +119,8 @@ function readSnapshot(): TacticalHudSnapshot {
 
   return {
     phase: state.phase,
+    pendingAttackPrompt: pendingAttackTargeting?.prompt ?? null,
+    pendingAttackTargetCount,
     selectedUnit: selected
       ? {
           id: selected.id,
@@ -216,10 +232,17 @@ export function GameHudPanels() {
       <section className="game-hud-panel combat-preview-panel">
         <div className="game-hud-panel-head">
           <p className="game-hud-title">Combat Preview</p>
-          {snapshot.hoverCombat ? (
+          {snapshot.pendingAttackPrompt ? (
+            <span className="game-hud-pill role">Attack Targeting</span>
+          ) : snapshot.hoverCombat ? (
             <span className={["game-hud-pill", snapshot.hoverCombat.canAttackNow ? "good" : "bad"].join(" ")}>{canAttackLabel}</span>
           ) : null}
         </div>
+        {snapshot.pendingAttackPrompt ? (
+          <p className="game-hud-detail-line">
+            {snapshot.pendingAttackPrompt} {snapshot.pendingAttackTargetCount > 0 ? `${snapshot.pendingAttackTargetCount} target${snapshot.pendingAttackTargetCount === 1 ? "" : "s"} in range.` : ""}
+          </p>
+        ) : null}
         {snapshot.hoverCombat ? (
           <>
             <div className="game-hud-entity-header">
@@ -265,7 +288,9 @@ export function GameHudPanels() {
           </>
         ) : (
           <p className="game-hud-empty">
-            {snapshot.selectedUnit
+            {snapshot.pendingAttackPrompt
+              ? "Click an enemy unit or base to attack."
+              : snapshot.selectedUnit
               ? `Hover an enemy to preview combat (${snapshot.phase} phase).`
               : snapshot.hoveredHex
                 ? "Select a unit to see combat previews."

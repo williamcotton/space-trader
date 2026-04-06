@@ -1,3 +1,4 @@
+import { hexDistance } from "../model/hex";
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, UnitEntity } from "../model/state";
 import {
@@ -6,6 +7,7 @@ import {
   getUnitActionBlockReason,
   unitHasRegisteredAttackPermission,
 } from "../registries/directInteraction";
+import { getEffectiveUnitAttackRange } from "../systems/unitStats";
 
 export function getUnitMoveActionBlockReason(unit: Readonly<Pick<UnitEntity, "hasSummoningSickness" | "keywords">>): string | null {
   return getUnitActionBlockReason(unit, "move");
@@ -76,4 +78,33 @@ export function canAttackEntityDirectly(
   target: EntityState
 ): boolean {
   return getDirectAttackBlockReason(state, sourcePlayerId, target) === null;
+}
+
+export function canUnitAttackTarget(
+  state: Readonly<GameState>,
+  attacker: Readonly<UnitEntity>,
+  target: Readonly<EntityState>
+): boolean {
+  if (attacker.ownerId === target.ownerId) {
+    return false;
+  }
+
+  if (!canUnitDeclareAttack(state, attacker) || attacker.attacksRemaining <= 0) {
+    return false;
+  }
+
+  if (!canAttackEntityDirectly(state, attacker.ownerId, target)) {
+    return false;
+  }
+
+  return hexDistance(attacker.coord, target.coord) <= getEffectiveUnitAttackRange(state, attacker);
+}
+
+export function getAttackableEntitiesForUnit(
+  state: Readonly<GameState>,
+  attacker: Readonly<UnitEntity>
+): EntityState[] {
+  return Object.values(state.entities)
+    .filter((target) => canUnitAttackTarget(state, attacker, target))
+    .sort((a, b) => a.id.localeCompare(b.id));
 }

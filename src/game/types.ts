@@ -138,6 +138,10 @@ export type CanvasAnimation =
 export type FrameTransients = {
   animations: CanvasAnimation[];
   hoveredHex: HexCoord | null;
+  pendingAttackTargeting: {
+    playerId: PlayerId;
+    attackerId: string;
+  } | null;
 };
 
 export type GameViewport = {
