@@ -10,10 +10,7 @@ export type MatchStartPayload = {
   matchId: string;
   seed: number;
   localPlayerId: PlayerId;
-  factions: {
-    player_1: Faction;
-    player_2: Faction;
-  };
+  factions: Record<PlayerId, Faction>;
   mapId: string;
   runtimeProfileId: string | null;
   builtInSetIds: string[];

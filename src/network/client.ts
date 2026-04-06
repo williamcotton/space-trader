@@ -1,5 +1,6 @@
 import type { GameCommand } from "../game/actions/commands";
 import type { Faction } from "../game/model/enums";
+import type { PlayerId } from "../game/model/ids";
 import { getGameRuntime } from "../game/runtime";
 import {
   DEFAULT_MULTIPLAYER_SERVER_URL,
@@ -38,7 +39,7 @@ export type MultiplayerSnapshot = {
   queuedFaction: Faction | null;
   queuedPlayers: number;
   matchId: string | null;
-  localPlayerId: "player_1" | "player_2" | null;
+  localPlayerId: PlayerId | null;
   error: string | null;
 };
 

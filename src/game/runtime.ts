@@ -75,7 +75,7 @@ type PendingAttackTargeting = {
 export type RuntimeContentOptions = Omit<ContentLoadSelection, "reset"> & {
   runtimeProfileId?: string;
   mapId?: string;
-  factions?: { player_1: Faction; player_2: Faction };
+  factions?: Partial<Record<PlayerId, Faction>>;
   matchId?: string;
   seed?: number;
 };
@@ -326,7 +326,7 @@ export class GameRuntime {
     this.scheduleAutomationFromCurrentState();
   }
 
-  resetWithFactions(factions: { player_1: Faction; player_2: Faction }): void {
+  resetWithFactions(factions: Partial<Record<PlayerId, Faction>>): void {
     if (this.networkSession) {
       return;
     }

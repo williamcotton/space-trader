@@ -1,5 +1,5 @@
 import type { Faction, GamePhase, ResourceType, UnitRole } from "./enums";
-import { PLAYER_ONE, PLAYER_TWO, type EntityId, type NodeId, type PlayerId } from "./ids";
+import { DEFAULT_PLAYER_ORDER, type EntityId, type NodeId, type PlayerId } from "./ids";
 import { ensureDefaultContentLoaded } from "../content/loader";
 import { getStarterDeckCardIds, validateDeckCardIds } from "../content/decks/starterDecks";
 import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog";
@@ -154,6 +154,8 @@ export interface GameState {
   matchId: string;
   turn: number;
   phase: GamePhase;
+  playerOrder: PlayerId[];
+  eliminatedPlayerIds: PlayerId[];
   activePlayerId: PlayerId;
   priorityPlayerId: PlayerId | null;
   consecutivePriorityPasses: number;
@@ -189,7 +191,8 @@ type CreateInitialGameStateOptions = {
   matchId?: string;
   randomSource?: () => number;
   rules?: Partial<GameRules>;
-  factions?: { player_1: Faction; player_2: Faction };
+  playerOrder?: PlayerId[];
+  factions?: Partial<Record<PlayerId, Faction>>;
 };
 
 export const DEFAULT_GAME_RULES: GameRules = {
@@ -231,11 +234,11 @@ function shuffleCards<T>(cards: T[], randomSource: () => number): T[] {
   return shuffled;
 }
 
-function createStartingResources(playerId: PlayerId, faction: Faction): ResourcePool {
+function createStartingResources(seatIndex: number, faction: Faction): ResourcePool {
   const primary = getPrimaryResourceForFaction(faction);
   const currency = getCurrencyResourceId();
   const resources = createEmptyResourcePool();
-  resources[currency] = playerId === PLAYER_ONE ? PLAYER_ONE_STARTING_CURRENCY : PLAYER_TWO_STARTING_CURRENCY;
+  resources[currency] = seatIndex === 0 ? PLAYER_ONE_STARTING_CURRENCY : PLAYER_TWO_STARTING_CURRENCY;
   resources[primary] = STARTING_PRIMARY_RESOURCE;
   return resources;
 }
@@ -263,15 +266,27 @@ function resolveRuntimeProfile(options: CreateInitialGameStateOptions) {
 function cloneMap(map: MapState): MapState {
   return {
     ...map,
-    spawnPoints: {
-      player_1: { ...map.spawnPoints.player_1 },
-      player_2: { ...map.spawnPoints.player_2 },
-    },
+    spawnPoints: Object.fromEntries(
+      Object.entries(map.spawnPoints).map(([playerId, coord]) => [playerId, { ...coord }])
+    ) as Record<PlayerId, HexCoord>,
     resourceNodes: map.resourceNodes.map((node) => ({
       ...node,
       coord: { ...node.coord },
     })),
   };
+}
+
+function resolveInitialPlayerOrder(map: MapState, options: CreateInitialGameStateOptions): PlayerId[] {
+  if (options.playerOrder && options.playerOrder.length > 0) {
+    return [...options.playerOrder];
+  }
+
+  const mapPlayers = Object.keys(map.spawnPoints).sort();
+  if (mapPlayers.length > 0) {
+    return mapPlayers;
+  }
+
+  return [...DEFAULT_PLAYER_ORDER];
 }
 
 function resolveInitialMap(options: CreateInitialGameStateOptions): MapState {
@@ -336,48 +351,58 @@ export function createInitialZonesForPlayer(
 }
 
 export function syncPlayerZoneCounts(state: Pick<GameState, "players" | "zones">): void {
-  state.players.player_1.handSize = state.zones.player_1.hand.length;
-  state.players.player_1.deckSize = state.zones.player_1.deck.length;
-  state.players.player_2.handSize = state.zones.player_2.hand.length;
-  state.players.player_2.deckSize = state.zones.player_2.deck.length;
+  for (const playerId of Object.keys(state.players)) {
+    const player = state.players[playerId];
+    const zones = state.zones[playerId];
+    if (!player || !zones) {
+      continue;
+    }
+    player.handSize = zones.hand.length;
+    player.deckSize = zones.deck.length;
+  }
+}
+
+const STARTING_UNIT_OFFSETS: Array<{ combat: HexCoord; resource: HexCoord }> = [
+  { combat: { q: 1, r: 0 }, resource: { q: 0, r: 1 } },
+  { combat: { q: -1, r: 0 }, resource: { q: 0, r: -1 } },
+  { combat: { q: 0, r: -1 }, resource: { q: 1, r: 0 } },
+  { combat: { q: 0, r: 1 }, resource: { q: -1, r: 0 } },
+];
+
+function getStartingUnitOffsets(seatIndex: number): { combat: HexCoord; resource: HexCoord } {
+  return STARTING_UNIT_OFFSETS[seatIndex] ?? STARTING_UNIT_OFFSETS[seatIndex % STARTING_UNIT_OFFSETS.length]!;
 }
 
 export function createInitialGameState(options: CreateInitialGameStateOptions): GameState {
   ensureDefaultContentLoaded();
   const map = resolveInitialMap(options);
+  const playerOrder = resolveInitialPlayerOrder(map, options);
   const registeredFactions = getRegisteredFactionIds();
   if (registeredFactions.length === 0) {
     throw new Error("No registered factions are available.");
+  }
+  if (playerOrder.length === 0) {
+    throw new Error("Cannot create a match without at least one player.");
   }
   const runtimeProfile = resolveRuntimeProfile({
     ...options,
     map,
   });
-  const factionOne =
-    options.factions?.player_1 ??
-    runtimeProfile?.defaultFactions?.player_1 ??
-    registeredFactions[0];
-  const factionTwo =
-    options.factions?.player_2 ??
-    runtimeProfile?.defaultFactions?.player_2 ??
-    registeredFactions[1] ??
-    registeredFactions[0] ??
-    factionOne;
-  const factionOneModule = getRegisteredFactionModule(factionOne);
-  const factionTwoModule = getRegisteredFactionModule(factionTwo);
-  if (!factionOneModule || !factionTwoModule) {
-    throw new Error(`Missing faction module configuration for ${!factionOneModule ? factionOne : factionTwo}.`);
-  }
+  const factionsByPlayer = Object.fromEntries(
+    playerOrder.map((playerId, seatIndex) => {
+      const fallbackFaction = registeredFactions[seatIndex] ?? registeredFactions[0];
+      return [
+        playerId,
+        options.factions?.[playerId] ??
+          runtimeProfile?.defaultFactions?.[playerId] ??
+          fallbackFaction,
+      ];
+    })
+  ) as Record<PlayerId, Faction>;
   const rules = {
     ...createDefaultGameRules(),
     ...(options.rules ?? {}),
   };
-  const baseOneId: EntityId = "base_player_1";
-  const baseTwoId: EntityId = "base_player_2";
-  const unitOneId: EntityId = "unit_player_1_scout";
-  const unitTwoId: EntityId = "unit_player_2_scout";
-  const harvesterOneId: EntityId = "unit_player_1_harvester";
-  const harvesterTwoId: EntityId = "unit_player_2_harvester";
   const createStartingUnit = (
     id: EntityId,
     ownerId: PlayerId,
@@ -430,82 +455,87 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     };
   };
 
-  const entities: Record<EntityId, EntityState> = {
-    [baseOneId]: {
-      id: baseOneId,
-      kind: "base",
-      name: "Player 1 Base",
-      ownerId: PLAYER_ONE,
-      hp: BASE_STARTING_HP,
-      maxHp: BASE_STARTING_HP,
-      coord: { ...map.spawnPoints.player_1 },
-    },
-    [baseTwoId]: {
-      id: baseTwoId,
-      kind: "base",
-      name: "Player 2 Base",
-      ownerId: PLAYER_TWO,
-      hp: BASE_STARTING_HP,
-      maxHp: BASE_STARTING_HP,
-      coord: { ...map.spawnPoints.player_2 },
-    },
-    [unitOneId]: createStartingUnit(unitOneId, PLAYER_ONE, factionOneModule.startingCombatUnitCardId, {
-        q: map.spawnPoints.player_1.q + 1,
-        r: map.spawnPoints.player_1.r,
-      }, factionOneModule.startingCombatUnitOverrides),
-    [unitTwoId]: createStartingUnit(unitTwoId, PLAYER_TWO, factionTwoModule.startingCombatUnitCardId, {
-        q: map.spawnPoints.player_2.q - 1,
-        r: map.spawnPoints.player_2.r,
-      }, factionTwoModule.startingCombatUnitOverrides),
-    [harvesterOneId]: createStartingUnit(harvesterOneId, PLAYER_ONE, factionOneModule.startingResourceUnitCardId, {
-        q: map.spawnPoints.player_1.q,
-        r: map.spawnPoints.player_1.r + 1,
-      }, factionOneModule.startingResourceUnitOverrides),
-    [harvesterTwoId]: createStartingUnit(harvesterTwoId, PLAYER_TWO, factionTwoModule.startingResourceUnitCardId, {
-        q: map.spawnPoints.player_2.q,
-        r: map.spawnPoints.player_2.r - 1,
-      }, factionTwoModule.startingResourceUnitOverrides),
-  };
+  const entities: Record<EntityId, EntityState> = {};
+  const zones = {} as Record<PlayerId, PlayerZones>;
+  const players = {} as Record<PlayerId, PlayerState>;
 
-  const zones = {
-    player_1: createInitialZonesForPlayer(PLAYER_ONE, factionOne, OPENING_HAND_SIZE, options.randomSource),
-    player_2: createInitialZonesForPlayer(PLAYER_TWO, factionTwo, OPENING_HAND_SIZE, options.randomSource),
-  } satisfies Record<PlayerId, PlayerZones>;
+  for (let seatIndex = 0; seatIndex < playerOrder.length; seatIndex += 1) {
+    const playerId = playerOrder[seatIndex]!;
+    const faction = factionsByPlayer[playerId];
+    const factionModule = getRegisteredFactionModule(faction);
+    if (!factionModule) {
+      throw new Error(`Missing faction module configuration for ${faction}.`);
+    }
+
+    const spawn = map.spawnPoints[playerId];
+    if (!spawn) {
+      throw new Error(`Missing spawn point for ${playerId} on map ${map.id}.`);
+    }
+
+    const offsets = getStartingUnitOffsets(seatIndex);
+    const baseId: EntityId = `base_${playerId}`;
+    const combatUnitId: EntityId = `unit_${playerId}_scout`;
+    const resourceUnitId: EntityId = `unit_${playerId}_harvester`;
+
+    entities[baseId] = {
+      id: baseId,
+      kind: "base",
+      name: `Player ${seatIndex + 1} Base`,
+      ownerId: playerId,
+      hp: BASE_STARTING_HP,
+      maxHp: BASE_STARTING_HP,
+      coord: { ...spawn },
+    };
+    entities[combatUnitId] = createStartingUnit(
+      combatUnitId,
+      playerId,
+      factionModule.startingCombatUnitCardId,
+      {
+        q: spawn.q + offsets.combat.q,
+        r: spawn.r + offsets.combat.r,
+      },
+      factionModule.startingCombatUnitOverrides
+    );
+    entities[resourceUnitId] = createStartingUnit(
+      resourceUnitId,
+      playerId,
+      factionModule.startingResourceUnitCardId,
+      {
+        q: spawn.q + offsets.resource.q,
+        r: spawn.r + offsets.resource.r,
+      },
+      factionModule.startingResourceUnitOverrides
+    );
+
+    zones[playerId] = createInitialZonesForPlayer(playerId, faction, OPENING_HAND_SIZE, options.randomSource);
+    players[playerId] = {
+      id: playerId,
+      name: `Player ${seatIndex + 1}`,
+      faction,
+      resources: createStartingResources(seatIndex, faction),
+      handSize: zones[playerId].hand.length,
+      deckSize: zones[playerId].deck.length,
+      baseEntityId: baseId,
+    };
+  }
   const matchIdPrefix = runtimeProfile?.matchIdPrefix ?? map.id;
   const initialMatchId = options.matchId ?? `match_${matchIdPrefix}`;
 
   const state = {
-    stateVersion: 25,
+    stateVersion: 26,
     nextGeneratedIdCounter: 1,
     matchId: initialMatchId,
     turn: 1,
     phase: "start",
-    activePlayerId: PLAYER_ONE,
-    priorityPlayerId: PLAYER_ONE,
+    playerOrder,
+    eliminatedPlayerIds: [],
+    activePlayerId: playerOrder[0]!,
+    priorityPlayerId: playerOrder[0]!,
     consecutivePriorityPasses: 0,
     selectedEntityId: null,
     rules,
     map,
-    players: {
-      player_1: {
-        id: PLAYER_ONE,
-        name: "Player 1",
-        faction: factionOne,
-        resources: createStartingResources(PLAYER_ONE, factionOne),
-        handSize: zones.player_1.hand.length,
-        deckSize: zones.player_1.deck.length,
-        baseEntityId: baseOneId,
-      },
-      player_2: {
-        id: PLAYER_TWO,
-        name: "Player 2",
-        faction: factionTwo,
-        resources: createStartingResources(PLAYER_TWO, factionTwo),
-        handSize: zones.player_2.hand.length,
-        deckSize: zones.player_2.deck.length,
-        baseEntityId: baseTwoId,
-      },
-    },
+    players,
     zones,
     entities,
     stack: [],

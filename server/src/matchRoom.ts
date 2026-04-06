@@ -1,7 +1,6 @@
 import { dispatchCommand } from "../../src/game/actions/reducers";
 import type { GameCommand } from "../../src/game/actions/commands";
 import type { Faction } from "../../src/game/model/enums";
-import type { PlayerId } from "../../src/game/model/ids";
 import type { GameState } from "../../src/game/model/state";
 import { hexDistance } from "../../src/game/model/hex";
 import { getAutoFlowCommand } from "../../src/game/turn/autoFlow";
@@ -24,6 +23,8 @@ type MatchRoomOptions = {
   sessionStore: SessionStore;
   onFinished: (matchId: string) => void;
 };
+
+type MatchPlayerId = keyof MatchRoomOptions["playerTokens"];
 
 export class MatchRoom {
   readonly matchId: string;
@@ -157,7 +158,7 @@ export class MatchRoom {
     return { ok: true };
   }
 
-  private getPlayerIdForToken(token: string): PlayerId | null {
+  private getPlayerIdForToken(token: string): MatchPlayerId | null {
     if (token === this.playerTokens.player_1) {
       return "player_1";
     }
@@ -167,14 +168,14 @@ export class MatchRoom {
     return null;
   }
 
-  private sendMatchStart(localPlayerId: PlayerId): void {
+  private sendMatchStart(localPlayerId: MatchPlayerId): void {
     this.sessionStore.send(this.playerTokens[localPlayerId], {
       type: "match_start",
       payload: this.createMatchStartPayload(localPlayerId),
     });
   }
 
-  private createMatchStartPayload(localPlayerId: PlayerId): MatchStartPayload {
+  private createMatchStartPayload(localPlayerId: MatchPlayerId): MatchStartPayload {
     return {
       matchId: this.matchId,
       seed: this.seed,

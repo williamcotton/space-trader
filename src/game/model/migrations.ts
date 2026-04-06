@@ -2,10 +2,11 @@ import { getCardDefinition, getUnitCardKeywords } from "../content/cards/catalog
 import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/stackEffects";
 import { migrateMechanicState } from "../mechanics";
 import { ensureEntityPresentation } from "../presentation";
-import { BASE_STARTING_HP, OPENING_HAND_SIZE, createDefaultGameRules, createInitialZonesForPlayer } from "./state";
+import { DEFAULT_PLAYER_ORDER, type PlayerId } from "./ids";
+import { BASE_STARTING_HP, OPENING_HAND_SIZE, createDefaultGameRules, createInitialZonesForPlayer, syncPlayerZoneCounts } from "./state";
 import type { GameState } from "./state";
 
-export const CURRENT_STATE_VERSION = 25;
+export const CURRENT_STATE_VERSION = 26;
 
 function inferNextGeneratedIdCounter(state: GameState): number {
   let maxSuffix = 0;
@@ -96,6 +97,17 @@ export function migrateRuntimeState(state: GameState): void {
     state.stateVersion = 0;
   }
 
+  if (!Array.isArray((state as GameState & { playerOrder?: unknown }).playerOrder)) {
+    state.playerOrder = Object.keys(state.players ?? {}).sort();
+    if (state.playerOrder.length === 0) {
+      state.playerOrder = [...DEFAULT_PLAYER_ORDER];
+    }
+  }
+
+  if (!Array.isArray((state as GameState & { eliminatedPlayerIds?: unknown }).eliminatedPlayerIds)) {
+    state.eliminatedPlayerIds = [];
+  }
+
   if (typeof state.consecutivePriorityPasses !== "number") {
     state.consecutivePriorityPasses = 0;
   }
@@ -128,6 +140,14 @@ export function migrateRuntimeState(state: GameState): void {
 
   if (!Array.isArray(state.tacticalHarvestedUnitIds)) {
     state.tacticalHarvestedUnitIds = [];
+  }
+
+  if (!state.players[state.activePlayerId]) {
+    state.activePlayerId = state.playerOrder[0]!;
+  }
+
+  if (state.priorityPlayerId && !state.players[state.priorityPlayerId]) {
+    state.priorityPlayerId = state.activePlayerId;
   }
 
   migrateMechanicState(state);
@@ -226,13 +246,10 @@ export function migrateRuntimeState(state: GameState): void {
   migratePhaseFourHarvesters(state);
 
   if (typeof state.zones === "undefined") {
-    state.zones = {
-      player_1: createInitialZonesForPlayer("player_1", state.players.player_1.faction, state.players.player_1.handSize || OPENING_HAND_SIZE),
-      player_2: createInitialZonesForPlayer("player_2", state.players.player_2.faction, state.players.player_2.handSize || OPENING_HAND_SIZE),
-    };
+    state.zones = {} as GameState["zones"];
   }
 
-  for (const playerId of ["player_1", "player_2"] as const) {
+  for (const playerId of Object.keys(state.players) as PlayerId[]) {
     if (!state.zones[playerId]) {
       state.zones[playerId] = createInitialZonesForPlayer(
         playerId,
@@ -252,10 +269,9 @@ export function migrateRuntimeState(state: GameState): void {
     if (!Array.isArray(state.zones[playerId].exile)) {
       state.zones[playerId].exile = [];
     }
-
-    state.players[playerId].handSize = state.zones[playerId].hand.length;
-    state.players[playerId].deckSize = state.zones[playerId].deck.length;
   }
+
+  syncPlayerZoneCounts(state);
 
   if (!Array.isArray(state.continuousEffects)) {
     state.continuousEffects = [];
