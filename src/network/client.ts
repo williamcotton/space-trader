@@ -18,6 +18,8 @@ import {
   type MultiplayerServerEvent,
   type OpenSessionRequest,
   type OpenSessionResponse,
+  type ResyncMatchRequest,
+  type ResyncMatchResponse,
   type SubmitCommandRequest,
   type SubmitCommandResponse,
 } from "./protocol";
@@ -592,17 +594,16 @@ class MultiplayerClient {
 
   private requestAuthoritativeResync(): void {
     const token = this.snapshot.token;
-    if (!token || !this.activeMatchStart || this.resyncPromise) {
+    const matchId = this.activeMatchStart?.matchId;
+    if (!token || !matchId || this.resyncPromise) {
       return;
     }
 
-    this.snapshot = {
-      ...this.snapshot,
-      status: "reconnecting",
-    };
-    this.notify();
-
-    this.resyncPromise = this.openEventStream(token)
+    this.resyncPromise = this.postJson<ResyncMatchRequest, ResyncMatchResponse>("/api/match/resync", {
+      token,
+      matchId,
+    })
+      .then(() => undefined)
       .catch((error) => {
         this.handleError(error instanceof Error ? error.message : "Failed to resync multiplayer match.");
       })

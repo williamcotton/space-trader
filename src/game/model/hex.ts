@@ -64,20 +64,74 @@ export function hexDistance(from: HexCoord, to: HexCoord): number {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.z - b.z));
 }
 
+let cachedPlayableHexesKey = "";
+let cachedPlayableHexes: HexCoord[] = [];
+let cachedPlayableHexSet: Set<string> = new Set();
+
+function buildPlayableHexesKey(map: MapState): string {
+  const playableHexes = map.playableHexes ?? [];
+  const first = playableHexes[0];
+  const last = playableHexes[playableHexes.length - 1];
+  return [
+    map.id,
+    map.width,
+    map.height,
+    playableHexes.length,
+    first ? `${first.q},${first.r}` : "none",
+    last ? `${last.q},${last.r}` : "none",
+  ].join("|");
+}
+
+export function getPlayableHexes(map: MapState): HexCoord[] {
+  const key = buildPlayableHexesKey(map);
+  if (cachedPlayableHexesKey === key) {
+    return cachedPlayableHexes;
+  }
+
+  if (map.playableHexes && map.playableHexes.length > 0) {
+    cachedPlayableHexes = map.playableHexes;
+  } else {
+    const qRadius = Math.floor(map.width / 2);
+    const rRadius = Math.floor(map.height / 2);
+    const coords: HexCoord[] = [];
+    for (let r = -rRadius; r <= rRadius; r += 1) {
+      for (let q = -qRadius; q <= qRadius; q += 1) {
+        coords.push({ q, r });
+      }
+    }
+    cachedPlayableHexes = coords;
+  }
+
+  cachedPlayableHexSet = new Set(cachedPlayableHexes.map((coord) => hexKey(coord)));
+  cachedPlayableHexesKey = key;
+  return cachedPlayableHexes;
+}
+
 export function getMapAxialBounds(map: MapState): { qMin: number; qMax: number; rMin: number; rMax: number } {
-  const qRadius = Math.floor(map.width / 2);
-  const rRadius = Math.floor(map.height / 2);
+  const playableHexes = getPlayableHexes(map);
+  let qMin = Number.POSITIVE_INFINITY;
+  let qMax = Number.NEGATIVE_INFINITY;
+  let rMin = Number.POSITIVE_INFINITY;
+  let rMax = Number.NEGATIVE_INFINITY;
+
+  for (const coord of playableHexes) {
+    qMin = Math.min(qMin, coord.q);
+    qMax = Math.max(qMax, coord.q);
+    rMin = Math.min(rMin, coord.r);
+    rMax = Math.max(rMax, coord.r);
+  }
+
   return {
-    qMin: -qRadius,
-    qMax: qRadius,
-    rMin: -rRadius,
-    rMax: rRadius,
+    qMin: Number.isFinite(qMin) ? qMin : 0,
+    qMax: Number.isFinite(qMax) ? qMax : 0,
+    rMin: Number.isFinite(rMin) ? rMin : 0,
+    rMax: Number.isFinite(rMax) ? rMax : 0,
   };
 }
 
 export function isWithinMapBounds(coord: HexCoord, map: MapState): boolean {
-  const bounds = getMapAxialBounds(map);
-  return coord.q >= bounds.qMin && coord.q <= bounds.qMax && coord.r >= bounds.rMin && coord.r <= bounds.rMax;
+  getPlayableHexes(map);
+  return cachedPlayableHexSet.has(hexKey(coord));
 }
 
 export function hexKey(coord: HexCoord): string {

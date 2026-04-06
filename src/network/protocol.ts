@@ -134,6 +134,15 @@ export type QuitMatchResponse = {
   ok: true;
 };
 
+export type ResyncMatchRequest = {
+  token: string;
+  matchId: string;
+};
+
+export type ResyncMatchResponse = {
+  ok: true;
+};
+
 export type SubmitCommandRequest = {
   token: string;
   matchId: string;

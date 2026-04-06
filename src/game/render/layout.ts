@@ -1,4 +1,4 @@
-import { getMapAxialBounds } from "../model/hex";
+import { getPlayableHexes } from "../model/hex";
 import type { MapState } from "../model/state";
 import type { GameViewport } from "../types";
 
@@ -11,26 +11,23 @@ let cachedMapBounds: MapBounds | null = null;
 let cachedMapBoundsKey = "";
 
 function getNormalizedMapBounds(map: MapState): MapBounds {
-  const key = `${map.width},${map.height}`;
+  const key = `${map.id},${map.width},${map.height},${map.playableHexes?.length ?? 0}`;
   if (cachedMapBounds && cachedMapBoundsKey === key) {
     return cachedMapBounds;
   }
 
-  const { qMin, qMax, rMin, rMax } = getMapAxialBounds(map);
   let minX = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
 
-  for (let r = rMin; r <= rMax; r += 1) {
-    for (let q = qMin; q <= qMax; q += 1) {
-      const centerX = SQRT3 * (q + r / 2);
-      const centerY = 1.5 * r;
-      minX = Math.min(minX, centerX - 1);
-      maxX = Math.max(maxX, centerX + 1);
-      minY = Math.min(minY, centerY - 1);
-      maxY = Math.max(maxY, centerY + 1);
-    }
+  for (const coord of getPlayableHexes(map)) {
+    const centerX = SQRT3 * (coord.q + coord.r / 2);
+    const centerY = 1.5 * coord.r;
+    minX = Math.min(minX, centerX - 1);
+    maxX = Math.max(maxX, centerX + 1);
+    minY = Math.min(minY, centerY - 1);
+    maxY = Math.max(maxY, centerY + 1);
   }
 
   cachedMapBounds = { minX, maxX, minY, maxY };
@@ -43,7 +40,7 @@ let cachedMetricsKey = "";
 
 export function getHexMetrics(viewport: GameViewport, map: MapState): HexMetrics {
   const scale = viewport.scale ?? 1;
-  const key = `${viewport.width},${viewport.height},${scale},${map.width},${map.height}`;
+  const key = `${viewport.width},${viewport.height},${scale},${map.id},${map.width},${map.height},${map.playableHexes?.length ?? 0}`;
   if (cachedMetrics && cachedMetricsKey === key) {
     return cachedMetrics;
   }

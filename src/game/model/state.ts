@@ -66,6 +66,7 @@ export type MapState = {
   height: number;
   spawnPoints: Record<PlayerId, HexCoord>;
   startingUnitOffsets?: Partial<Record<PlayerId, StartingUnitOffsets>>;
+  playableHexes?: HexCoord[];
   resourceNodes: MapResourceNode[];
 };
 
@@ -288,6 +289,7 @@ function cloneMap(map: MapState): MapState {
           ])
         ) as Partial<Record<PlayerId, StartingUnitOffsets>>
       : undefined,
+    playableHexes: map.playableHexes?.map((coord) => ({ ...coord })),
     resourceNodes: map.resourceNodes.map((node) => ({
       ...node,
       coord: { ...node.coord },

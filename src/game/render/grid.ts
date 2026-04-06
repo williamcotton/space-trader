@@ -1,4 +1,4 @@
-import { getMapAxialBounds } from "../model/hex";
+import { getPlayableHexes } from "../model/hex";
 import type { GameState } from "../model/state";
 import { getPlayerTheme, getResourceTheme } from "../presentation";
 import type { GameFrame } from "../types";
@@ -65,8 +65,7 @@ function buildStaticBoardCacheKey(
     frame.viewport.width,
     frame.viewport.height,
     state.map.id,
-    state.players.player_1.faction,
-    state.players.player_2.faction,
+    ...state.playerOrder.map((playerId) => state.players[playerId]?.faction ?? "none"),
     originX.toFixed(2),
     originY.toFixed(2),
     hexSize.toFixed(2),
@@ -74,25 +73,26 @@ function buildStaticBoardCacheKey(
 }
 
 export function drawHexGrid(state: GameState, context: DrawContext, originX: number, originY: number, hexSize: number): void {
-  const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
   const fillPulse = 0.42 + 0.08 * Math.sin((originX + originY) * 0.001);
 
-  for (let r = rMin; r <= rMax; r += 1) {
-    for (let q = qMin; q <= qMax; q += 1) {
-      const { x, y } = toPixel({ q, r }, originX, originY, hexSize);
-      drawHexOutline(context, x, y, hexSize - 1.5);
-      context.fillStyle = `rgba(9, 18, 46, ${fillPulse})`;
-      context.fill();
-      context.strokeStyle = "rgba(43, 69, 126, 0.66)";
-      context.lineWidth = 1;
-      context.stroke();
-    }
+  for (const coord of getPlayableHexes(state.map)) {
+    const { x, y } = toPixel(coord, originX, originY, hexSize);
+    drawHexOutline(context, x, y, hexSize - 1.5);
+    context.fillStyle = `rgba(9, 18, 46, ${fillPulse})`;
+    context.fill();
+    context.strokeStyle = "rgba(43, 69, 126, 0.66)";
+    context.lineWidth = 1;
+    context.stroke();
   }
 }
 
 export function drawPlayerTerritory(state: GameState, context: DrawContext, originX: number, originY: number, hexSize: number): void {
-  for (const playerId of ["player_1", "player_2"] as const) {
-    const base = state.entities[state.players[playerId].baseEntityId];
+  for (const playerId of state.playerOrder) {
+    const player = state.players[playerId];
+    if (!player) {
+      continue;
+    }
+    const base = state.entities[player.baseEntityId];
     if (!base || base.kind !== "base") {
       continue;
     }

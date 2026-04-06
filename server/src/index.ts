@@ -12,10 +12,12 @@ import {
   type LeaveQueueRequest,
   type OpenSessionRequest,
   type QuitMatchRequest,
+  type ResyncMatchRequest,
   type SubmitCommandRequest,
 } from "../../src/network/protocol";
 
 const PORT = Number(process.env.PORT ?? 4310);
+const DISCONNECT_GRACE_MS = 1000;
 
 const sessionStore = new SessionStore();
 const roomStore = new RoomStore();
@@ -70,7 +72,14 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     request.on("close", () => {
       sessionStore.detachStream(token, response);
       if (session.matchId) {
-        roomStore.get(session.matchId)?.notifyDisconnect(token);
+        const matchId = session.matchId;
+        setTimeout(() => {
+          const latestSession = sessionStore.get(token);
+          if (!latestSession || latestSession.matchId !== matchId || latestSession.stream) {
+            return;
+          }
+          roomStore.get(matchId)?.notifyDisconnect(token);
+        }, DISCONNECT_GRACE_MS).unref();
       }
     });
     return;
@@ -163,6 +172,27 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       writeJson(response, 409, { reason: result.reason });
       return;
     }
+    writeJson(response, 200, { ok: true });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/match/resync") {
+    const body = await readJsonBody<ResyncMatchRequest>(request);
+    const session = body.token ? sessionStore.get(body.token) : null;
+    if (!session) {
+      writeJson(response, 404, { reason: "Unknown session." });
+      return;
+    }
+    if (!session.matchId || session.matchId !== body.matchId) {
+      writeJson(response, 409, { reason: "Session is not bound to that match." });
+      return;
+    }
+    const room = roomStore.get(session.matchId);
+    if (!room) {
+      writeJson(response, 404, { reason: "Match room not found." });
+      return;
+    }
+    room.sendResync(body.token);
     writeJson(response, 200, { ok: true });
     return;
   }
