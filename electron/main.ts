@@ -7,6 +7,21 @@ const APP_ROOT = join(__dirname, "..");
 const RENDERER_DIST = join(APP_ROOT, "dist");
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 
+function getDevServerPort(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).port || null;
+  } catch {
+    return null;
+  }
+}
+
+const DEV_SERVER_PORT = getDevServerPort(VITE_DEV_SERVER_URL);
+
+if (DEV_SERVER_PORT) {
+  app.setPath("userData", join(app.getPath("userData"), `dev-${DEV_SERVER_PORT}`));
+}
+
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
@@ -15,12 +30,18 @@ function createWindow(): void {
     height: 768,
     minWidth: 640,
     minHeight: 480,
+    show: false,
     autoHideMenuBar: true,
+    backgroundColor: "#0b1220",
     webPreferences: {
       preload: join(__dirname, "preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
   });
 
   if (VITE_DEV_SERVER_URL) {
