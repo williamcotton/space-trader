@@ -2,7 +2,7 @@ import { getGameRuntime } from "../game/runtime";
 import { useGameSnapshot } from "./useGameSnapshot";
 import { type Faction, type ResourceType } from "../game/model/enums";
 import type { PlayerId } from "../game/model/ids";
-import { getRegisteredFactionIds, getOrderedRegisteredResourceModules } from "../game/content/registry";
+import { getRegisteredFactionIds, getOrderedRegisteredResourceModules, getRegisteredRuntimeProfiles } from "../game/content/registry";
 import { formatFactionName, getPlayerLabel, getResourceTheme } from "../game/presentation";
 import { PRIORITY_STOP_LABELS, type PriorityStopKey, type PriorityStopSettings } from "../game/turn/priorityStops";
 import { ResourceIcon } from "./ResourceIcon";
@@ -26,6 +26,7 @@ type TopBarSnapshot = {
   priorityPlayerId: PlayerId | null;
   networked: boolean;
   networkLocalPlayerId: PlayerId | null;
+  runtimeProfileId: string | null;
   players: PlayerTopBarSnapshot[];
 };
 
@@ -40,15 +41,18 @@ function readSnapshot(): TopBarSnapshot {
     priorityPlayerId: state.priorityPlayerId,
     networked: runtime.isNetworkedMatch(),
     networkLocalPlayerId: runtime.getNetworkLocalPlayerId(),
-    players: (["player_1", "player_2"] as const).map((playerId) => ({
-      id: playerId,
-      faction: state.players[playerId].faction,
-      resources: { ...state.players[playerId].resources },
-      hand: state.zones[playerId].hand.length,
-      deck: state.zones[playerId].deck.length,
-      botAutoplay: runtime.isBotAutoplayEnabled(playerId),
-      priorityStops: runtime.getPriorityStopSettings(playerId),
-    })),
+    runtimeProfileId: runtime.getRuntimeProfileId(),
+    players: state.playerOrder
+      .filter((playerId) => Boolean(state.players[playerId] && state.zones[playerId]))
+      .map((playerId) => ({
+        id: playerId,
+        faction: state.players[playerId]!.faction,
+        resources: { ...state.players[playerId]!.resources },
+        hand: state.zones[playerId]!.hand.length,
+        deck: state.zones[playerId]!.deck.length,
+        botAutoplay: runtime.isBotAutoplayEnabled(playerId),
+        priorityStops: runtime.getPriorityStopSettings(playerId),
+      })),
   };
 }
 
@@ -56,6 +60,7 @@ export function GameTopBar() {
   const runtime = getGameRuntime();
   const snapshot = useGameSnapshot(readSnapshot);
   const factionIds = getRegisteredFactionIds();
+  const runtimeProfiles = getRegisteredRuntimeProfiles();
   const resourceOrder = getOrderedRegisteredResourceModules().map((resource) => resource.id);
 
   return (
@@ -64,6 +69,25 @@ export function GameTopBar() {
         <div className="game-top-bar-match">
           <span className="eyebrow">{snapshot.mapName}</span>
           <strong>Turn {snapshot.turn}</strong>
+          {!snapshot.networked ? (
+            <label className="game-top-bar-profile-select-wrap">
+              <span className="eyebrow">Mode</span>
+              <select
+                className="top-bar-faction-select game-top-bar-profile-select"
+                value={snapshot.runtimeProfileId ?? ""}
+                onChange={(e) => {
+                  const runtimeProfileId = e.target.value;
+                  runtime.resetWithContent({
+                    runtimeProfileId: runtimeProfileId || undefined,
+                  });
+                }}
+              >
+                {runtimeProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>{profile.label}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           {snapshot.networked && snapshot.networkLocalPlayerId ? (
             <span className="game-top-bar-priority-chip">Online · {getPlayerLabel(snapshot.networkLocalPlayerId)}</span>
           ) : null}
@@ -77,7 +101,6 @@ export function GameTopBar() {
                 "top-bar-player-pod",
                 player.id === snapshot.activePlayerId ? "active" : "",
                 player.id === snapshot.priorityPlayerId ? "priority" : "",
-                player.id === "player_1" ? "player-one" : "player-two",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -90,12 +113,11 @@ export function GameTopBar() {
                   disabled={snapshot.networked}
                   onChange={(e) => {
                     const faction = e.target.value as Faction;
-                    const other = player.id === "player_1" ? "player_2" : "player_1";
-                    const otherFaction = snapshot.players.find((p) => p.id === other)!.faction;
-                    runtime.resetWithFactions({
-                      [player.id]: faction,
-                      [other]: otherFaction,
-                    } as { player_1: Faction; player_2: Faction });
+                    runtime.resetWithFactions(
+                      Object.fromEntries(
+                        snapshot.players.map((entry) => [entry.id, entry.id === player.id ? faction : entry.faction])
+                      ) as Partial<Record<PlayerId, Faction>>
+                    );
                   }}
                 >
                   {factionIds.map((f) => (

@@ -35,6 +35,7 @@ function createFourPlayerMap(): MapState {
 function setupFourPlayerState() {
   return createInitialGameState({
     map: createFourPlayerMap(),
+    randomSource: () => 0,
     factions: {
       player_1: "alloy_clan",
       player_2: "flux_collective",

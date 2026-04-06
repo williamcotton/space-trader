@@ -29,9 +29,9 @@ export function createDefaultPriorityStopSettings(): PriorityStopSettings {
   };
 }
 
-export function createDefaultPlayerPriorityStopSettings(): PlayerPriorityStopSettings {
+export function createDefaultPlayerPriorityStopSettings(playerIds: PlayerId[] = DEFAULT_PLAYER_ORDER): PlayerPriorityStopSettings {
   return Object.fromEntries(
-    DEFAULT_PLAYER_ORDER.map((playerId, index) => [
+    playerIds.map((playerId, index) => [
       playerId,
       index === 0
         ? {

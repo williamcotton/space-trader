@@ -27,15 +27,21 @@ let activePlayerThemes: Record<PlayerId, PlayerTheme> = {
   player_2: DEFAULT_PLAYER_THEME,
 };
 
-export function configurePlayerThemes(factions: Record<PlayerId, Faction>): void {
+export function configurePlayerThemes(factions: Partial<Record<PlayerId, Faction>>): void {
   ensureDefaultContentLoaded();
-  const sameFaction = factions.player_1 === factions.player_2;
-  activePlayerThemes = {
-    player_1: getFactionPresentation(factions.player_1).theme,
-    player_2: sameFaction
-      ? (getFactionPresentation(factions.player_2).mirrorAltTheme ?? getFactionPresentation(factions.player_2).theme)
-      : getFactionPresentation(factions.player_2).theme,
-  };
+  const factionCounts = new Map<Faction, number>();
+  activePlayerThemes = Object.fromEntries(
+    Object.entries(factions).flatMap(([playerId, faction]) => {
+      if (!faction) {
+        return [];
+      }
+      const presentation = getFactionPresentation(faction);
+      const seenCount = factionCounts.get(faction) ?? 0;
+      factionCounts.set(faction, seenCount + 1);
+      const theme = seenCount === 0 ? presentation.theme : (presentation.mirrorAltTheme ?? presentation.theme);
+      return [[playerId, theme] satisfies [PlayerId, PlayerTheme]];
+    })
+  ) as Record<PlayerId, PlayerTheme>;
 }
 
 const ROLE_FALLBACK_NAMES: Record<UnitRole, string> = {
@@ -67,7 +73,7 @@ export type PlayerAnimationPalette = {
 };
 
 export function getPlayerAnimationPalette(playerId: PlayerId): PlayerAnimationPalette {
-  const theme = activePlayerThemes[playerId];
+  const theme = getPlayerTheme(playerId);
   const primaryRgb = hexToRgb(theme.primary);
   const lineRgb = hexToRgb(theme.line);
   const secondaryRgb = hexToRgb(theme.secondary);

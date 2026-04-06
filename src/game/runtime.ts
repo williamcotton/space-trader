@@ -205,6 +205,24 @@ function buildPendingAttackPrompt(attackerName: string): string {
   return `Choose an attack target for ${attackerName}. Press A or Esc to cancel.`;
 }
 
+function buildFactionMap(state: Pick<GameState, "playerOrder" | "players">): Record<PlayerId, Faction> {
+  return Object.fromEntries(
+    state.playerOrder
+      .filter((playerId) => Boolean(state.players[playerId]))
+      .map((playerId) => [playerId, state.players[playerId]!.faction])
+  ) as Record<PlayerId, Faction>;
+}
+
+function createDefaultBotAutoplayEnabled(playerIds: PlayerId[]): Record<PlayerId, boolean> {
+  return Object.fromEntries(
+    playerIds.map((playerId, index) => [playerId, playerIds.length === 2 ? index === 1 : false])
+  ) as Record<PlayerId, boolean>;
+}
+
+function createDisabledBotAutoplayEnabled(playerIds: PlayerId[]): Record<PlayerId, boolean> {
+  return Object.fromEntries(playerIds.map((playerId) => [playerId, false])) as Record<PlayerId, boolean>;
+}
+
 export function getBoardClickCommand(state: GameState, clickedHex: { q: number; r: number } | null): GameCommand | null {
   return getBoardClickCommandForPlayer(state, state.activePlayerId, clickedHex);
 }
@@ -285,10 +303,7 @@ export class GameRuntime {
   private pendingBotDecisionRequestId: number | null = null;
   private pendingBotDecisionStateVersion: number | null = null;
   private animations: CanvasAnimation[] = [];
-  private botAutoplayEnabled: Record<PlayerId, boolean> = {
-    player_1: false,
-    player_2: true,
-  };
+  private botAutoplayEnabled: Record<PlayerId, boolean> = createDefaultBotAutoplayEnabled(["player_1", "player_2"]);
   private priorityStopSettings: PlayerPriorityStopSettings = createDefaultPlayerPriorityStopSettings();
   private consumedPriorityStopKeys: Set<string> = new Set();
   private pendingCardTargeting: PendingCardTargeting | null = null;
@@ -318,10 +333,7 @@ export class GameRuntime {
       builtInSetIds: getLoadedContentSetIds(),
     };
     this.rehydrateHotState();
-    configurePlayerThemes({
-      player_1: this.state.players.player_1.faction,
-      player_2: this.state.players.player_2.faction,
-    });
+    configurePlayerThemes(buildFactionMap(this.state));
     this.pushAnimations([buildMatchIntroAnimation(this.state)]);
     this.scheduleAutomationFromCurrentState();
   }
@@ -350,6 +362,8 @@ export class GameRuntime {
         runtimeProfileId: options?.runtimeProfileId,
         mapId: options?.mapId,
         factions: options?.factions,
+        seed: options?.seed,
+        matchId: options?.matchId,
       },
       this.runtimeProfileId,
       this.state.map.id
@@ -385,10 +399,11 @@ export class GameRuntime {
     this.hoveredHex = null;
     this.consumedPriorityStopKeys = new Set();
     this.derivedState = createEmptyDerivedState();
-    configurePlayerThemes({
-      player_1: this.state.players.player_1.faction,
-      player_2: this.state.players.player_2.faction,
-    });
+    this.botAutoplayEnabled = this.networkSession
+      ? createDisabledBotAutoplayEnabled(this.state.playerOrder)
+      : createDefaultBotAutoplayEnabled(this.state.playerOrder);
+    this.priorityStopSettings = createDefaultPlayerPriorityStopSettings(this.state.playerOrder);
+    configurePlayerThemes(buildFactionMap(this.state));
     if (options?.showIntroAnimation !== false) {
       this.pushAnimations([buildMatchIntroAnimation(this.state)]);
     }
@@ -435,19 +450,30 @@ export class GameRuntime {
       this.pendingBotDecisionStateVersion = null;
     }
     if (!this.botAutoplayEnabled) {
-      this.botAutoplayEnabled = {
-        player_1: false,
-        player_2: true,
-      };
+      this.botAutoplayEnabled = this.networkSession
+        ? createDisabledBotAutoplayEnabled(this.state.playerOrder)
+        : createDefaultBotAutoplayEnabled(this.state.playerOrder);
+    } else {
+      const defaults = this.networkSession
+        ? createDisabledBotAutoplayEnabled(this.state.playerOrder)
+        : createDefaultBotAutoplayEnabled(this.state.playerOrder);
+      this.botAutoplayEnabled = Object.fromEntries(
+        this.state.playerOrder.map((playerId) => [playerId, this.botAutoplayEnabled[playerId] ?? defaults[playerId] ?? false])
+      ) as Record<PlayerId, boolean>;
     }
     if (!this.priorityStopSettings) {
-      this.priorityStopSettings = createDefaultPlayerPriorityStopSettings();
+      this.priorityStopSettings = createDefaultPlayerPriorityStopSettings(this.state.playerOrder);
     } else {
-      const defaults = createDefaultPlayerPriorityStopSettings();
-      this.priorityStopSettings = {
-        player_1: { ...defaults.player_1, ...this.priorityStopSettings.player_1 },
-        player_2: { ...defaults.player_2, ...this.priorityStopSettings.player_2 },
-      };
+      const defaults = createDefaultPlayerPriorityStopSettings(this.state.playerOrder);
+      this.priorityStopSettings = Object.fromEntries(
+        this.state.playerOrder.map((playerId) => [
+          playerId,
+          {
+            ...defaults[playerId],
+            ...this.priorityStopSettings[playerId],
+          },
+        ])
+      ) as PlayerPriorityStopSettings;
     }
     if (!(this.consumedPriorityStopKeys instanceof Set)) {
       this.consumedPriorityStopKeys = new Set();
@@ -596,7 +622,7 @@ export class GameRuntime {
   }
 
   isBotAutoplayEnabled(playerId: PlayerId): boolean {
-    return this.botAutoplayEnabled[playerId];
+    return this.botAutoplayEnabled[playerId] ?? false;
   }
 
   setBotAutoplayEnabled(playerId: PlayerId, enabled: boolean): void {
@@ -619,7 +645,7 @@ export class GameRuntime {
   }
 
   getPriorityStopSettings(playerId: PlayerId): PriorityStopSettings {
-    return { ...this.priorityStopSettings[playerId] };
+    return { ...(this.priorityStopSettings[playerId] ?? { opponentMain: false, opponentTactical: false, opponentStack: false }) };
   }
 
   setPriorityStopSetting(playerId: PlayerId, stopKey: PriorityStopKey, enabled: boolean): void {
@@ -659,6 +685,10 @@ export class GameRuntime {
     return this.networkSession?.localPlayerId ?? null;
   }
 
+  getRuntimeProfileId(): string | null {
+    return this.runtimeProfileId;
+  }
+
   canLocalPlayerActAs(playerId: PlayerId): boolean {
     return !this.networkSession || this.networkSession.localPlayerId === playerId;
   }
@@ -689,11 +719,6 @@ export class GameRuntime {
       seed: payload.seed,
     });
 
-    this.botAutoplayEnabled = {
-      player_1: false,
-      player_2: false,
-    };
-
     this.applyResetState(
       newState,
       runtimeProfileId,
@@ -702,6 +727,7 @@ export class GameRuntime {
       },
       { showIntroAnimation: options?.showIntroAnimation }
     );
+    this.botAutoplayEnabled = createDisabledBotAutoplayEnabled(this.state.playerOrder);
     this.state.log.push({
       turn: this.state.turn,
       text: `Network match started as ${payload.localPlayerId}.`,

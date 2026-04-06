@@ -46,7 +46,10 @@ describe("createInitialZonesForPlayer", () => {
 
 describe("createInitialGameState", () => {
   it("uses the tuned asymmetric starting resources", () => {
-    const state = createInitialGameState({ map: requireMapDefinition("frontier_belt") });
+    const state = createInitialGameState({
+      map: requireMapDefinition("frontier_belt"),
+      randomSource: createSeededRandom(0),
+    });
 
     expect(state.players.player_1.resources).toEqual({
       credits: PLAYER_ONE_STARTING_CURRENCY,
@@ -67,6 +70,39 @@ describe("createInitialGameState", () => {
     expect(getLastBloomedUnitIds(state)).toEqual([]);
     expect(getSalvageTriggersThisTurn(state, "player_1")).toBe(0);
     expect(getSalvageTriggersThisTurn(state, "player_2")).toBe(0);
+  });
+
+  it("supports deterministic four-player bootstrap with a random opening seat", () => {
+    const stateA = createInitialGameState({
+      runtimeProfileId: "alpha_four_player",
+      randomSource: createSeededRandom(7),
+    });
+    const stateB = createInitialGameState({
+      runtimeProfileId: "alpha_four_player",
+      randomSource: createSeededRandom(7),
+    });
+
+    expect(stateA.map.id).toBe("frontier_crossroads");
+    expect(stateA.playerOrder).toEqual(["player_1", "player_2", "player_3", "player_4"]);
+    expect(stateA.activePlayerId).toBe(stateB.activePlayerId);
+    expect(stateA.priorityPlayerId).toBe(stateA.activePlayerId);
+
+    const lowCurrencyPlayers = stateA.playerOrder.filter(
+      (playerId) => stateA.players[playerId]!.resources.credits === PLAYER_ONE_STARTING_CURRENCY
+    );
+    expect(lowCurrencyPlayers).toEqual([stateA.activePlayerId]);
+
+    const nonStartingPlayers = stateA.playerOrder.filter((playerId) => playerId !== stateA.activePlayerId);
+    expect(nonStartingPlayers.every((playerId) => stateA.players[playerId]!.resources.credits === PLAYER_TWO_STARTING_CURRENCY)).toBe(true);
+
+    expect(stateA.players.player_1.faction).toBe("alloy_clan");
+    expect(stateA.players.player_2.faction).toBe("flux_collective");
+    expect(stateA.players.player_3.faction).toBe("biomass_swarm");
+    expect(stateA.players.player_4.faction).toBe("alloy_clan");
+    expect(stateA.entities.base_player_4).toBeDefined();
+    expect(stateA.entities.unit_player_4_scout).toBeDefined();
+    expect(stateA.entities.unit_player_4_harvester).toBeDefined();
+    expect(stateA.zones.player_4.hand).toHaveLength(OPENING_HAND_SIZE);
   });
 
   it("derives match metadata from registered content instead of hardcoded map strings", () => {

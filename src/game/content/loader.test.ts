@@ -40,6 +40,7 @@ describe("content loader", () => {
     expect(getOrderedRegisteredResourceModules().map((resource) => resource.id)).toEqual(["credits", "alloy", "flux", "biomass"]);
     expect(getRegisteredCurrencyResourceId()).toBe("credits");
     expect(getRegisteredMap("frontier_belt")?.name).toBe("Frontier Belt");
+    expect(getRegisteredMap("frontier_crossroads")?.name).toBe("Frontier Crossroads");
     expect(getDefaultRuntimeProfile()?.defaultMapId).toBe("frontier_belt");
     expect(getRegisteredStarterDeck("alloy_clan")).toHaveLength(60);
     expect(getFactionPresentation("alloy_clan").animationAccent).toBe("alloy_clan");

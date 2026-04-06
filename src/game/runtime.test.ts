@@ -183,6 +183,21 @@ describe("GameRuntime", () => {
     expect(runtime.state.matchId.startsWith("match_test_expansion_")).toBe(true);
   });
 
+  it("can create a local four-player runtime from the FFA runtime profile", () => {
+    const runtime = createConfiguredRuntime({
+      runtimeProfileId: "alpha_four_player",
+      seed: 7,
+      matchId: "four_player_runtime",
+    });
+
+    expect(runtime.getRuntimeProfileId()).toBe("alpha_four_player");
+    expect(runtime.state.map.id).toBe("frontier_crossroads");
+    expect(runtime.state.playerOrder).toEqual(["player_1", "player_2", "player_3", "player_4"]);
+    expect(runtime.state.players.player_4.faction).toBe("alloy_clan");
+    expect(runtime.isBotAutoplayEnabled("player_3")).toBe(false);
+    expect(runtime.isBotAutoplayEnabled("player_4")).toBe(false);
+  });
+
   it("creates deterministic deck order when a seed is supplied", () => {
     const first = createConfiguredRuntime({
       seed: 123,

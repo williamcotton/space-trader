@@ -12,4 +12,16 @@ export const ALPHA_RUNTIME_PROFILES: RuntimeProfile[] = [
     matchIdPrefix: "alpha",
     default: true,
   },
+  {
+    id: "alpha_four_player",
+    label: "Alpha Free-For-All",
+    defaultMapId: "frontier_crossroads",
+    defaultFactions: {
+      player_1: "alloy_clan",
+      player_2: "flux_collective",
+      player_3: "biomass_swarm",
+      player_4: "alloy_clan",
+    },
+    matchIdPrefix: "alpha_ffa",
+  },
 ];

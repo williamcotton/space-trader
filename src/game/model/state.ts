@@ -54,12 +54,18 @@ export type MapResourceNode = {
   controlledBy: PlayerId | null;
 };
 
+export type StartingUnitOffsets = {
+  combat: HexCoord;
+  resource: HexCoord;
+};
+
 export type MapState = {
   id: string;
   name: string;
   width: number;
   height: number;
   spawnPoints: Record<PlayerId, HexCoord>;
+  startingUnitOffsets?: Partial<Record<PlayerId, StartingUnitOffsets>>;
   resourceNodes: MapResourceNode[];
 };
 
@@ -234,11 +240,11 @@ function shuffleCards<T>(cards: T[], randomSource: () => number): T[] {
   return shuffled;
 }
 
-function createStartingResources(seatIndex: number, faction: Faction): ResourcePool {
+function createStartingResources(playerId: PlayerId, startingPlayerId: PlayerId, faction: Faction): ResourcePool {
   const primary = getPrimaryResourceForFaction(faction);
   const currency = getCurrencyResourceId();
   const resources = createEmptyResourcePool();
-  resources[currency] = seatIndex === 0 ? PLAYER_ONE_STARTING_CURRENCY : PLAYER_TWO_STARTING_CURRENCY;
+  resources[currency] = playerId === startingPlayerId ? PLAYER_ONE_STARTING_CURRENCY : PLAYER_TWO_STARTING_CURRENCY;
   resources[primary] = STARTING_PRIMARY_RESOURCE;
   return resources;
 }
@@ -269,6 +275,19 @@ function cloneMap(map: MapState): MapState {
     spawnPoints: Object.fromEntries(
       Object.entries(map.spawnPoints).map(([playerId, coord]) => [playerId, { ...coord }])
     ) as Record<PlayerId, HexCoord>,
+    startingUnitOffsets: map.startingUnitOffsets
+      ? Object.fromEntries(
+          Object.entries(map.startingUnitOffsets).map(([playerId, offsets]) => [
+            playerId,
+            offsets
+              ? {
+                  combat: { ...offsets.combat },
+                  resource: { ...offsets.resource },
+                }
+              : offsets,
+          ])
+        ) as Partial<Record<PlayerId, StartingUnitOffsets>>
+      : undefined,
     resourceNodes: map.resourceNodes.map((node) => ({
       ...node,
       coord: { ...node.coord },
@@ -373,6 +392,15 @@ function getStartingUnitOffsets(seatIndex: number): { combat: HexCoord; resource
   return STARTING_UNIT_OFFSETS[seatIndex] ?? STARTING_UNIT_OFFSETS[seatIndex % STARTING_UNIT_OFFSETS.length]!;
 }
 
+function pickStartingPlayerId(playerOrder: PlayerId[], randomSource?: () => number): PlayerId {
+  if (playerOrder.length <= 2) {
+    return playerOrder[0]!;
+  }
+  const source = randomSource ?? Math.random;
+  const index = Math.floor(source() * playerOrder.length);
+  return playerOrder[index] ?? playerOrder[0]!;
+}
+
 export function createInitialGameState(options: CreateInitialGameStateOptions): GameState {
   ensureDefaultContentLoaded();
   const map = resolveInitialMap(options);
@@ -384,6 +412,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
   if (playerOrder.length === 0) {
     throw new Error("Cannot create a match without at least one player.");
   }
+  const startingPlayerId = pickStartingPlayerId(playerOrder, options.randomSource);
   const runtimeProfile = resolveRuntimeProfile({
     ...options,
     map,
@@ -472,7 +501,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       throw new Error(`Missing spawn point for ${playerId} on map ${map.id}.`);
     }
 
-    const offsets = getStartingUnitOffsets(seatIndex);
+    const offsets = map.startingUnitOffsets?.[playerId] ?? getStartingUnitOffsets(seatIndex);
     const baseId: EntityId = `base_${playerId}`;
     const combatUnitId: EntityId = `unit_${playerId}_scout`;
     const resourceUnitId: EntityId = `unit_${playerId}_harvester`;
@@ -512,7 +541,7 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
       id: playerId,
       name: `Player ${seatIndex + 1}`,
       faction,
-      resources: createStartingResources(seatIndex, faction),
+      resources: createStartingResources(playerId, startingPlayerId, faction),
       handSize: zones[playerId].hand.length,
       deckSize: zones[playerId].deck.length,
       baseEntityId: baseId,
@@ -529,8 +558,8 @@ export function createInitialGameState(options: CreateInitialGameStateOptions): 
     phase: "start",
     playerOrder,
     eliminatedPlayerIds: [],
-    activePlayerId: playerOrder[0]!,
-    priorityPlayerId: playerOrder[0]!,
+    activePlayerId: startingPlayerId,
+    priorityPlayerId: startingPlayerId,
     consecutivePriorityPasses: 0,
     selectedEntityId: null,
     rules,

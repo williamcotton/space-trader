@@ -1,4 +1,5 @@
 import { FRONTIER_BELT_MAP } from "./maps/frontierBelt";
+import { FRONTIER_CROSSROADS_MAP } from "./maps/frontierCrossroads";
 import { ALPHA_CARD_DEFINITIONS } from "./cards";
 import { ALPHA_STACK_EFFECTS } from "./stackEffects";
 import { ALPHA_STARTER_DECKS } from "./decks";
@@ -44,6 +45,10 @@ export const ALPHA_SET: CardSet = {
     {
       id: FRONTIER_BELT_MAP.id,
       map: FRONTIER_BELT_MAP,
+    },
+    {
+      id: FRONTIER_CROSSROADS_MAP.id,
+      map: FRONTIER_CROSSROADS_MAP,
     },
   ],
   roleThemes: ALPHA_SET_ROLE_THEMES,
