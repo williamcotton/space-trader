@@ -12,11 +12,10 @@ This is not a small feature toggle. The current codebase is structurally 2-playe
 
 Treat this as a multi-phase program:
 
-1. Land an `attack-refactor` first so attacks use explicit target selection instead of the current shortcut flow.
-2. Refactor the engine to support a dynamic player list and 4-player local matches.
-3. Make the game actually playable as local 4-player FFA.
-4. Reintroduce bots for 4-player.
-5. Only then generalize online multiplayer to 4 seats.
+1. Refactor the engine to support a dynamic player list and 4-player local matches.
+2. Make the game actually playable as local 4-player FFA.
+3. Reintroduce bots for 4-player.
+4. Only then generalize online multiplayer to 4 seats.
 
 Do not start with networked 4-player FFA first.
 
@@ -96,9 +95,8 @@ These rules are now treated as locked unless explicitly revised later.
   - `opponent` means any other live player
   - `enemy base` semantics need a separate content/targeting pass
 - Attack UX:
-  - a separate `attack-refactor.md` should be created
-  - attack target selection should become explicit rather than relying on the current shortcut behavior
-  - this should be treated as a likely prerequisite to the 4-player content/targeting pass
+  - explicit attack target selection is now the live interaction model
+  - 4-player work should preserve that model and extend it cleanly to more possible enemies
 - Map direction:
   - 4-player FFA should use a symmetric four-corner map
   - economy should keep a central contested resource cluster
@@ -237,8 +235,6 @@ Needed changes:
 
 Some 1v1 cards will need redesign in FFA rather than direct translation.
 
-This work should assume the attack-targeting refactor exists or lands first. Otherwise, "choose which enemy to attack" and "choose which enemy base to affect" will stay awkward across rules, UI, and AI.
-
 ### 5. Map And Match Bootstrap
 
 The current live map is a 2-base map and cannot just be stretched into FFA.
@@ -356,25 +352,6 @@ Release-grade 4-player online would require:
 This is separate from the 4-player engine refactor, but the two become coupled once online FFA matters.
 
 ## Phased Implementation Plan
-
-## Phase -1. Attack Refactor Prerequisite
-
-Before 4-player content and UI work, add a separate targeted refactor for attack declaration.
-
-Goal:
-
-- make attacks use explicit target choice instead of the current shortcut-oriented attack flow
-
-Why it should happen first:
-
-- 4-player FFA multiplies valid attack targets
-- explicit target choice is cleaner for rules, UI, AI, and content wording
-- this also helps future enemy-base targeting cleanup
-
-Deliverable:
-
-- separate `attack-refactor.md`
-- explicit attack target selection in local 1v1 without regressions
 
 ## Phase 0. Design Lock
 
@@ -597,8 +574,6 @@ In FFA:
 - some triggers become too weak
 - some cards need explicit target choice UI
 
-This is one reason the attack-targeting refactor should not be deferred until late in the project.
-
 ### 3. Online Security Is A Separate Major Project
 
 Current deterministic replay is not enough for serious online FFA.
@@ -611,21 +586,19 @@ The easiest path is to get human 4-player working before trying to make bots goo
 
 If work starts now, the recommended implementation order is:
 
-1. Phase -1
-2. Phase 0
-3. Phase 1
-4. Phase 2
-5. Phase 3
-6. Phase 5
-7. Phase 4
-8. Phase 6
-9. Phase 7
-10. Phase 8
-11. Phase 9
+1. Phase 0
+2. Phase 1
+3. Phase 2
+4. Phase 3
+5. Phase 5
+6. Phase 4
+7. Phase 6
+8. Phase 7
+9. Phase 8
+10. Phase 9
 
 That order intentionally puts:
 
-- attack targeting cleanup before multiplayer targeting expansion
 - engine generalization before content audit
 - local play before online play
 - human play before bots
@@ -659,7 +632,6 @@ But the current implementation is still fundamentally a 2-player engine.
 
 The right way to build 4-player FFA is:
 
-- attack-targeting cleanup first
 - dynamic-player kernel first
 - local multiplayer second
 - bots third
