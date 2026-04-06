@@ -801,6 +801,51 @@ describe("dispatchCommand", () => {
     expect(state.players.player_1.resources.alloy).toBe(3);
   });
 
+  it("lets base reach spells choose among multiple enemy bases in four-player games", () => {
+    const state = setupFourPlayerState();
+    const cardInstanceId = addCardToHand(state, "player_1", "orbital_ping");
+    state.players.player_1.resources.credits = 4;
+    state.players.player_1.resources.flux = 4;
+
+    const untargeted = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+    });
+    expect(expectRejected(untargeted)).toContain("requires a battlefield target");
+
+    const targetBase = state.entities.base_player_3;
+    const otherBase = state.entities.base_player_2;
+    expect(targetBase?.kind).toBe("base");
+    expect(otherBase?.kind).toBe("base");
+    if (!targetBase || targetBase.kind !== "base" || !otherBase || otherBase.kind !== "base") {
+      throw new Error("Expected four-player enemy bases for Orbital Ping.");
+    }
+
+    const targetBeforeHp = targetBase.hp;
+    const otherBeforeHp = otherBase.hp;
+    const play = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId,
+      targetEntityId: targetBase.id,
+    });
+    expect(play.ok).toBe(true);
+    expect(state.stack[0]?.targetEntityId).toBe(targetBase.id);
+
+    resolveStackByPassing(state);
+
+    const updatedTarget = state.entities.base_player_3;
+    const updatedOther = state.entities.base_player_2;
+    expect(updatedTarget?.kind).toBe("base");
+    expect(updatedOther?.kind).toBe("base");
+    if (!updatedTarget || updatedTarget.kind !== "base" || !updatedOther || updatedOther.kind !== "base") {
+      throw new Error("Expected enemy bases after Orbital Ping resolves.");
+    }
+    expect(updatedTarget.hp).toBe(targetBeforeHp - 2);
+    expect(updatedOther.hp).toBe(otherBeforeHp);
+  });
+
   it("lets Slag Barrage target a damaged enemy unit", () => {
     const state = setupState();
     const cardInstanceId = moveCardFromDeckToHand(state, "player_1", "slag_barrage");

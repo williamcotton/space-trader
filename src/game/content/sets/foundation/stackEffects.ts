@@ -18,12 +18,31 @@ import {
 import { registerStackEffectMagnitudeCalculator } from "../../../registries/stackEffectMagnitudes";
 import { LAYER } from "../../../systems/continuousEffects";
 import type { ResourceType } from "../../../model/enums";
+import { hexDistance } from "../../../model/hex";
+import { getEnemyBases, getPlayerBase } from "../../../model/queries";
+import type { GameState } from "../../../model/state";
 import { getRegisteredResourceIds } from "../../registry";
 import type { CounterDestination, StackEffectDefinition } from "../../stackEffects/types";
 
-function getOpponentBaseEntityId(context: InstructionContext): string {
-  const opponentId = context.controllerId === "player_1" ? "player_2" : "player_1";
-  return context.state.players[opponentId].baseEntityId;
+function getDefaultEnemyBaseEntityId(context: InstructionContext): string | null {
+  const state = context.state as GameState;
+  const controllerBase = getPlayerBase(state, context.controllerId);
+  const enemyBases = getEnemyBases(state, context.controllerId);
+
+  return enemyBases
+    .sort((a, b) => {
+      if (a.hp !== b.hp) {
+        return a.hp - b.hp;
+      }
+      if (controllerBase) {
+        const distanceA = hexDistance(controllerBase.coord, a.coord);
+        const distanceB = hexDistance(controllerBase.coord, b.coord);
+        if (distanceA !== distanceB) {
+          return distanceA - distanceB;
+        }
+      }
+      return a.id.localeCompare(b.id);
+    })[0]?.id ?? null;
 }
 
 function createNoopLogInstructions(context: InstructionContext): GameInstruction[] {
@@ -46,12 +65,19 @@ function createDeployUnitInstructions(context: InstructionContext): GameInstruct
 }
 
 function createDamageEnemyBaseInstructions(amount: number) {
-  return (context: InstructionContext): GameInstruction[] => [{
-    type: "DEAL_DAMAGE",
-    targetEntityId: getOpponentBaseEntityId(context),
-    amount,
-    sourceLabel: context.item.label,
-  }];
+  return (context: InstructionContext): GameInstruction[] => {
+    const targetEntityId = context.targetEntityId ?? getDefaultEnemyBaseEntityId(context);
+    if (!targetEntityId) {
+      return [{ type: "LOG", text: `Resolved ${context.item.label}: no enemy base target available.` }];
+    }
+
+    return [{
+      type: "DEAL_DAMAGE",
+      targetEntityId,
+      amount,
+      sourceLabel: context.item.label,
+    }];
+  };
 }
 
 function createDamageEntityInstructions(amount: number) {
@@ -295,7 +321,9 @@ export const FOUNDATION_STACK_EFFECTS: Record<string, StackEffectDefinition> = {
       defaultCounterDestination: "discard",
     },
     targeting: {
-      type: "none",
+      type: "entity",
+      entityKind: "entity",
+      relation: "enemy",
     },
     behavior: {
       type: "damage_enemy_base",

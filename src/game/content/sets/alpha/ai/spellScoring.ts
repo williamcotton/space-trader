@@ -2,9 +2,8 @@ import { MAX_HAND_SIZE, type EntityState, type GameState, type HexCoord, type Un
 import type { PlayerId } from "../../../../model/ids";
 import type { ResourceType } from "../../../../model/enums";
 import { areSameHex, hexDistance } from "../../../../model/hex";
-import { getEnemyEntities, getPlayerUnits } from "../../../../model/queries";
+import { getEnemyBases, getEnemyEntities, getPlayerUnits } from "../../../../model/queries";
 import { canAttackEntityDirectly, canUnitAttack, canUnitDeclareAttack } from "../../../../rules/directInteraction";
-import { getOpponentPlayer } from "../../../../turn/stack";
 import { getCascadeAffectedHexes } from "../../../../systems/cascade";
 import { getEffectiveUnitAttackDamage, getEffectiveUnitAttackRange } from "../../../../systems/unitStats";
 import { getRegisteredCurrencyResourceId, getRegisteredResourceIds } from "../../../registry";
@@ -93,6 +92,17 @@ function scoreEnemyEntityThreat(state: GameState, botPlayerId: PlayerId, target:
   return score;
 }
 
+function getThreateningEnemyUnits(state: GameState, botPlayerId: PlayerId, target: UnitEntity): UnitEntity[] {
+  return getEnemyEntities(state, botPlayerId).filter(
+    (enemy): enemy is UnitEntity =>
+      enemy.kind === "unit" &&
+      canUnitDeclareAttack(state, enemy) &&
+      enemy.attacksRemaining > 0 &&
+      canAttackEntityDirectly(state, enemy.ownerId, target) &&
+      hexDistance(enemy.coord, target.coord) <= getEffectiveUnitAttackRange(state, enemy)
+  );
+}
+
 export function scoreDamageSpellTarget(
   state: GameState,
   botPlayerId: PlayerId,
@@ -165,23 +175,20 @@ export function scoreBaseDamageSpell(
   amount: number,
   phase: GameState["phase"]
 ): number {
-  const enemyBase = state.entities[state.players[getOpponentPlayer(botPlayerId)].baseEntityId];
-  if (!enemyBase || enemyBase.kind !== "base") {
+  const scores = getEnemyBases(state, botPlayerId).map((enemyBase) =>
+    scoreDamageSpellTarget(state, botPlayerId, enemyBase, amount, phase)
+  );
+  const bestScore = Math.max(...scores);
+  if (!Number.isFinite(bestScore)) {
     return -Infinity;
   }
-
-  return scoreDamageSpellTarget(state, botPlayerId, enemyBase, amount, phase);
+  return bestScore;
 }
 
 export function scoreBraceProtocolTarget(state: GameState, botPlayerId: PlayerId, target: UnitEntity): number {
-  const threateningEnemies = getPlayerUnits(state, getOpponentPlayer(botPlayerId)).filter((enemy) => {
-    return (
-      enemy.role === "combat" &&
-      canUnitAttack(enemy) &&
-      enemy.attacksRemaining > 0 &&
-      hexDistance(enemy.coord, target.coord) <= getEffectiveUnitAttackRange(state, enemy)
-    );
-  });
+  const threateningEnemies = getThreateningEnemyUnits(state, botPlayerId, target).filter((enemy) =>
+    enemy.role === "combat" && canUnitAttack(enemy)
+  );
 
   if (threateningEnemies.length === 0) {
     return -Infinity;
@@ -276,13 +283,7 @@ function scoreUnitBuffOpportunity(
     score += unit.role === "combat" ? 14 : unit.role === "utility" ? 8 : 5;
 
     if (options.armorBonus > 0) {
-      const threateningEnemies = getPlayerUnits(state, getOpponentPlayer(botPlayerId)).filter(
-        (enemy) =>
-          canUnitDeclareAttack(state, enemy) &&
-          enemy.attacksRemaining > 0 &&
-          canAttackEntityDirectly(state, enemy.ownerId, unit) &&
-          hexDistance(enemy.coord, unit.coord) <= getEffectiveUnitAttackRange(state, enemy)
-      );
+      const threateningEnemies = getThreateningEnemyUnits(state, botPlayerId, unit);
 
       for (const enemy of threateningEnemies) {
         const before = resolveCombatAttack(state, enemy, unit);

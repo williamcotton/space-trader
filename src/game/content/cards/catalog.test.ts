@@ -16,8 +16,12 @@ describe("card catalog balance guardrails", () => {
 
   it("keeps neutral removal and reach cards differentiated with a visible tax", () => {
     const cards = getCardCatalog();
+    expect(cards.orbital_ping.play.stackEffectId).toBe("damage_enemy_base_2");
+    expect(cards.orbital_ping.play.targetMode).toBe("entity");
+
     expect(cards.emergency_thrust.cost).toEqual({ credits: 2 });
     expect(cards.emergency_thrust.play.stackEffectId).toBe("damage_enemy_base_2");
+    expect(cards.emergency_thrust.play.targetMode).toBe("entity");
 
     expect(cards.scrap_burst.cost).toEqual({ credits: 3 });
     expect(cards.scrap_burst.play.stackEffectId).toBe("damage_enemy_entity_2");

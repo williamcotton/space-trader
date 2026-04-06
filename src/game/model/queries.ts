@@ -1,6 +1,6 @@
 import type { PlayerId } from "./ids";
 import type { ResourceType } from "./enums";
-import type { EntityState, GameState, HexCoord, UnitEntity } from "./state";
+import type { BaseEntity, EntityState, GameState, HexCoord, UnitEntity } from "./state";
 import { areSameHex, isWithinMapBounds } from "./hex";
 import type { CardCost } from "../content/cards/catalog";
 
@@ -71,6 +71,12 @@ export function getPlayerUnits(state: GameState, playerId: PlayerId): UnitEntity
 export function getEnemyEntities(state: GameState, playerId: PlayerId): EntityState[] {
   return Object.values(state.entities)
     .filter((entity) => entity.ownerId !== playerId)
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export function getEnemyBases(state: GameState, playerId: PlayerId): BaseEntity[] {
+  return getEnemyEntities(state, playerId)
+    .filter((entity): entity is BaseEntity => entity.kind === "base")
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 

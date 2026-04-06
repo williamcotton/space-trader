@@ -44,21 +44,6 @@ function getStartOfControllersNextTurn(state: Readonly<GameState>, controllerId:
   return state.activePlayerId === controllerId ? state.turn + 2 : state.turn + 1;
 }
 
-function getOpponentPlayer(playerId: PlayerId): PlayerId {
-  return playerId === "player_1" ? "player_2" : "player_1";
-}
-
-function getOpponentBaseEntityId(ctx: InstructionContext): string {
-  const opponentId = getOpponentPlayer(ctx.controllerId);
-  return ctx.state.players[opponentId].baseEntityId;
-}
-
-function damageEnemyBase(amount: number, label: string): (ctx: InstructionContext) => GameInstruction[] {
-  return (ctx) => [
-    { type: "DEAL_DAMAGE", targetEntityId: getOpponentBaseEntityId(ctx), amount, sourceLabel: label },
-  ];
-}
-
 function counterStackItem(destination: "discard" | "hand" | "exile" | "none", label: string): (ctx: InstructionContext) => GameInstruction[] {
   return (ctx) => {
     if (!ctx.targetStackItemId) return [{ type: "LOG", text: `${label}: no stack target.` }];
@@ -343,6 +328,10 @@ function isFriendlyCascadeHexTarget(state: Readonly<GameState>, target: HexCoord
   return isWithinMapBounds(target, state.map) && hasFriendlyUnitNearHex(state, playerId, target);
 }
 
+function isEnemyBaseTarget(_state: Readonly<GameState>, target: EntityState, playerId: PlayerId): boolean {
+  return target.kind === "base" && target.ownerId !== playerId;
+}
+
 function hasFriendlyUnitNearEntity(state: Readonly<GameState>, playerId: PlayerId, target: EntityState): boolean {
   if (target.kind === "base") {
     return false;
@@ -364,9 +353,12 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "tactic",
     speed: "instant",
     cost: { credits: 1, flux: 1 },
-    text: "Deal 2 damage to enemy base.",
-    play: tacticPlay("damage_enemy_base_2"),
-    onResolve: damageEnemyBase(2, "Orbital Ping"),
+    text: "Deal 2 damage to target enemy base.",
+    play: tacticPlay("damage_enemy_base_2", {
+      targetMode: "entity",
+      isValidTarget: isEnemyBaseTarget,
+    }),
+    onResolve: damageTargetEntity(2, "Orbital Ping"),
   },
   slag_barrage: {
     id: "slag_barrage",
@@ -619,9 +611,12 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "tactic",
     speed: "instant",
     cost: { credits: 2 },
-    text: "Deal 2 damage to enemy base.",
-    play: tacticPlay("damage_enemy_base_2"),
-    onResolve: damageEnemyBase(2, "Emergency Thrust"),
+    text: "Deal 2 damage to target enemy base.",
+    play: tacticPlay("damage_enemy_base_2", {
+      targetMode: "entity",
+      isValidTarget: isEnemyBaseTarget,
+    }),
+    onResolve: damageTargetEntity(2, "Emergency Thrust"),
   },
   jammer_cloud: {
     id: "jammer_cloud",
@@ -1253,7 +1248,7 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "unit",
     speed: "main",
     cost: { credits: 1, alloy: 1 },
-    text: "Bastion (While this unit is adjacent to another allied unit, it gets +1 ARM.) Whenever one of your units salvages, Scrap Quartermaster deals 1 damage to the enemy base.",
+    text: "Bastion (While this unit is adjacent to another allied unit, it gets +1 ARM.) Whenever one of your units salvages, Scrap Quartermaster deals 1 damage to the weakest enemy base.",
     play: unitPlay(),
     onResolve: deployUnit("scrap_quartermaster_card"),
     unit: {
@@ -1362,7 +1357,7 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "unit",
     speed: "main",
     cost: { credits: 2, flux: 1 },
-    text: "Whenever you cast a surged tactic, Overcharge Savant deals 1 damage to the enemy base.",
+    text: "Whenever you cast a surged tactic, Overcharge Savant deals 1 damage to the weakest enemy base.",
     play: unitPlay(),
     onResolve: deployUnit("overcharge_savant_card"),
     unit: {

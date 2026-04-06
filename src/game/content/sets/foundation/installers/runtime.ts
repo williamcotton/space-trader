@@ -17,8 +17,8 @@ import {
 import { getCardDefinition, getResolvedCardPlayEffectConfigs } from "../../../cards/catalog";
 import { installFoundationPlayEffectRegistrations, installFoundationStackEffectMagnitudeRegistrations } from "../stackEffects";
 import { hexDistance } from "../../../../model/hex";
-import type { PlayerId } from "../../../../model/ids";
 import type { GameState, HexCoord, UnitEntity } from "../../../../model/state";
+import { getEnemyBases, getPlayerBase } from "../../../../model/queries";
 import { registerAutoTargetResolver } from "../../../../registries/autoTargets";
 import { getBoardBlastEffectResolver, registerBoardBlastEffectResolver } from "../../../../registries/boardBlastEffects";
 import { registerCardResolveAnimationBuilder } from "../../../../registries/cardResolveAnimations";
@@ -51,10 +51,6 @@ function sortWeakestEnemyUnits(units: UnitEntity[]): UnitEntity[] {
     }
     return a.id.localeCompare(b.id);
   });
-}
-
-function getOpponentPlayer(playerId: PlayerId): PlayerId {
-  return playerId === "player_1" ? "player_2" : "player_1";
 }
 
 function registerFoundationAutoTargetResolvers(): void {
@@ -291,8 +287,15 @@ function registerFoundationSpellScoring(): void {
   });
 
   registerSpellScoringResolver("damage_enemy_base", ({ state, botPlayerId, targeting, effect }) => {
-    if (targeting.targetEntityId || targeting.targetHex || targeting.targetStackItemId) {
+    if (targeting.targetHex || targeting.targetStackItemId) {
       return -Infinity;
+    }
+    if (targeting.targetEntityId) {
+      const entity = state.entities[targeting.targetEntityId];
+      if (!entity || entity.kind !== "base" || entity.ownerId === botPlayerId) {
+        return -Infinity;
+      }
+      return scoreDamageSpellTarget(state, botPlayerId, entity, Number(effect.amount ?? 0), state.phase);
     }
     return scoreBaseDamageSpell(state, botPlayerId, Number(effect.amount ?? 0), state.phase);
   });
@@ -338,11 +341,11 @@ function registerFoundationStackPreviewPresenters(): void {
       : (effect?.label ?? "Counter target stack item."),
   }));
 
-  registerStackPreviewPresenter("damage_enemy_base", ({ effect }) => ({
+  registerStackPreviewPresenter("damage_enemy_base", ({ effect, targetEntity }) => ({
     kindLabel: "Ability",
     detail:
       effect?.behavior.type === "damage_enemy_base"
-        ? `Deal ${Number(effect.behavior.amount ?? 0)} damage to the enemy base.`
+        ? `Deal ${Number(effect.behavior.amount ?? 0)} damage to ${targetEntity?.name ?? "an enemy base"}.`
         : (effect?.label ?? "Deal damage to the enemy base."),
   }));
 }
@@ -639,9 +642,25 @@ function registerFoundationStackResolveAnimations(): void {
     };
   });
 
-  registerStackResolveAnimationBuilder("damage_enemy_base", ({ event, state, baseId, behavior }) => {
-    const targetPlayerId = getOpponentPlayer(event.controllerId);
-    const targetBase = state.entities[state.players[targetPlayerId].baseEntityId];
+  registerStackResolveAnimationBuilder("damage_enemy_base", ({ event, before, state, baseId, behavior }) => {
+    const liveTarget = event.targetEntityId ? state.entities[event.targetEntityId] : undefined;
+    const capturedTarget = event.targetEntityId ? before.entities[event.targetEntityId] : undefined;
+    const controllerBase = getPlayerBase(state, event.controllerId);
+    const fallbackTargetBase = getEnemyBases(state, event.controllerId)
+      .sort((a, b) => {
+        if (a.hp !== b.hp) {
+          return a.hp - b.hp;
+        }
+        if (controllerBase) {
+          const distanceA = hexDistance(controllerBase.coord, a.coord);
+          const distanceB = hexDistance(controllerBase.coord, b.coord);
+          if (distanceA !== distanceB) {
+            return distanceA - distanceB;
+          }
+        }
+        return a.id.localeCompare(b.id);
+      })[0];
+    const targetBase = liveTarget ?? capturedTarget ?? fallbackTargetBase;
     if (!targetBase || targetBase.kind !== "base") {
       return null;
     }
@@ -649,7 +668,7 @@ function registerFoundationStackResolveAnimations(): void {
     return {
       id: baseId,
       kind: "base_hit",
-      playerId: targetPlayerId,
+      playerId: targetBase.ownerId,
       ageSeconds: 0,
       durationSeconds: 0.7,
       coord: targetBase.coord,
