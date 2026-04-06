@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { requireMapDefinition } from "../content/maps/catalog";
 import { getBloomedUnitIdsThisTurn, getLastBloomedUnitIds, setLastBloomSourceItemId } from "../content/sets/alpha/mechanics/bloom";
 import { getSalvageTriggersThisTurn, incrementSalvageTriggersThisTurn } from "../content/sets/alpha/mechanics/salvage";
-import { createInitialGameState } from "../model/state";
+import { createInitialGameState, type MapState } from "../model/state";
 import { advancePhase } from "./phaseMachine";
 
 function moveTopCardFromDeckToHand(state: ReturnType<typeof createInitialGameState>, playerId: "player_1" | "player_2"): void {
@@ -12,6 +12,34 @@ function moveTopCardFromDeckToHand(state: ReturnType<typeof createInitialGameSta
   }
 
   state.zones[playerId].hand.push(card);
+}
+
+function createFourPlayerMap(): MapState {
+  return {
+    id: "test_four_player",
+    name: "Test Four Player",
+    width: 9,
+    height: 9,
+    spawnPoints: {
+      player_1: { q: -4, r: -4 },
+      player_2: { q: 4, r: -4 },
+      player_3: { q: 4, r: 4 },
+      player_4: { q: -4, r: 4 },
+    },
+    resourceNodes: [],
+  };
+}
+
+function createFourPlayerState() {
+  return createInitialGameState({
+    map: createFourPlayerMap(),
+    factions: {
+      player_1: "alloy_clan",
+      player_2: "flux_collective",
+      player_3: "biomass_swarm",
+      player_4: "alloy_clan",
+    },
+  });
 }
 
 describe("phaseMachine", () => {
@@ -113,5 +141,35 @@ describe("phaseMachine", () => {
     expect(getLastBloomedUnitIds(state)).toEqual([]);
     expect(getSalvageTriggersThisTurn(state, "player_1")).toBe(0);
     expect(getSalvageTriggersThisTurn(state, "player_2")).toBe(0);
+  });
+
+  it("rotates turn order across all live seats on a four-player map", () => {
+    const state = createFourPlayerState();
+
+    expect(state.activePlayerId).toBe("player_1");
+    advancePhase(state); // economy
+    advancePhase(state); // main
+    advancePhase(state); // tactical
+    advancePhase(state); // end
+    advancePhase(state); // start, next turn
+
+    expect(state.turn).toBe(2);
+    expect(state.activePlayerId).toBe("player_2");
+    expect(state.priorityPlayerId).toBe("player_2");
+  });
+
+  it("skips eliminated seats when handing off to the next turn", () => {
+    const state = createFourPlayerState();
+    state.eliminatedPlayerIds = ["player_2"];
+
+    advancePhase(state); // economy
+    advancePhase(state); // main
+    advancePhase(state); // tactical
+    advancePhase(state); // end
+    advancePhase(state); // start, next turn
+
+    expect(state.turn).toBe(2);
+    expect(state.activePlayerId).toBe("player_3");
+    expect(state.priorityPlayerId).toBe("player_3");
   });
 });

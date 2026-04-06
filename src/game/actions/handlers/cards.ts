@@ -2,7 +2,7 @@ import type { GameCommand } from "../commands";
 import type { GameEvent } from "../events";
 import { getCardDefinition, type CardCost } from "../../content/cards/catalog";
 import { getStackEffectDefinition, getStackEffectMagnitude, type CounterDestination } from "../../content/stackEffects";
-import { getOpponentPlayer, popTopStackItem, reserveStackItemId } from "../../turn/stack";
+import { popTopStackItem, reserveStackItemId } from "../../turn/stack";
 import type { PlayerId } from "../../model/ids";
 import type { ResourceType } from "../../model/enums";
 import { syncPlayerZoneCounts, type CardInstance, type GameState } from "../../model/state";
@@ -16,6 +16,7 @@ import {
   getCardPlayModifierLabels,
   runCardPlayedToStackModifierHooks,
 } from "../../registries/cardPlayModifiers";
+import { getNextLivePlayerId, getPriorityReturnPlayerId } from "../../turn/playerOrder";
 
 function applyCardCost(state: GameState, playerId: PlayerId, cost: CardCost): void {
   const pool = state.players[playerId].resources;
@@ -131,7 +132,7 @@ export function handleRespondStack(
       sourceCardInstanceId: null,
       sourceCardId: null,
       sourceCardOwnerId: null,
-      nextPriorityPlayerId: getOpponentPlayer(command.playerId),
+      nextPriorityPlayerId: getNextLivePlayerId(state, command.playerId) ?? command.playerId,
       pendingUnitEntityId: null,
     },
   ];
@@ -176,7 +177,7 @@ export function handlePlayCard(
       objectKind: effectDefinition.object.kind,
       counterable: resolveCardCounterable(card, effectDefinition, effectDefinition.object.counterable),
       defaultCounterDestination: effectDefinition.object.defaultCounterDestination,
-      nextPriorityPlayerId: getOpponentPlayer(command.playerId),
+      nextPriorityPlayerId: getNextLivePlayerId(state, command.playerId) ?? command.playerId,
       pendingUnitEntityId: card.play.reserveEntityId
         ? createSummonedUnitId(state, command.playerId, card.id, handCard.instanceId)
         : null,
@@ -325,7 +326,7 @@ export function reduceStackItemResolved(
   }
 
   resetResolutionMechanicState(state);
-  state.priorityPlayerId = state.activePlayerId;
+  state.priorityPlayerId = getPriorityReturnPlayerId(state);
   state.consecutivePriorityPasses = 0;
   const resolvedSourceDestination = applyResolvedStackEffect(state, resolvedItem);
   moveStackSourceCardToZone(state, resolvedItem, resolvedSourceDestination);

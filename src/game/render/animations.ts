@@ -5,7 +5,7 @@ import {
 } from "../content/cards/catalog";
 import { getStackEffectDefinition } from "../content/stackEffects";
 import "../presentation";
-import type { PlayerId } from "../model/ids";
+import { DRAW_RESULT_ID, type PlayerId } from "../model/ids";
 import type { EntityState, GameState, HexCoord } from "../model/state";
 import type { CanvasAnimation } from "../types";
 import { getCascadeAffectedHexes } from "../systems/cascade";
@@ -14,6 +14,7 @@ import { getFactionAnimationAccent } from "../registries/presentation";
 import { getCardResolveAnimationBuilder } from "../registries/cardResolveAnimations";
 import { getStackResolveAnimationBuilder } from "../registries/stackResolveAnimations";
 import { buildRegisteredMechanicAnimations } from "../registries/mechanicAnimations";
+import { getPlayerLabel } from "../presentation";
 
 type EntitySnapshot = {
   kind: EntityState["kind"];
@@ -269,7 +270,22 @@ export function buildVictoryAnimation(state: GameState, winner: PlayerId): Canva
     center: effectCenter,
     textCenter: getMapCenterHex(state),
     hexes: getVictoryHexes(state, winner),
-    label: winner === "player_1" ? "Player 1 Wins!" : "Player 2 Wins!",
+    label: `${getPlayerLabel(winner)} Wins!`,
+  };
+}
+
+export function buildDrawAnimation(state: GameState): CanvasAnimation {
+  const center = getMapCenterHex(state);
+  return {
+    id: `DRAW_${state.matchId}_${state.turn}`,
+    kind: "victory_fanfare",
+    playerId: state.activePlayerId,
+    ageSeconds: 0,
+    durationSeconds: 2.2,
+    center,
+    textCenter: center,
+    hexes: getRadiusAffectedHexes(state, center, 4),
+    label: "Draw",
   };
 }
 
@@ -462,7 +478,11 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
   }
 
   if (!before.winner && state.winner) {
-    animations.push(buildVictoryAnimation(state, state.winner));
+    animations.push(
+      state.winner === DRAW_RESULT_ID || !state.players[state.winner]
+        ? buildDrawAnimation(state)
+        : buildVictoryAnimation(state, state.winner)
+    );
   }
 
   animations.push(...buildRegisteredMechanicAnimations(events, before, state));

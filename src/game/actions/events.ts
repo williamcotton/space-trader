@@ -94,6 +94,7 @@ export type CardDiscardedEvent = {
 export type PriorityPassedEvent = {
   type: "PRIORITY_PASSED";
   playerId: PlayerId;
+  passKind: "pass_priority" | "end_phase";
   nextPriorityPlayerId: PlayerId;
   consecutivePasses: number;
 };

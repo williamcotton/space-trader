@@ -97,7 +97,12 @@ export function getAutoFlowCommand(state: GameState): GameCommand | null {
   }
 
   if (state.priorityPlayerId !== state.activePlayerId) {
-    return null;
+    return hasAnyPlayableCard(state, state.priorityPlayerId)
+      ? null
+      : {
+          type: "PASS_PRIORITY",
+          playerId: state.priorityPlayerId,
+        };
   }
 
   if (state.phase === "discard") {

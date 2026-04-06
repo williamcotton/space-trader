@@ -2,12 +2,13 @@ import type { GameCommand } from "../commands";
 import type { GameEvent } from "../events";
 import type { GameState } from "../../model/state";
 import type { PlayerId } from "../../model/ids";
-import { getOpponentPlayer, peekTopStackItem } from "../../turn/stack";
+import { peekTopStackItem } from "../../turn/stack";
 import { advancePhase } from "../../turn/phaseMachine";
 import { resolveEconomyDeposits, resolveEconomyIncome } from "../../systems/harvesting";
 import { resolveEndPhaseNodeControl } from "../../systems/nodeControl";
 import { trackTacticalHarvestOpportunity } from "./combat";
 import { drawCardForPlayer } from "./cards";
+import { getLivePlayerCount, getNextLivePlayerId, getPriorityReturnPlayerId } from "../../turn/playerOrder";
 
 function seedTacticalHarvestOpportunities(state: GameState, playerId: PlayerId): void {
   for (const entity of Object.values(state.entities)) {
@@ -34,15 +35,17 @@ export function handleAdvancePhase(
 
 export function handlePassPriority(
   state: GameState,
-  command: Extract<GameCommand, { type: "PASS_PRIORITY" }>
+  command: Extract<GameCommand, { type: "PASS_PRIORITY" }> | Extract<GameCommand, { type: "END_PHASE" }>
 ): GameEvent[] {
+  const livePlayerCount = Math.max(1, getLivePlayerCount(state));
   const nextPasses = state.consecutivePriorityPasses + 1;
-  if (nextPasses < 2) {
+  if (nextPasses < livePlayerCount) {
     return [
       {
         type: "PRIORITY_PASSED",
         playerId: command.playerId,
-        nextPriorityPlayerId: getOpponentPlayer(command.playerId),
+        passKind: command.type === "END_PHASE" ? "end_phase" : "pass_priority",
+        nextPriorityPlayerId: getNextLivePlayerId(state, command.playerId) ?? command.playerId,
         consecutivePasses: nextPasses,
       },
     ];
@@ -52,7 +55,8 @@ export function handlePassPriority(
     {
       type: "PRIORITY_PASSED",
       playerId: command.playerId,
-      nextPriorityPlayerId: state.activePlayerId,
+      passKind: command.type === "END_PHASE" ? "end_phase" : "pass_priority",
+      nextPriorityPlayerId: getPriorityReturnPlayerId(state) ?? command.playerId,
       consecutivePasses: 0,
     },
   ];
@@ -78,6 +82,13 @@ export function handlePassPriority(
       sourceCardId: topItem.sourceCardId,
       sourceCardOwnerId: topItem.sourceCardOwnerId,
       pendingUnitEntityId: topItem.pendingUnitEntityId,
+    });
+  } else {
+    events.push({
+      type: "PHASE_ADVANCED",
+      activePlayerId: state.activePlayerId,
+      turn: state.turn,
+      phase: state.phase,
     });
   }
 
@@ -113,6 +124,8 @@ export function reducePriorityPassed(
   state.priorityPlayerId = event.nextPriorityPlayerId;
   state.log.push({
     turn: state.turn,
-    text: `${event.playerId} passed priority.`,
+    text: event.passKind === "end_phase"
+      ? `${event.playerId} signaled phase end and passed priority.`
+      : `${event.playerId} passed priority.`,
   });
 }

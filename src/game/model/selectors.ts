@@ -97,7 +97,7 @@ export function getStackItemPreview(item: StackItem, state: GameState): StackPre
     counterable: item.counterable,
     kindLabel: getStackItemKindLabel(item, state),
     detail: getStackItemDetail(item, state),
-    ownerLabel: getPlayerLabel(item.controllerId === "player_1" ? "player_1" : "player_2"),
+    ownerLabel: getPlayerLabel(item.controllerId),
   };
 }
 

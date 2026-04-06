@@ -8,14 +8,40 @@ function setupState() {
   return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
 
+function endCurrentPhase(state: ReturnType<typeof setupState>) {
+  const startingTurn = state.turn;
+  const startingPhase = state.phase;
+  const startingActivePlayerId = state.activePlayerId;
+  const result = dispatchCommand(state, {
+    type: "END_PHASE",
+    playerId: state.activePlayerId,
+  });
+  expect(result.ok).toBe(true);
+
+  let guard = 0;
+  while (
+    guard < 12 &&
+    state.turn === startingTurn &&
+    state.phase === startingPhase &&
+    state.activePlayerId === startingActivePlayerId
+  ) {
+    const priorityPlayerId = state.priorityPlayerId;
+    if (!priorityPlayerId) {
+      throw new Error("Expected priority player while ending phase in minimax test.");
+    }
+    const passResult = dispatchCommand(state, {
+      type: "PASS_PRIORITY",
+      playerId: priorityPlayerId,
+    });
+    expect(passResult.ok).toBe(true);
+    guard += 1;
+  }
+}
+
 function advanceToPhase(state: ReturnType<typeof setupState>, phase: ReturnType<typeof setupState>["phase"]): void {
   let guard = 0;
   while (state.phase !== phase && guard < 16) {
-    const result = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: state.activePlayerId,
-    });
-    expect(result.ok).toBe(true);
+    endCurrentPhase(state);
     guard += 1;
   }
 }

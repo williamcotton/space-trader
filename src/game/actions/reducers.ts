@@ -26,8 +26,8 @@ export type DispatchResult =
 function createEventsFromCommand(state: GameState, command: GameCommand): GameEvent[] {
   switch (command.type) {
     case "ADVANCE_PHASE":
-    case "END_PHASE":
       return handleAdvancePhase(state, command);
+    case "END_PHASE":
     case "PASS_PRIORITY":
       return handlePassPriority(state, command);
     case "RESPOND_STACK":

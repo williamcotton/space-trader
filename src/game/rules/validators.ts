@@ -72,8 +72,7 @@ function validateEndPhase(state: GameState, playerId: string): CommandValidation
 }
 
 function validatePassPriority(state: GameState, playerId: string): CommandValidationResult {
-  return requireNotDiscardPhase(state, "pass priority")
-    ?? requirePriority(state, playerId, "pass priority")
+  return requirePriority(state, playerId, "pass priority")
     ?? { ok: true };
 }
 
@@ -249,6 +248,9 @@ function validateDiscardCard(state: GameState, command: Extract<GameCommand, { t
 export function validateCommand(state: GameState, command: GameCommand): CommandValidationResult {
   if (state.winner) {
     return { ok: false, reason: "Match is already over." };
+  }
+  if (state.eliminatedPlayerIds.includes(command.playerId)) {
+    return { ok: false, reason: "Eliminated players cannot act." };
   }
 
   switch (command.type) {

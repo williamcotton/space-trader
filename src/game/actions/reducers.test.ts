@@ -7,7 +7,7 @@ import { getBloomedUnitIdsThisTurn } from "../content/sets/alpha/mechanics/bloom
 import { RELAY_KEYWORD, SPROUT_KEYWORD } from "../content/sets/alpha/mechanics/keywordIds";
 import { getSalvageTriggersThisTurn, incrementSalvageTriggersThisTurn } from "../content/sets/alpha/mechanics/salvage";
 import { getTacticsCastThisTurn } from "../content/sets/alpha/mechanics/surge";
-import { BASE_STARTING_HP, createInitialGameState } from "../model/state";
+import { BASE_STARTING_HP, createInitialGameState, type MapState } from "../model/state";
 import { validateCommand } from "../rules/validators";
 import { canUnitDeclareAttack } from "../rules/directInteraction";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage, getEffectiveUnitMoveRange, getEffectiveUnitSiegeDamageBonus } from "../systems/unitStats";
@@ -16,10 +16,70 @@ function setupState() {
   return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
 }
 
+function createFourPlayerMap(): MapState {
+  return {
+    id: "test_four_player",
+    name: "Test Four Player",
+    width: 9,
+    height: 9,
+    spawnPoints: {
+      player_1: { q: -4, r: -4 },
+      player_2: { q: 4, r: -4 },
+      player_3: { q: 4, r: 4 },
+      player_4: { q: -4, r: 4 },
+    },
+    resourceNodes: [],
+  };
+}
+
+function setupFourPlayerState() {
+  return createInitialGameState({
+    map: createFourPlayerMap(),
+    factions: {
+      player_1: "alloy_clan",
+      player_2: "flux_collective",
+      player_3: "biomass_swarm",
+      player_4: "alloy_clan",
+    },
+  });
+}
+
+function endCurrentPhase(state: ReturnType<typeof setupState>) {
+  const startingTurn = state.turn;
+  const startingPhase = state.phase;
+  const startingActivePlayerId = state.activePlayerId;
+  const result = dispatchCommand(state, {
+    type: "END_PHASE",
+    playerId: state.activePlayerId,
+  });
+  expect(result.ok).toBe(true);
+
+  let guard = 0;
+  while (
+    guard < 12 &&
+    state.turn === startingTurn &&
+    state.phase === startingPhase &&
+    state.activePlayerId === startingActivePlayerId
+  ) {
+    const priorityPlayerId = state.priorityPlayerId;
+    if (!priorityPlayerId) {
+      throw new Error("Expected priority player while ending a phase.");
+    }
+    const passResult = dispatchCommand(state, {
+      type: "PASS_PRIORITY",
+      playerId: priorityPlayerId,
+    });
+    expect(passResult.ok).toBe(true);
+    guard += 1;
+  }
+
+  return result;
+}
+
 function advanceToPhase(state: ReturnType<typeof setupState>, phase: ReturnType<typeof setupState>["phase"]): void {
   let guard = 0;
   while (state.phase !== phase && guard < 16) {
-    dispatchCommand(state, { type: "END_PHASE", playerId: state.activePlayerId });
+    endCurrentPhase(state);
     guard += 1;
   }
 }
@@ -232,9 +292,9 @@ describe("dispatchCommand", () => {
     const commandStream: GameCommand[] = [
       { type: "SELECT_ENTITY", playerId: "player_1", entityId: "unit_player_1_scout" },
       { type: "MOVE_UNIT", playerId: "player_1", entityId: "unit_player_1_scout", to: { q: -2, r: 0 } }, // invalid phase
-      { type: "END_PHASE", playerId: "player_1" },
-      { type: "END_PHASE", playerId: "player_1" },
-      { type: "END_PHASE", playerId: "player_1" },
+      { type: "ADVANCE_PHASE", playerId: "player_1" },
+      { type: "ADVANCE_PHASE", playerId: "player_1" },
+      { type: "ADVANCE_PHASE", playerId: "player_1" },
       { type: "MOVE_UNIT", playerId: "player_1", entityId: "unit_player_1_scout", to: { q: -2, r: 0 } }, // valid
       { type: "ATTACK_UNIT", playerId: "player_1", attackerId: "unit_player_1_scout", targetId: "unit_player_2_scout" }, // out of range
     ];
@@ -427,13 +487,8 @@ describe("dispatchCommand", () => {
 
     expect(attackResult.ok).toBe(true);
     expect(state.winner).toBe("player_1");
-
-    const updatedBase = state.entities[baseId];
-    expect(updatedBase?.kind).toBe("base");
-    if (!updatedBase || updatedBase.kind !== "base") {
-      throw new Error("Expected base after attack.");
-    }
-    expect(updatedBase.hp).toBe(0);
+    expect(state.entities[baseId]).toBeUndefined();
+    expect(state.entities[blockerId]).toBeUndefined();
   });
 
   it("enforces attack legality checks (phase, ownership, range, summoning sickness)", () => {
@@ -555,10 +610,7 @@ describe("dispatchCommand", () => {
     advanceToPhase(state, "end");
     const beforeHand = state.zones.player_2.hand.length;
     const beforeDeck = state.zones.player_2.deck.length;
-    const handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const handoff = endCurrentPhase(state);
 
     expect(handoff.ok).toBe(true);
     expect(state.phase).toBe("start");
@@ -572,10 +624,7 @@ describe("dispatchCommand", () => {
     const beforeHand = state.zones.player_1.hand.length;
     const beforeDeck = state.zones.player_1.deck.length;
 
-    const toEconomy = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const toEconomy = endCurrentPhase(state);
 
     expect(toEconomy.ok).toBe(true);
     expect(state.turn).toBe(1);
@@ -592,17 +641,11 @@ describe("dispatchCommand", () => {
 
     // End player_1 turn -> player_2 start (player_2 draws)
     advanceToPhase(state, "end");
-    dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    endCurrentPhase(state);
 
     // End player_2 turn -> player_1 start (player_1 draws)
     advanceToPhase(state, "end");
-    const handoffBack = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_2",
-    });
+    const handoffBack = endCurrentPhase(state);
     expect(handoffBack.ok).toBe(true);
     expect(state.activePlayerId).toBe("player_1");
     expect(state.phase).toBe("start");
@@ -622,10 +665,7 @@ describe("dispatchCommand", () => {
     advanceToPhase(state, "end");
     const beforeHand = state.zones.player_2.hand.length;
     const beforeDeck = state.zones.player_2.deck.length;
-    const handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const handoff = endCurrentPhase(state);
 
     expect(handoff.ok).toBe(true);
     expect(state.phase).toBe("start");
@@ -645,10 +685,7 @@ describe("dispatchCommand", () => {
     advanceToPhase(state, "end");
     const beforeHand = state.zones.player_2.hand.length;
     const beforeDeck = state.zones.player_2.deck.length;
-    const handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const handoff = endCurrentPhase(state);
 
     expect(handoff.ok).toBe(true);
     expect(state.phase).toBe("start");
@@ -666,10 +703,7 @@ describe("dispatchCommand", () => {
     expect(state.zones.player_1.hand).toHaveLength(8);
 
     advanceToPhase(state, "end");
-    const handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const handoff = endCurrentPhase(state);
 
     expect(handoff.ok).toBe(true);
     expect(state.phase).toBe("discard");
@@ -687,10 +721,7 @@ describe("dispatchCommand", () => {
     expect(state.zones.player_1.hand).toHaveLength(8);
 
     advanceToPhase(state, "end");
-    dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    endCurrentPhase(state);
     expect(state.phase).toBe("discard");
 
     const blockedHandoff = dispatchCommand(state, {
@@ -708,10 +739,7 @@ describe("dispatchCommand", () => {
     expect(state.zones.player_1.hand).toHaveLength(7);
     expect(state.zones.player_1.discard.some((card) => card.instanceId === discardedId)).toBe(true);
 
-    const handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const handoff = endCurrentPhase(state);
     expect(handoff.ok).toBe(true);
     expect(state.phase).toBe("start");
     expect(state.turn).toBe(2);
@@ -916,8 +944,8 @@ describe("dispatchCommand", () => {
 
     state.players.player_1.resources.credits = 4;
     state.players.player_1.resources.alloy = 3;
-    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // economy
-    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // main
+    endCurrentPhase(state); // economy
+    endCurrentPhase(state); // main
     expect(state.phase).toBe("main");
 
     const beforeUnitCount = Object.values(state.entities).filter((entity) => entity.kind === "unit" && entity.ownerId === "player_1").length;
@@ -964,8 +992,8 @@ describe("dispatchCommand", () => {
     state.players.player_1.resources.alloy = 3;
     state.players.player_2.resources.credits = 4;
     state.players.player_2.resources.flux = 2;
-    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // economy
-    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // main
+    endCurrentPhase(state); // economy
+    endCurrentPhase(state); // main
 
     const beforeUnitCount = Object.values(state.entities).filter((entity) => entity.kind === "unit" && entity.ownerId === "player_1").length;
     const castUnit = dispatchCommand(state, {
@@ -1010,8 +1038,8 @@ describe("dispatchCommand", () => {
     state.players.player_1.handSize = state.zones.player_1.hand.length;
     state.players.player_1.resources.credits = 4;
     state.players.player_1.resources.biomass = 4;
-    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // economy
-    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // main
+    endCurrentPhase(state); // economy
+    endCurrentPhase(state); // main
 
     const play = dispatchCommand(state, {
       type: "PLAY_CARD",
@@ -1041,7 +1069,7 @@ describe("dispatchCommand", () => {
     }
     enemyScout.coord = { q: 2, r: 0 };
     const enemyScoutHpBefore = enemyScout.hp;
-    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // tactical
+    endCurrentPhase(state); // tactical
     expect(state.phase).toBe("tactical");
 
     const select = dispatchCommand(state, {
@@ -1084,8 +1112,8 @@ describe("dispatchCommand", () => {
     state.players.player_1.resources.alloy = 3;
     state.players.player_2.resources.credits = 4;
     state.players.player_2.resources.flux = 4;
-    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // economy
-    dispatchCommand(state, { type: "END_PHASE", playerId: "player_1" }); // main
+    endCurrentPhase(state); // economy
+    endCurrentPhase(state); // main
 
     const castUnit = dispatchCommand(state, {
       type: "PLAY_CARD",
@@ -1338,10 +1366,7 @@ describe("dispatchCommand", () => {
     advanceToPhase(state, "end");
     expect(getEffectiveUnitAttackDamage(state, state.entities[scout.id] as typeof buffedScout)).toBe((state.entities[scout.id] as typeof buffedScout).attackDamage + 1);
 
-    const handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_2",
-    });
+    const handoff = endCurrentPhase(state);
     expect(handoff.ok).toBe(true);
 
     const afterHandoffScout = state.entities[scout.id];
@@ -1843,10 +1868,7 @@ describe("dispatchCommand", () => {
     expect(getEffectiveUnitArmor(state, harvester)).toBe(harvester.armor + 1);
 
     advanceToPhase(state, "end");
-    const handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const handoff = endCurrentPhase(state);
     expect(handoff.ok).toBe(true);
 
     const nextScout = state.entities[scout.id];
@@ -1911,10 +1933,7 @@ describe("dispatchCommand", () => {
     expect(legalAttack.ok).toBe(true);
 
     advanceToPhase(state, "end");
-    const handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const handoff = endCurrentPhase(state);
     expect(handoff.ok).toBe(true);
 
     const nextHarvester = state.entities[harvester.id];
@@ -2014,17 +2033,11 @@ describe("dispatchCommand", () => {
     expect(canUnitDeclareAttack(state, fortified)).toBe(true);
 
     advanceToPhase(state, "end");
-    const toOpponent = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const toOpponent = endCurrentPhase(state);
     expect(toOpponent.ok).toBe(true);
 
     advanceToPhase(state, "end");
-    const backToPlayerOne = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_2",
-    });
+    const backToPlayerOne = endCurrentPhase(state);
     expect(backToPlayerOne.ok).toBe(true);
     expect(state.activePlayerId).toBe("player_1");
 
@@ -2644,10 +2657,7 @@ describe("dispatchCommand", () => {
 
     resolveStackByPassing(state);
     advanceToPhase(state, "end");
-    const handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_2",
-    });
+    const handoff = endCurrentPhase(state);
     expect(handoff.ok).toBe(true);
 
     expect(state.activePlayerId).toBe("player_1");
@@ -2839,10 +2849,7 @@ describe("dispatchCommand", () => {
     advanceToPhase(state, "end");
     expect(getEffectiveUnitArmor(state, state.entities[target.id] as typeof buffed)).toBe((state.entities[target.id] as typeof buffed).armor + 2);
 
-    let handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    let handoff = endCurrentPhase(state);
     expect(handoff.ok).toBe(true);
 
     const duringOpponentTurn = state.entities[target.id];
@@ -2854,10 +2861,7 @@ describe("dispatchCommand", () => {
     expect(getEffectiveUnitArmor(state, duringOpponentTurn)).toBe(duringOpponentTurn.armor + 2);
 
     advanceToPhase(state, "end");
-    handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_2",
-    });
+    handoff = endCurrentPhase(state);
     expect(handoff.ok).toBe(true);
 
     const afterHandoff = state.entities[target.id];
@@ -2960,10 +2964,7 @@ describe("dispatchCommand", () => {
     expect(node.controlledBy).toBeNull();
 
     advanceToPhase(state, "end");
-    const handoff = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const handoff = endCurrentPhase(state);
     expect(handoff.ok).toBe(true);
     expect(state.phase).toBe("start");
     expect(state.activePlayerId).toBe("player_2");
@@ -2980,10 +2981,7 @@ describe("dispatchCommand", () => {
     node.controlledBy = "player_1";
 
     const before = { ...state.players.player_1.resources };
-    const toEconomy = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const toEconomy = endCurrentPhase(state);
     expect(toEconomy.ok).toBe(true);
     expect(state.phase).toBe("economy");
     expect(state.players.player_1.resources).toEqual({
@@ -3000,10 +2998,7 @@ describe("dispatchCommand", () => {
     state.priorityPlayerId = "player_2";
     const before = { ...state.players.player_2.resources };
 
-    const toEconomy = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_2",
-    });
+    const toEconomy = endCurrentPhase(state);
 
     expect(toEconomy.ok).toBe(true);
     expect(state.phase).toBe("economy");
@@ -3129,10 +3124,7 @@ describe("dispatchCommand", () => {
     harvester.coord = { q: -3, r: -3 };
     const beforeAlloy = state.players.player_1.resources.alloy;
 
-    const economyStep = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const economyStep = endCurrentPhase(state);
     expect(economyStep.ok).toBe(true);
     expect(state.phase).toBe("economy");
     expect(state.players.player_1.resources.alloy).toBe(beforeAlloy + 2);
@@ -3152,10 +3144,7 @@ describe("dispatchCommand", () => {
     farHarvester.carries = "flux";
     farHarvester.coord = { q: -1, r: 0 };
 
-    const farEconomyStep = dispatchCommand(stateFar, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const farEconomyStep = endCurrentPhase(stateFar);
     expect(farEconomyStep.ok).toBe(true);
     expect(stateFar.players.player_1.resources.flux).toBe(0);
     const stillLoaded = stateFar.entities[harvesterId];
@@ -3178,10 +3167,7 @@ describe("dispatchCommand", () => {
     harvester.coord = { q: -3, r: -3 };
     const beforeCredits = state.players.player_1.resources.credits;
 
-    const economyStep = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const economyStep = endCurrentPhase(state);
 
     expect(economyStep.ok).toBe(true);
     expect(state.phase).toBe("economy");
@@ -3201,10 +3187,7 @@ describe("dispatchCommand", () => {
     harvester.coord = { q: -3, r: -3 };
     const beforeAlloy = state.players.player_1.resources.alloy;
 
-    const economyStep = dispatchCommand(state, {
-      type: "END_PHASE",
-      playerId: "player_1",
-    });
+    const economyStep = endCurrentPhase(state);
 
     expect(economyStep.ok).toBe(true);
     expect(state.players.player_1.resources.alloy).toBe(beforeAlloy + 4);
@@ -3318,6 +3301,44 @@ describe("dispatchCommand", () => {
       playerId: "player_1",
     });
     expect(passTwo.ok).toBe(true);
+    expect(state.stack.length).toBe(0);
+    expect(state.priorityPlayerId).toBe("player_1");
+    expect(state.consecutivePriorityPasses).toBe(0);
+  });
+
+  it("rotates priority through every live player before resolving the stack in four-player games", () => {
+    const state = setupFourPlayerState();
+
+    const pushResult = dispatchCommand(state, {
+      type: "RESPOND_STACK",
+      playerId: "player_1",
+      label: "Debug stack effect",
+      effectId: "noop_log",
+    });
+    expect(pushResult.ok).toBe(true);
+    expect(state.stack.length).toBe(1);
+    expect(state.priorityPlayerId).toBe("player_2");
+
+    for (const [expectedPlayerId, expectedNextPriorityId, expectedPassCount] of [
+      ["player_2", "player_3", 1],
+      ["player_3", "player_4", 2],
+      ["player_4", "player_1", 3],
+    ] as const) {
+      const passResult = dispatchCommand(state, {
+        type: "PASS_PRIORITY",
+        playerId: expectedPlayerId,
+      });
+      expect(passResult.ok).toBe(true);
+      expect(state.stack.length).toBe(1);
+      expect(state.priorityPlayerId).toBe(expectedNextPriorityId);
+      expect(state.consecutivePriorityPasses).toBe(expectedPassCount);
+    }
+
+    const finalPass = dispatchCommand(state, {
+      type: "PASS_PRIORITY",
+      playerId: "player_1",
+    });
+    expect(finalPass.ok).toBe(true);
     expect(state.stack.length).toBe(0);
     expect(state.priorityPlayerId).toBe("player_1");
     expect(state.consecutivePriorityPasses).toBe(0);
@@ -3535,12 +3556,7 @@ describe("dispatchCommand", () => {
     dispatchCommand(state, { type: "PASS_PRIORITY", playerId: "player_1" });
 
     expect(state.winner).toBe("player_1");
-    const afterBase = state.entities.base_player_2;
-    expect(afterBase?.kind).toBe("base");
-    if (!afterBase || afterBase.kind !== "base") {
-      throw new Error("Expected enemy base.");
-    }
-    expect(afterBase.hp).toBe(0);
+    expect(state.entities.base_player_2).toBeUndefined();
 
     const rejectedAfterWin = dispatchCommand(state, {
       type: "END_PHASE",

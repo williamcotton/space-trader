@@ -3,12 +3,9 @@ import { MAX_HAND_SIZE, type GameState } from "../model/state";
 import type { PlayerId } from "../model/ids";
 import { clearTemporaryUnitModifiers, getEffectiveUnitMoveRange } from "../systems/unitStats";
 import { resetTurnMechanicState } from "../mechanics";
+import { getNextLivePlayerId, getPriorityReturnPlayerId } from "./playerOrder";
 
 const PHASE_SEQUENCE: GamePhase[] = ["start", "economy", "main", "tactical", "end", "discard"];
-
-function getNextActivePlayer(playerId: PlayerId): PlayerId {
-  return playerId === "player_1" ? "player_2" : "player_1";
-}
 
 function resetUnitActionBudgetsForPlayer(state: GameState, playerId: PlayerId): void {
   for (const entity of Object.values(state.entities)) {
@@ -43,7 +40,7 @@ export function advancePhase(state: GameState): void {
   if (movingToNewTurn) {
     clearTemporaryUnitModifiers(state);
     state.turn += 1;
-    state.activePlayerId = getNextActivePlayer(state.activePlayerId);
+    state.activePlayerId = getNextLivePlayerId(state, state.activePlayerId) ?? state.activePlayerId;
     resetTurnMechanicState(state);
     clearTemporaryUnitModifiers(state);
     resetUnitActionBudgetsForPlayer(state, state.activePlayerId);
@@ -56,7 +53,7 @@ export function advancePhase(state: GameState): void {
   } else {
     state.phase = getNextPhase(previousPhase);
   }
-  state.priorityPlayerId = state.activePlayerId;
+  state.priorityPlayerId = getPriorityReturnPlayerId(state);
   state.consecutivePriorityPasses = 0;
   state.tacticalHarvestEligibleUnitIds = [];
   state.tacticalHarvestedUnitIds = [];

@@ -524,9 +524,11 @@ describe("GameRuntime", () => {
     state.activePlayerId = "player_1";
     state.zones.player_1.hand = [];
     state.players.player_1.handSize = 0;
+    state.zones.player_2.hand = [];
+    state.players.player_2.handSize = 0;
 
     const runtime = new GameRuntime(state);
-    await vi.runOnlyPendingTimersAsync();
+    await vi.runAllTimersAsync();
 
     expect(runtime.state.phase).toBe("tactical");
   });
@@ -537,6 +539,8 @@ describe("GameRuntime", () => {
     state.phase = "start";
     state.activePlayerId = "player_2";
     state.priorityPlayerId = "player_2";
+    state.zones.player_1.hand = [];
+    state.players.player_1.handSize = 0;
 
     const runtime = new GameRuntime(state);
     runtime.replaceBotDecisionSystem(() => ({
@@ -544,7 +548,9 @@ describe("GameRuntime", () => {
       playerId: "player_2",
     }));
 
-    await vi.runOnlyPendingTimersAsync();
+    for (let step = 0; step < 4 && runtime.state.phase === "start"; step += 1) {
+      await vi.runOnlyPendingTimersAsync();
+    }
 
     expect(runtime.state.phase).toBe("economy");
     expect(runtime.state.activePlayerId).toBe("player_2");

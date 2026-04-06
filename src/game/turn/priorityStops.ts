@@ -1,7 +1,7 @@
-import type { PlayerId } from "../model/ids";
+import { DEFAULT_PLAYER_ORDER, type PlayerId } from "../model/ids";
 import type { GameState } from "../model/state";
-import { getOpponentPlayer } from "./stack";
 import { hasAnyPlayableCard } from "./playableCards";
+import { getNextLivePlayerId } from "./playerOrder";
 
 export type PriorityStopKey = "opponentMain" | "opponentTactical" | "opponentStack";
 
@@ -30,14 +30,18 @@ export function createDefaultPriorityStopSettings(): PriorityStopSettings {
 }
 
 export function createDefaultPlayerPriorityStopSettings(): PlayerPriorityStopSettings {
-  return {
-    player_1: {
-      opponentMain: true,
-      opponentTactical: true,
-      opponentStack: true,
-    },
-    player_2: createDefaultPriorityStopSettings(),
-  };
+  return Object.fromEntries(
+    DEFAULT_PLAYER_ORDER.map((playerId, index) => [
+      playerId,
+      index === 0
+        ? {
+            opponentMain: true,
+            opponentTactical: true,
+            opponentStack: true,
+          }
+        : createDefaultPriorityStopSettings(),
+    ])
+  ) as PlayerPriorityStopSettings;
 }
 
 function createPhaseStopWindow(
@@ -82,7 +86,10 @@ export function getPriorityStopWindow(
     return null;
   }
 
-  const yieldedToPlayerId = getOpponentPlayer(priorityPlayerId);
+  const yieldedToPlayerId = getNextLivePlayerId(state, priorityPlayerId);
+  if (!yieldedToPlayerId) {
+    return null;
+  }
   if (botAutoplayEnabled[yieldedToPlayerId]) {
     return null;
   }
@@ -90,7 +97,7 @@ export function getPriorityStopWindow(
     return null;
   }
 
-  const settings = playerPriorityStopSettings[yieldedToPlayerId];
+  const settings = playerPriorityStopSettings[yieldedToPlayerId] ?? createDefaultPriorityStopSettings();
   if (state.stack.length > 0) {
     return settings.opponentStack ? createStackStopWindow(state, priorityPlayerId, yieldedToPlayerId) : null;
   }

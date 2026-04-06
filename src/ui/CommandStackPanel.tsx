@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { getGameRuntime } from "../game/runtime";
 import type { GamePhase } from "../game/model/enums";
-import type { PlayerId } from "../game/model/ids";
+import { DRAW_RESULT_ID, type PlayerId } from "../game/model/ids";
 import { getStackItemPreview, type StackPreviewItem } from "../game/model/selectors";
 import { getPlayerLabel } from "../game/presentation";
 import { useGameSnapshot } from "./useGameSnapshot";
@@ -75,7 +75,9 @@ export function CommandStackPanel() {
       ? `${getPlayerLabel(snapshot.priorityPlayerId)} can act during ${getPlayerLabel(snapshot.activePlayerId)}'s turn.`
       : `${getPlayerLabel(snapshot.activePlayerId)} is holding priority.`;
   const statusMessage = snapshot.winner
-    ? `${getPlayerLabel(snapshot.winner)} wins`
+    ? snapshot.winner === DRAW_RESULT_ID
+      ? "Match ended in a draw"
+      : `${getPlayerLabel(snapshot.winner)} wins`
     : snapshot.lastRejectedReason
       ? `Reject: ${snapshot.lastRejectedReason}`
       : null;

@@ -1,7 +1,7 @@
 import { getCardDefinition } from "./content/cards/catalog";
 import { ensureDefaultContentLoaded } from "./content/loader";
 import type { Faction, ResourceType, UnitRole } from "./model/enums";
-import type { PlayerId } from "./model/ids";
+import { DRAW_RESULT_ID, type PlayerId } from "./model/ids";
 import type { EntityState, GameState } from "./model/state";
 import {
   type PlayerTheme,
@@ -52,7 +52,7 @@ function formatWords(value: string): string {
 }
 
 export function getPlayerTheme(playerId: PlayerId): PlayerTheme {
-  return activePlayerThemes[playerId];
+  return activePlayerThemes[playerId] ?? DEFAULT_PLAYER_THEME;
 }
 
 function hexToRgb(hex: string): string {
@@ -79,7 +79,16 @@ export function getPlayerAnimationPalette(playerId: PlayerId): PlayerAnimationPa
 }
 
 export function getPlayerLabel(playerId: PlayerId): string {
-  return playerId === "player_1" ? "Player 1" : "Player 2";
+  if (playerId === DRAW_RESULT_ID) {
+    return "Draw";
+  }
+
+  const indexedMatch = /^player_(\d+)$/.exec(playerId);
+  if (indexedMatch) {
+    return `Player ${indexedMatch[1]}`;
+  }
+
+  return formatWords(playerId);
 }
 
 export function getResourceTheme(resourceType: ResourceType): ResourceTheme {

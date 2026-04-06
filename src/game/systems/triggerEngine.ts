@@ -3,7 +3,8 @@ import { getCardDefinition } from "../content/cards/catalog";
 import { getStackEffectDefinition, getStackEffectMagnitude } from "../content/stackEffects";
 import type { PlayerId } from "../model/ids";
 import type { GameState, UnitEntity } from "../model/state";
-import { getOpponentPlayer, reserveStackItemId } from "../turn/stack";
+import { reserveStackItemId } from "../turn/stack";
+import { getNextLivePlayerId } from "../turn/playerOrder";
 import { getAutoTargetResolver } from "../registries/autoTargets";
 import { getTriggerConditionEvaluator } from "../registries/triggerConditions";
 
@@ -139,7 +140,7 @@ export function evaluateTriggersFromEvent(
         sourceCardInstanceId: null,
         sourceCardId: null,
         sourceCardOwnerId: null,
-        nextPriorityPlayerId: getOpponentPlayer(unit.ownerId),
+        nextPriorityPlayerId: getNextLivePlayerId(state, unit.ownerId) ?? unit.ownerId,
         pendingUnitEntityId: null,
       });
     }
