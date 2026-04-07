@@ -65,7 +65,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       type: "session_ready",
       token,
     });
-    sessionStore.emitQueueStatus(token, matchmaker.getQueuedPlayers());
+    matchmaker.emitQueueStatus(token);
     if (session.matchId) {
       roomStore.get(session.matchId)?.sendResync(token);
     }
@@ -103,7 +103,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       writeJson(response, 400, { reason: "Missing token." });
       return;
     }
-    const result = matchmaker.joinQueue(token, body.faction);
+    const result = matchmaker.joinQueue(token, body.faction, body.format);
     if (!result.ok) {
       writeJson(response, 409, { reason: result.reason });
       return;

@@ -2,13 +2,38 @@ import type { GameCommand } from "../game/actions/commands";
 import type { Faction } from "../game/model/enums";
 import type { PlayerId } from "../game/model/ids";
 
-export const MULTIPLAYER_PROTOCOL_VERSION = 1;
+export const MULTIPLAYER_PROTOCOL_VERSION = 2;
 export const DEFAULT_MULTIPLAYER_SERVER_URL = "http://127.0.0.1:4310";
 export const MULTIPLAYER_TOKEN_STORAGE_KEY = "space_trader_multiplayer_token";
+
+export type OnlineMatchFormat = "pvp_1v1" | "ffa_4p";
+
+export type OnlineMatchFormatConfig = {
+  label: string;
+  requiredPlayers: number;
+  runtimeProfileId: string;
+};
+
+export const ONLINE_MATCH_FORMATS: Record<OnlineMatchFormat, OnlineMatchFormatConfig> = {
+  pvp_1v1: {
+    label: "1v1 PvP",
+    requiredPlayers: 2,
+    runtimeProfileId: "alpha_default",
+  },
+  ffa_4p: {
+    label: "4-Player FFA",
+    requiredPlayers: 4,
+    runtimeProfileId: "alpha_four_player",
+  },
+};
+
+export const DEFAULT_ONLINE_MATCH_FORMAT: OnlineMatchFormat = "pvp_1v1";
 
 export type MatchStartPayload = {
   matchId: string;
   seed: number;
+  format: OnlineMatchFormat;
+  playerOrder: PlayerId[];
   localPlayerId: PlayerId;
   factions: Record<PlayerId, Faction>;
   mapId: string;
@@ -37,9 +62,11 @@ export type SessionReadyEvent = {
 export type QueueStatusEvent = {
   type: "queue_status";
   status: "idle" | "queued";
+  format: OnlineMatchFormat | null;
   queuedFaction: Faction | null;
   queuedAt: number | null;
   queuedPlayers: number;
+  requiredPlayers: number;
 };
 
 export type MatchStartEvent = {
@@ -111,6 +138,7 @@ export type OpenSessionResponse = {
 export type JoinQueueRequest = {
   token: string;
   faction: Faction;
+  format: OnlineMatchFormat;
 };
 
 export type JoinQueueResponse = {

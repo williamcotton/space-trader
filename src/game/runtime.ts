@@ -76,6 +76,7 @@ export type RuntimeContentOptions = Omit<ContentLoadSelection, "reset"> & {
   runtimeProfileId?: string;
   mapId?: string;
   factions?: Partial<Record<PlayerId, Faction>>;
+  playerOrder?: PlayerId[];
   matchId?: string;
   seed?: number;
 };
@@ -178,6 +179,7 @@ function createRuntimeStateFromContent(
       matchId: selection?.matchId ?? createRuntimeMatchId(runtimeProfile?.matchIdPrefix ?? map.id),
       randomSource,
       factions: selection?.factions,
+      playerOrder: selection?.playerOrder,
     }),
     runtimeProfileId: runtimeProfile?.id ?? findRegisteredRuntimeProfileForMap(map.id)?.id ?? null,
     loadedSetIds: getLoadedContentSetIds(),
@@ -715,6 +717,7 @@ export class GameRuntime {
       runtimeProfileId: payload.runtimeProfileId ?? undefined,
       mapId: payload.mapId,
       factions: payload.factions,
+      playerOrder: payload.playerOrder,
       matchId: payload.matchId,
       seed: payload.seed,
     });

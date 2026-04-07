@@ -1,43 +1,40 @@
 import { dispatchCommand } from "../../src/game/actions/reducers";
 import type { GameCommand } from "../../src/game/actions/commands";
 import type { Faction } from "../../src/game/model/enums";
+import type { PlayerId } from "../../src/game/model/ids";
 import type { GameState } from "../../src/game/model/state";
 import { hexDistance } from "../../src/game/model/hex";
 import { getAutoFlowCommand } from "../../src/game/turn/autoFlow";
-import type { MatchCommandEnvelope, MatchStartPayload } from "../../src/network/protocol";
+import type { MatchCommandEnvelope, MatchStartPayload, OnlineMatchFormat } from "../../src/network/protocol";
 import { MULTIPLAYER_PROTOCOL_VERSION } from "../../src/network/protocol";
 import { SessionStore } from "./sessionStore";
 
 type MatchRoomOptions = {
   matchId: string;
   seed: number;
+  format: OnlineMatchFormat;
+  playerOrder: PlayerId[];
   builtInSetIds: string[];
   runtimeProfileId: string | null;
   mapId: string;
-  factions: { player_1: Faction; player_2: Faction };
+  factions: Record<PlayerId, Faction>;
   state: GameState;
-  playerTokens: {
-    player_1: string;
-    player_2: string;
-  };
+  playerTokens: Record<PlayerId, string>;
   sessionStore: SessionStore;
   onFinished: (matchId: string) => void;
 };
 
-type MatchPlayerId = keyof MatchRoomOptions["playerTokens"];
-
 export class MatchRoom {
   readonly matchId: string;
   private readonly seed: number;
+  private readonly format: OnlineMatchFormat;
+  private readonly playerOrder: PlayerId[];
   private readonly builtInSetIds: string[];
   private readonly runtimeProfileId: string | null;
   private readonly mapId: string;
-  private readonly factions: { player_1: Faction; player_2: Faction };
+  private readonly factions: Record<PlayerId, Faction>;
   private readonly state: GameState;
-  private readonly playerTokens: {
-    player_1: string;
-    player_2: string;
-  };
+  private readonly playerTokens: Record<PlayerId, string>;
   private readonly sessionStore: SessionStore;
   private readonly onFinished: (matchId: string) => void;
   private history: MatchCommandEnvelope[] = [];
@@ -47,6 +44,8 @@ export class MatchRoom {
   constructor(options: MatchRoomOptions) {
     this.matchId = options.matchId;
     this.seed = options.seed;
+    this.format = options.format;
+    this.playerOrder = [...options.playerOrder];
     this.builtInSetIds = [...options.builtInSetIds];
     this.runtimeProfileId = options.runtimeProfileId;
     this.mapId = options.mapId;
@@ -58,8 +57,9 @@ export class MatchRoom {
   }
 
   start(): void {
-    this.sendMatchStart("player_1");
-    this.sendMatchStart("player_2");
+    for (const playerId of this.playerOrder) {
+      this.sendMatchStart(playerId);
+    }
     this.drainAutoFlow();
   }
 
@@ -132,8 +132,7 @@ export class MatchRoom {
     if (!playerId || this.finished) {
       return;
     }
-    const opponent = playerId === "player_1" ? "player_2" : "player_1";
-    this.sessionStore.send(this.playerTokens[opponent], {
+    this.sendToAllExcept(playerId, {
       type: "player_disconnected",
       matchId: this.matchId,
       playerId,
@@ -158,27 +157,28 @@ export class MatchRoom {
     return { ok: true };
   }
 
-  private getPlayerIdForToken(token: string): MatchPlayerId | null {
-    if (token === this.playerTokens.player_1) {
-      return "player_1";
-    }
-    if (token === this.playerTokens.player_2) {
-      return "player_2";
+  private getPlayerIdForToken(token: string): PlayerId | null {
+    for (const playerId of this.playerOrder) {
+      if (token === this.playerTokens[playerId]) {
+        return playerId;
+      }
     }
     return null;
   }
 
-  private sendMatchStart(localPlayerId: MatchPlayerId): void {
+  private sendMatchStart(localPlayerId: PlayerId): void {
     this.sessionStore.send(this.playerTokens[localPlayerId], {
       type: "match_start",
       payload: this.createMatchStartPayload(localPlayerId),
     });
   }
 
-  private createMatchStartPayload(localPlayerId: MatchPlayerId): MatchStartPayload {
+  private createMatchStartPayload(localPlayerId: PlayerId): MatchStartPayload {
     return {
       matchId: this.matchId,
       seed: this.seed,
+      format: this.format,
+      playerOrder: [...this.playerOrder],
       localPlayerId,
       factions: this.factions,
       mapId: this.mapId,
@@ -195,14 +195,25 @@ export class MatchRoom {
       command,
     };
     this.history.push(envelope);
-    this.sessionStore.send(this.playerTokens.player_1, {
+    this.sendToAll({
       type: "match_command",
       payload: envelope,
     });
-    this.sessionStore.send(this.playerTokens.player_2, {
-      type: "match_command",
-      payload: envelope,
-    });
+  }
+
+  private sendToAll(event: Parameters<SessionStore["send"]>[1]): void {
+    for (const playerId of this.playerOrder) {
+      this.sessionStore.send(this.playerTokens[playerId], event);
+    }
+  }
+
+  private sendToAllExcept(excludedPlayerId: PlayerId, event: Parameters<SessionStore["send"]>[1]): void {
+    for (const playerId of this.playerOrder) {
+      if (playerId === excludedPlayerId) {
+        continue;
+      }
+      this.sessionStore.send(this.playerTokens[playerId], event);
+    }
   }
 
   private describeRejectedCommand(command: GameCommand, baseReason: string): string {
@@ -242,20 +253,15 @@ export class MatchRoom {
       return;
     }
     this.finished = true;
-    this.sessionStore.send(this.playerTokens.player_1, {
+    this.sendToAll({
       type: "match_ended",
       matchId: this.matchId,
       winnerId: this.state.winner,
       reason,
     });
-    this.sessionStore.send(this.playerTokens.player_2, {
-      type: "match_ended",
-      matchId: this.matchId,
-      winnerId: this.state.winner,
-      reason,
-    });
-    this.sessionStore.clearMatch(this.playerTokens.player_1);
-    this.sessionStore.clearMatch(this.playerTokens.player_2);
+    for (const token of Object.values(this.playerTokens)) {
+      this.sessionStore.clearMatch(token);
+    }
     this.onFinished(this.matchId);
   }
 }

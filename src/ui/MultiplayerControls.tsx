@@ -3,6 +3,7 @@ import { getRegisteredFactionIds } from "../game/content/registry";
 import type { Faction } from "../game/model/enums";
 import { formatFactionName, getPlayerLabel } from "../game/presentation";
 import { getMultiplayerClient } from "../network/client";
+import { ONLINE_MATCH_FORMATS, type OnlineMatchFormat } from "../network/protocol";
 import { useMultiplayerSnapshot } from "../network/useMultiplayerSnapshot";
 
 function describeStatus(status: ReturnType<typeof useMultiplayerSnapshot>["status"]): string {
@@ -31,6 +32,7 @@ export function MultiplayerControls() {
   const snapshot = useMultiplayerSnapshot();
   const [serverUrl, setServerUrl] = useState(snapshot.serverUrl);
   const [faction, setFaction] = useState<Faction>(snapshot.selectedFaction);
+  const [format, setFormat] = useState<OnlineMatchFormat>(snapshot.selectedFormat);
   const factionIds = getRegisteredFactionIds();
 
   useEffect(() => {
@@ -41,10 +43,16 @@ export function MultiplayerControls() {
     setFaction(snapshot.selectedFaction);
   }, [snapshot.selectedFaction]);
 
+  useEffect(() => {
+    setFormat(snapshot.selectedFormat);
+  }, [snapshot.selectedFormat]);
+
+  const queuedFormatConfig = ONLINE_MATCH_FORMATS[snapshot.queuedFormat ?? format];
+  const queuedRequiredPlayers = snapshot.requiredPlayers || queuedFormatConfig.requiredPlayers;
   const queuedDescription = snapshot.status === "queued"
-    ? `${snapshot.queuedPlayers} queued · ${formatFactionName(snapshot.queuedFaction ?? snapshot.selectedFaction)}`
+    ? `${snapshot.queuedPlayers}/${queuedRequiredPlayers} queued · ${queuedFormatConfig.label} · ${formatFactionName(snapshot.queuedFaction ?? snapshot.selectedFaction)}`
     : snapshot.localPlayerId
-      ? `You are ${getPlayerLabel(snapshot.localPlayerId)}`
+      ? `${ONLINE_MATCH_FORMATS[snapshot.selectedFormat].label} · You are ${getPlayerLabel(snapshot.localPlayerId)}`
       : null;
   const canFindMatch = snapshot.status !== "queued" && snapshot.status !== "in_match" && snapshot.status !== "connecting";
   const canQuitMatch = snapshot.status === "in_match" || snapshot.status === "reconnecting";
@@ -71,6 +79,25 @@ export function MultiplayerControls() {
             />
           </label>
           <label className="multiplayer-field multiplayer-field-faction">
+            <span className="multiplayer-field-label">Mode</span>
+            <select
+              className="multiplayer-select"
+              value={format}
+              onChange={(event) => {
+                const nextFormat = event.target.value as OnlineMatchFormat;
+                setFormat(nextFormat);
+                client.setSelectedFormat(nextFormat);
+              }}
+              disabled={snapshot.status === "queued" || snapshot.status === "in_match"}
+            >
+              {Object.entries(ONLINE_MATCH_FORMATS).map(([formatId, config]) => (
+                <option key={formatId} value={formatId}>
+                  {config.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="multiplayer-field multiplayer-field-faction">
             <span className="multiplayer-field-label">Faction</span>
             <select
               className="multiplayer-select"
@@ -95,7 +122,7 @@ export function MultiplayerControls() {
             disabled={!canFindMatch}
             onClick={() => {
               client.setServerUrl(serverUrl);
-              void client.joinQueue(faction);
+              void client.joinQueue(faction, format);
             }}
           >
             Find Match

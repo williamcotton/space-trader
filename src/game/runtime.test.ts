@@ -15,6 +15,8 @@ function createMatchStartPayload(overrides?: Partial<MatchStartPayload>): MatchS
   return {
     matchId: "net_test_match",
     seed: 12345,
+    format: "pvp_1v1",
+    playerOrder: ["player_1", "player_2"],
     localPlayerId: "player_1",
     factions: {
       player_1: "alloy_clan",

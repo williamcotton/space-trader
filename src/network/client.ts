@@ -4,6 +4,7 @@ import type { PlayerId } from "../game/model/ids";
 import { getGameRuntime } from "../game/runtime";
 import {
   DEFAULT_MULTIPLAYER_SERVER_URL,
+  DEFAULT_ONLINE_MATCH_FORMAT,
   MULTIPLAYER_PROTOCOL_VERSION,
   MULTIPLAYER_TOKEN_STORAGE_KEY,
   type JoinQueueRequest,
@@ -16,6 +17,7 @@ import {
   type MatchResyncPayload,
   type MatchStartPayload,
   type MultiplayerServerEvent,
+  type OnlineMatchFormat,
   type OpenSessionRequest,
   type OpenSessionResponse,
   type ResyncMatchRequest,
@@ -38,8 +40,11 @@ export type MultiplayerSnapshot = {
   status: MultiplayerStatus;
   token: string | null;
   selectedFaction: Faction;
+  selectedFormat: OnlineMatchFormat;
   queuedFaction: Faction | null;
+  queuedFormat: OnlineMatchFormat | null;
   queuedPlayers: number;
+  requiredPlayers: number;
   matchId: string | null;
   localPlayerId: PlayerId | null;
   error: string | null;
@@ -48,6 +53,7 @@ export type MultiplayerSnapshot = {
 const WINDOW_TOKEN_SCOPE_PREFIX = "space_trader_window_";
 const DEFAULT_MULTIPLAYER_FACTION = "alloy_clan" as Faction;
 const MULTIPLAYER_PREFERRED_FACTION_STORAGE_KEY = "space_trader_multiplayer_faction";
+const MULTIPLAYER_PREFERRED_FORMAT_STORAGE_KEY = "space_trader_multiplayer_format";
 
 function getWindowTokenScope(): string {
   if (typeof window === "undefined") {
@@ -71,6 +77,10 @@ function getScopedTokenStorageKey(): string {
 
 function getScopedPreferredFactionStorageKey(): string {
   return `${MULTIPLAYER_PREFERRED_FACTION_STORAGE_KEY}:${getWindowTokenScope()}`;
+}
+
+function getScopedPreferredFormatStorageKey(): string {
+  return `${MULTIPLAYER_PREFERRED_FORMAT_STORAGE_KEY}:${getWindowTokenScope()}`;
 }
 
 function readStoredToken(): string | null {
@@ -106,6 +116,21 @@ function writeStoredPreferredFaction(faction: Faction): void {
   window.sessionStorage.setItem(getScopedPreferredFactionStorageKey(), faction);
 }
 
+function readStoredPreferredFormat(): OnlineMatchFormat {
+  if (typeof window === "undefined") {
+    return DEFAULT_ONLINE_MATCH_FORMAT;
+  }
+  const stored = window.sessionStorage.getItem(getScopedPreferredFormatStorageKey());
+  return stored === "ffa_4p" || stored === "pvp_1v1" ? stored : DEFAULT_ONLINE_MATCH_FORMAT;
+}
+
+function writeStoredPreferredFormat(format: OnlineMatchFormat): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.sessionStorage.setItem(getScopedPreferredFormatStorageKey(), format);
+}
+
 class MultiplayerClient {
   private listeners = new Set<() => void>();
   private snapshot: MultiplayerSnapshot = {
@@ -113,8 +138,11 @@ class MultiplayerClient {
     status: "offline",
     token: readStoredToken(),
     selectedFaction: readStoredPreferredFaction(),
+    selectedFormat: readStoredPreferredFormat(),
     queuedFaction: null,
+    queuedFormat: null,
     queuedPlayers: 0,
+    requiredPlayers: 0,
     matchId: null,
     localPlayerId: null,
     error: null,
@@ -188,6 +216,18 @@ class MultiplayerClient {
     this.notify();
   }
 
+  setSelectedFormat(format: OnlineMatchFormat): void {
+    if (this.snapshot.selectedFormat === format) {
+      return;
+    }
+    writeStoredPreferredFormat(format);
+    this.snapshot = {
+      ...this.snapshot,
+      selectedFormat: format,
+    };
+    this.notify();
+  }
+
   async ensureSession(): Promise<void> {
     if (this.openSessionPromise) {
       return this.openSessionPromise;
@@ -228,24 +268,29 @@ class MultiplayerClient {
     }
   }
 
-  async joinQueue(faction = this.snapshot.selectedFaction): Promise<void> {
+  async joinQueue(faction = this.snapshot.selectedFaction, format = this.snapshot.selectedFormat): Promise<void> {
     await this.ensureSession();
     const token = this.snapshot.token;
     if (!token) {
       throw new Error("Missing multiplayer session token.");
     }
     writeStoredPreferredFaction(faction);
+    writeStoredPreferredFormat(format);
     await this.postJson<JoinQueueRequest, JoinQueueResponse>("/api/queue/join", {
       token,
       faction,
+      format,
     });
     if (this.activeMatchStart) {
       this.snapshot = {
         ...this.snapshot,
         status: "in_match",
         selectedFaction: faction,
+        selectedFormat: format,
         queuedFaction: null,
+        queuedFormat: null,
         queuedPlayers: 0,
+        requiredPlayers: 0,
         matchId: this.activeMatchStart.matchId,
         localPlayerId: this.activeMatchStart.localPlayerId,
         error: null,
@@ -257,7 +302,9 @@ class MultiplayerClient {
       ...this.snapshot,
       status: "queued",
       selectedFaction: faction,
+      selectedFormat: format,
       queuedFaction: faction,
+      queuedFormat: format,
       error: null,
     };
     this.notify();
@@ -275,7 +322,9 @@ class MultiplayerClient {
       ...this.snapshot,
       status: this.activeMatchStart ? "in_match" : "connected",
       queuedFaction: null,
+      queuedFormat: null,
       queuedPlayers: 0,
+      requiredPlayers: 0,
       error: null,
     };
     this.notify();
@@ -312,7 +361,9 @@ class MultiplayerClient {
       status: "offline",
       token: null,
       queuedFaction: null,
+      queuedFormat: null,
       queuedPlayers: 0,
+      requiredPlayers: 0,
       matchId: null,
       localPlayerId: null,
       error: null,
@@ -339,7 +390,9 @@ class MultiplayerClient {
       status: "offline",
       token: null,
       queuedFaction: null,
+      queuedFormat: null,
       queuedPlayers: 0,
+      requiredPlayers: 0,
       matchId: null,
       localPlayerId: null,
       error: null,
@@ -461,8 +514,11 @@ class MultiplayerClient {
           ...this.snapshot,
           status: event.status === "queued" ? "queued" : this.activeMatchStart ? "in_match" : "connected",
           selectedFaction: event.queuedFaction ?? this.snapshot.selectedFaction,
+          selectedFormat: event.format ?? this.snapshot.selectedFormat,
           queuedFaction: event.queuedFaction,
+          queuedFormat: event.format,
           queuedPlayers: event.queuedPlayers,
+          requiredPlayers: event.requiredPlayers,
         };
         this.notify();
         return;
@@ -526,8 +582,11 @@ class MultiplayerClient {
       ...this.snapshot,
       status: "in_match",
       selectedFaction: payload.factions[payload.localPlayerId],
+      selectedFormat: payload.format,
       queuedFaction: null,
+      queuedFormat: null,
       queuedPlayers: 0,
+      requiredPlayers: 0,
       matchId: payload.matchId,
       localPlayerId: payload.localPlayerId,
       error: null,
