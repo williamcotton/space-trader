@@ -200,6 +200,21 @@ describe("GameRuntime", () => {
     expect(runtime.isBotAutoplayEnabled("player_4")).toBe(false);
   });
 
+  it("can create a local three-player runtime from the three-player FFA runtime profile", () => {
+    const runtime = createConfiguredRuntime({
+      runtimeProfileId: "alpha_three_player",
+      seed: 9,
+      matchId: "three_player_runtime",
+    });
+
+    expect(runtime.getRuntimeProfileId()).toBe("alpha_three_player");
+    expect(runtime.state.map.id).toBe("frontier_triad");
+    expect(runtime.state.playerOrder).toEqual(["player_1", "player_2", "player_3"]);
+    expect(runtime.state.players.player_3.faction).toBe("biomass_swarm");
+    expect(runtime.state.players.player_4).toBeUndefined();
+    expect(runtime.isBotAutoplayEnabled("player_3")).toBe(false);
+  });
+
   it("creates deterministic deck order when a seed is supplied", () => {
     const first = createConfiguredRuntime({
       seed: 123,

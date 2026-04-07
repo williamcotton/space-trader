@@ -107,11 +107,12 @@ Notes:
 ## Multiplayer Modes
 - Local mode selector:
   - `Alpha Default`: 1v1 on `Frontier Belt`
+  - `Alpha Three-Player FFA`: local 3-player FFA on `Frontier Triad`
   - `Alpha Free-For-All`: local 4-player FFA on `Frontier Crossroads`
 - Network mode selector:
   - `1v1 PvP`: waits for 2 players
+  - `3-Player FFA`: waits for 3 players
   - `4-Player FFA`: waits for 4 players
-- 3-player FFA is planned but not implemented yet.
 
 Current online play is trust-based command replay. The UI hides the opponent hand, but this is not secure hidden-information networking yet.
 

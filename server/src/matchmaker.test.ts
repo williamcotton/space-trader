@@ -131,4 +131,50 @@ describe("Matchmaker", () => {
       player_4: "biomass_swarm",
     });
   });
+
+  it("starts three-player FFA matches from a dedicated three-player queue", () => {
+    initializeServerContent();
+
+    const sessionStore = new SessionStore();
+    const roomStore = new RoomStore();
+    const matchmaker = new Matchmaker({
+      sessionStore,
+      roomStore,
+    });
+
+    const tokens = ["p1", "p2", "p3", "p4", "p5"];
+    const streams = Object.fromEntries(tokens.map((token) => [token, createCapturedStream()]));
+    for (const token of tokens) {
+      sessionStore.attachStream(token, streams[token] as never);
+    }
+
+    expect(matchmaker.joinQueue("p1", "alloy_clan", "ffa_3p")).toEqual({ ok: true });
+    expect(matchmaker.joinQueue("p2", "flux_collective", "ffa_3p")).toEqual({ ok: true });
+    expect(matchmaker.joinQueue("p3", "biomass_swarm", "pvp_1v1")).toEqual({ ok: true });
+    expect(matchmaker.joinQueue("p4", "alloy_clan", "pvp_1v1")).toEqual({ ok: true });
+
+    expect(parseServerEvents(streams.p1).some((event) => typeof event === "object" && event !== null && "type" in event && event.type === "match_start")).toBe(false);
+    const p3Start = parseServerEvents(streams.p3).find(
+      (event): event is { type: "match_start"; payload: { format: string; playerOrder: string[] } } =>
+        typeof event === "object" && event !== null && "type" in event && event.type === "match_start"
+    );
+    expect(p3Start?.payload.format).toBe("pvp_1v1");
+    expect(p3Start?.payload.playerOrder).toEqual(["player_1", "player_2"]);
+
+    expect(matchmaker.joinQueue("p5", "biomass_swarm", "ffa_3p")).toEqual({ ok: true });
+
+    const p1Start = parseServerEvents(streams.p1).find(
+      (event): event is { type: "match_start"; payload: { format: string; playerOrder: string[]; factions: Record<string, string>; mapId: string; runtimeProfileId: string | null } } =>
+        typeof event === "object" && event !== null && "type" in event && event.type === "match_start"
+    );
+    expect(p1Start?.payload.format).toBe("ffa_3p");
+    expect(p1Start?.payload.playerOrder).toEqual(["player_1", "player_2", "player_3"]);
+    expect(p1Start?.payload.mapId).toBe("frontier_triad");
+    expect(p1Start?.payload.runtimeProfileId).toBe("alpha_three_player");
+    expect(p1Start?.payload.factions).toEqual({
+      player_1: "alloy_clan",
+      player_2: "flux_collective",
+      player_3: "biomass_swarm",
+    });
+  });
 });

@@ -20,13 +20,14 @@ It is implementation-first:
 - in-repo Node.js multiplayer server under `server/`
 - two built-in content manifests: Foundation and Alpha
 - one live shipped playable set: Alpha
-- two live Alpha runtime profiles:
+- three live Alpha runtime profiles:
   - Alpha Default on Frontier Belt
+  - Alpha Three-Player FFA on Frontier Triad
   - Alpha Free-For-All on Frontier Crossroads
 - 1v1 turn-based hex tactics
+- local 3-player FFA prototype
 - local 4-player FFA prototype
-- prototype networked 1v1 and trust-based networked 4-player FFA
-- planned 3-player FFA documented in `three-player-feature.md`
+- prototype networked 1v1, trust-based networked 3-player FFA, and trust-based networked 4-player FFA
 - 3 premade faction starter decks, 60 cards each, max 4 copies
 - full stack / priority interaction for spells and abilities
 - harvesting / node-control economy loop
@@ -457,11 +458,12 @@ Online formats currently supported by the protocol:
 - `pvp_1v1`
   - required players: `2`
   - runtime profile: `alpha_default`
+- `ffa_3p`
+  - required players: `3`
+  - runtime profile: `alpha_three_player`
 - `ffa_4p`
   - required players: `4`
   - runtime profile: `alpha_four_player`
-
-The planned `ffa_3p` format is documented separately and is not live yet.
 
 Authoritative responsibilities:
 - session identity and reconnect tokens
@@ -764,9 +766,9 @@ Real hidden-information security would require:
 
 ### Three-Player FFA
 
-The four-player infrastructure should make three-player support incremental, but it still needs a purpose-built map/profile/online format.
+Three-player support now uses a purpose-built triangular hex footprint on `Frontier Triad`, not a 4-player map with one empty seat.
 
-Do not fake this with a 4-player map and one empty seat.
+The remaining three-player work is balance and live-play iteration, not kernel/player-count infrastructure.
 
 ## Recommended Next Architecture Work
 
@@ -774,7 +776,7 @@ Do not fake this with a 4-player map and one empty seat.
 - avoid reintroducing card-id or faction-id branches in kernel code
 - keep multiplayer authority and reconnection logic on the server side
 - keep generated-id sources deterministic and explicit
-- add 3-player FFA via a triangular map and dedicated `ffa_3p` format when ready
+- keep `1v1`, `3-player FFA`, and `4-player FFA` queues strictly format-separated
 - treat secure online hidden information as a separate architecture project
 - treat graveyard/reanimation as its own feature wave
 - treat tokens as their own feature wave

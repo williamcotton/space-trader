@@ -22,12 +22,13 @@ These are the rules the prototype should generally be designed around unless exp
 
 ### Match Structure
 - 1v1 on `Frontier Belt`
+- 3-player FFA on `Frontier Triad`
 - Local 4-player FFA on `Frontier Crossroads`
-- 3-player FFA is planned in `three-player-feature.md`, but not live yet
 - Premade decks only
 - Local skirmish plus prototype networked multiplayer
 - Online formats:
   - `1v1 PvP`
+  - `3-player FFA`
   - `4-player FFA`
 - Current playable factions:
   - `Alloy Clan`
@@ -257,8 +258,13 @@ Examples:
 - each base has an equivalent nearby `Trade Beacon`
 - central economy is intentionally contested
 
-### Planned 3-Player Map
-The three-player feature should use a purpose-built triangular/radial map rather than a 4-player map with one empty corner.
+### 3-Player Map
+`Frontier Triad`
+- 3-player triangular hex footprint
+- three symmetric corner bases
+- each base has equivalent nearby primary-resource access
+- each base has an equivalent nearby `Trade Beacon`
+- central economy uses a true equidistant contested credit node
 
 Future maps can vary visual identity heavily while keeping the same economy rules.
 
@@ -484,9 +490,9 @@ What Biomass should gain next:
 ## Current Prototype Scope
 The live prototype should now be understood as:
 - 1v1 on `Frontier Belt`
+- local 3-player FFA on `Frontier Triad`
 - local 4-player FFA on `Frontier Crossroads`
-- prototype networked 1v1 and trust-based 4-player FFA using the same command/replay ruleset
-- planned 3-player FFA, not yet implemented
+- prototype networked 1v1, trust-based 3-player FFA, and trust-based 4-player FFA using the same command/replay ruleset
 - premade decks only
 - stack + priority working for both tactics and unit spells
 - resource harvesting loop working
@@ -574,10 +580,10 @@ Readable feedback is part of the fun. If a combo happens, the player should feel
 - 2026-04-07: Local 4-player FFA is now a live prototype mode using `Frontier Crossroads` and full around-the-table priority.
 - 2026-04-07: Online multiplayer now has format-aware queues for `1v1 PvP` and trust-based `4-player FFA`.
 - 2026-04-07: Attack UX changed from first-target shortcut behavior to explicit attack target selection.
-- 2026-04-07: Three-player FFA is planned as a focused follow-up feature with a purpose-built triangular map.
+- 2026-04-07: Three-player FFA is now a live prototype mode using the triangular `Frontier Triad` map and a dedicated `ffa_3p` online format.
 
 ## Backlog Seeds
-- Build the `3-player FFA` feature from `three-player-feature.md`
+- Balance and polish `3-player FFA` after live-play iteration
 - Add a top-end Flux `Relay` / `Resonance` payoff
 - Add more Alloy formation / siege / salvage payoffs
 - Add Biomass regrowth / death-value support

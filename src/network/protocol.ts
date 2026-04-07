@@ -2,11 +2,11 @@ import type { GameCommand } from "../game/actions/commands";
 import type { Faction } from "../game/model/enums";
 import type { PlayerId } from "../game/model/ids";
 
-export const MULTIPLAYER_PROTOCOL_VERSION = 2;
+export const MULTIPLAYER_PROTOCOL_VERSION = 3;
 export const DEFAULT_MULTIPLAYER_SERVER_URL = "http://127.0.0.1:4310";
 export const MULTIPLAYER_TOKEN_STORAGE_KEY = "space_trader_multiplayer_token";
 
-export type OnlineMatchFormat = "pvp_1v1" | "ffa_4p";
+export type OnlineMatchFormat = "pvp_1v1" | "ffa_3p" | "ffa_4p";
 
 export type OnlineMatchFormatConfig = {
   label: string;
@@ -19,6 +19,11 @@ export const ONLINE_MATCH_FORMATS: Record<OnlineMatchFormat, OnlineMatchFormatCo
     label: "1v1 PvP",
     requiredPlayers: 2,
     runtimeProfileId: "alpha_default",
+  },
+  ffa_3p: {
+    label: "3-Player FFA",
+    requiredPlayers: 3,
+    runtimeProfileId: "alpha_three_player",
   },
   ffa_4p: {
     label: "4-Player FFA",

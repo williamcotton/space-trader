@@ -41,6 +41,7 @@ describe("content loader", () => {
     expect(getRegisteredCurrencyResourceId()).toBe("credits");
     expect(getRegisteredMap("frontier_belt")?.name).toBe("Frontier Belt");
     expect(getRegisteredMap("frontier_crossroads")?.name).toBe("Frontier Crossroads");
+    expect(getRegisteredMap("frontier_triad")?.name).toBe("Frontier Triad");
     expect(getDefaultRuntimeProfile()?.defaultMapId).toBe("frontier_belt");
     expect(getRegisteredStarterDeck("alloy_clan")).toHaveLength(60);
     expect(getFactionPresentation("alloy_clan").animationAccent).toBe("alloy_clan");

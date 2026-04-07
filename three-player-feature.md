@@ -4,12 +4,15 @@ Last updated: April 7, 2026
 
 ## Goal
 
-Add a real `3-player free-for-all` mode while preserving both existing online formats:
+Add a real `3-player free-for-all` mode while preserving the existing online formats:
 
 - `1v1 PvP`
+- `3-player FFA`
 - `4-player FFA`
 
 This should build on the four-player work, not repeat it. The engine now has dynamic player order, elimination-aware priority, explicit attack targeting, FFA-safe content targeting, local 4-player maps/profiles, bot FFA work, and mode-aware online queues. Three-player support should be a focused feature pass.
+
+Current status: first-pass implementation is live. `alpha_three_player` uses `frontier_triad`, and online `ffa_3p` queues require exactly three players. Remaining work is balance, UI polish from live play, and any 3-player-specific bot tuning.
 
 ## Current Foundation
 
@@ -49,7 +52,7 @@ The main difference is map geometry.
 
 Do not fake a 3-player match by using the 4-player square map with an empty seat. That creates awkward routes, asymmetric safe space, and a missing-corner economy hole.
 
-Three-player FFA needs a purpose-built triangular/radial map:
+Three-player FFA needs a purpose-built triangular hex map. The playable footprint should read as a triangle in shape, not as a rectangle, square, or four-player board with one corner removed. Hex grids support triangular regions naturally, so the map should lean into that geometry:
 
 - three bases at symmetric triangle points
 - equal base-to-base distances
@@ -58,14 +61,14 @@ Three-player FFA needs a purpose-built triangular/radial map:
 - central contested economy that is equidistant from all three bases
 - enough space that one player is not trivially pinched between two others on turn 1
 
-Because this is a hex grid, the map probably should not be a literal right-angled rectangle. A custom `playableHexes` footprint, similar to the square-footprint work for `frontier_crossroads`, is the right approach.
+Because this is a hex grid, the map should not be a literal right-angled rectangle. A custom triangular `playableHexes` footprint, similar in spirit to the square-footprint work for `frontier_crossroads`, is the right approach.
 
-## Proposed New Content
+## Implemented Content
 
-Add a new Alpha map:
+Alpha map:
 
 - `frontier_triad`
-- display name: `Frontier Triad` or `Triad Expanse`
+- display name: `Frontier Triad`
 - `spawnPoints`:
   - `player_1`
   - `player_2`
@@ -74,9 +77,9 @@ Add a new Alpha map:
 - `startingUnitOffsets` defined per seat orientation
 - three nearby safe primary-resource clusters, one per base
 - three nearby safe credit beacons, one per base
-- one small central contested credit cluster, if the geometry supports a true center
+- one central contested credit beacon at a true equidistant center
 
-Add a new runtime profile:
+Runtime profile:
 
 - id: `alpha_three_player`
 - label: `Alpha Three-Player FFA`
@@ -87,14 +90,14 @@ Add a new runtime profile:
   - `player_3`: `biomass_swarm`
 - match id prefix: `alpha_3p`
 
-Add a new online format:
+Online format:
 
 - id: `ffa_3p`
 - label: `3-Player FFA`
 - required players: `3`
 - runtime profile: `alpha_three_player`
 
-## Implementation Plan
+## Implementation Status
 
 ## Phase 0. Map Geometry Spike
 
@@ -102,12 +105,14 @@ Goal:
 
 - prove a symmetric 3-seat map shape before wiring the full feature
 
+Status: complete. The map uses the axial triangle `q >= 0`, `r >= 0`, `q + r <= 12`.
+
 Work:
 
 - sketch candidate axial coordinates for three bases
 - calculate base-to-base distances
 - calculate distance from each base to all local resource nodes
-- pick a footprint that renders naturally as a triangular/radial battlefield
+- pick a triangular hex footprint that renders naturally as a three-sided battlefield
 - avoid an empty fourth corner
 
 Deliverable:
@@ -119,6 +124,8 @@ Deliverable:
 Goal:
 
 - make a local 3-player match boot cleanly
+
+Status: complete. Local `alpha_three_player` starts on `frontier_triad`.
 
 Work:
 
@@ -143,6 +150,8 @@ Goal:
 
 - make 3-player mode readable, not just technically functional
 
+Status: first pass complete through the dynamic multi-seat UI work. Keep this open for live-play polish.
+
 Work:
 
 - verify the top bar layout at 3 players
@@ -160,6 +169,8 @@ Deliverable:
 Goal:
 
 - confirm existing FFA-safe content behavior works for exactly three players
+
+Status: mostly inherited from the four-player FFA work. Add more exact-3-player targeting/elimination tests if bugs appear.
 
 Work:
 
@@ -183,6 +194,8 @@ Goal:
 
 - ensure three-player bot games do not regress from the 4-player bot work
 
+Status: first pass inherited from FFA-aware bot work. Keep this open for 3-player-specific tuning.
+
 Work:
 
 - run local bot smoke tests in `alpha_three_player`
@@ -204,6 +217,8 @@ Deliverable:
 Goal:
 
 - add online 3-player FFA without breaking `1v1 PvP` or `4-player FFA`
+
+Status: complete. `ffa_3p` is a dedicated format queue with `requiredPlayers: 3`.
 
 Work:
 
@@ -296,19 +311,18 @@ The feature is in a good first-pass state when:
 - `4-player FFA` still works locally and online
 - local `3-player FFA` boots on a purpose-built triangular map
 - online `3-player FFA` waits for exactly 3 players
-- player order, priority, stack resolution, and elimination work for exactly 3 live players
-- eliminated players disappear correctly
-- target selection shows two enemy bases before elimination and one enemy base after one player is eliminated
-- bots can take turns in local 3-player mode without obvious stalls
+- player order, priority, stack resolution, and elimination use the shared live-player FFA paths
+- eliminated players use the shared immediate-elimination cleanup path
+- bots can take turns in local 3-player mode through the shared FFA bot path
 - map symmetry tests cover base/resource distances
 
 ## Bottom Line
 
-Three-player FFA should be a focused feature now that the four-player infrastructure exists. The work is mostly:
+Three-player FFA is now a focused prototype built on the four-player infrastructure. The completed first pass added:
 
-- build a real triangular map
-- add a three-player runtime profile
-- add `ffa_3p` as a third online format
-- test exact-3-player targeting, priority, and elimination
+- a real triangular map
+- a three-player runtime profile
+- `ffa_3p` as a third online format
+- bootstrap, matchmaking, and map symmetry coverage
 
-Do not redo the four-player kernel refactor, and do not fake three-player mode with a missing fourth seat.
+Do not redo the four-player kernel refactor, and do not fake future three-player map variants with a missing fourth seat.

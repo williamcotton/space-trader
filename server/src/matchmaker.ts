@@ -17,6 +17,7 @@ export class Matchmaker {
   private readonly roomStore: RoomStore;
   private queues: Record<OnlineMatchFormat, string[]> = {
     pvp_1v1: [],
+    ffa_3p: [],
     ffa_4p: [],
   };
 

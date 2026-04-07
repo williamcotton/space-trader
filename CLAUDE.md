@@ -308,6 +308,7 @@
   - `state.playerOrder` defines turn / priority seating
   - `state.eliminatedPlayerIds` removes players from live rotation
   - 1v1 remains `player_1`, `player_2`
+  - 3-player FFA uses `player_1` through `player_3`
   - 4-player FFA uses `player_1` through `player_4`
 - Continuous effects are layered and authoritative for stat/keyword changes.
 - Mechanic-owned state lives under `state.mechanicState` in:
@@ -326,10 +327,11 @@
 - Networked multiplayer is server-authoritative command replay, not client-authoritative state sync.
 - Online matchmaking is format-aware:
   - `pvp_1v1` uses `alpha_default`
+  - `ffa_3p` uses `alpha_three_player`
   - `ffa_4p` uses `alpha_four_player`
-  - `ffa_3p` is planned, not implemented yet
 - Current live Alpha runtime profiles:
   - `alpha_default` on `frontier_belt`
+  - `alpha_three_player` on `frontier_triad`
   - `alpha_four_player` on `frontier_crossroads`
 - Resource modules now own:
   - `kind` such as currency vs primary
@@ -399,6 +401,5 @@ These still imply meaningful engine work, not just content:
 - multi-target choice cards
 - explicit support for deterministic infinite combos
 - secure online hidden-information networking
-- true 3-player FFA map/profile/matchmaking support
 - full content-context isolation beyond the current process-global registries
 - any major change to spell-damage-vs-armor rules

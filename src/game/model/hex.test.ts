@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { requireMapDefinition } from "../content/maps/catalog";
-import { axialToPixel, hexDistance, isWithinMapBounds, pixelToAxial } from "./hex";
+import { axialToPixel, getPlayableHexes, hexDistance, isWithinMapBounds, pixelToAxial } from "./hex";
 
 describe("hex pixel conversion", () => {
   it("round-trips axial coords through pixel space", () => {
@@ -52,6 +52,49 @@ describe("map footprints", () => {
       const primaryResources = primaries.filter((node) => node.resourceType !== "credits");
       expect(primaryResources).toHaveLength(3);
       for (const node of primaryResources) {
+        expect(hexDistance(spawn, node.coord)).toBe(2);
+      }
+    }
+  });
+
+  it("supports an explicit triangular playable footprint for three-player maps", () => {
+    const map = requireMapDefinition("frontier_triad");
+
+    expect(getPlayableHexes(map)).toHaveLength(91);
+    expect(isWithinMapBounds({ q: 0, r: 0 }, map)).toBe(true);
+    expect(isWithinMapBounds({ q: 12, r: 0 }, map)).toBe(true);
+    expect(isWithinMapBounds({ q: 0, r: 12 }, map)).toBe(true);
+    expect(isWithinMapBounds({ q: 6, r: 6 }, map)).toBe(true);
+    expect(isWithinMapBounds({ q: 7, r: 6 }, map)).toBe(false);
+    expect(isWithinMapBounds({ q: -1, r: 0 }, map)).toBe(false);
+    expect(isWithinMapBounds({ q: 0, r: -1 }, map)).toBe(false);
+  });
+
+  it("keeps three-player bases and resource nodes at symmetric distances", () => {
+    const map = requireMapDefinition("frontier_triad");
+    const players = Object.entries(map.spawnPoints);
+    const beaconIds = [
+      "triad_credits_player_1",
+      "triad_credits_player_2",
+      "triad_credits_player_3",
+    ];
+    const centralBeacon = map.resourceNodes.find((node) => node.id === "triad_credits_center");
+
+    expect(players).toHaveLength(3);
+    expect(hexDistance(map.spawnPoints.player_1, map.spawnPoints.player_2)).toBe(9);
+    expect(hexDistance(map.spawnPoints.player_1, map.spawnPoints.player_3)).toBe(9);
+    expect(hexDistance(map.spawnPoints.player_2, map.spawnPoints.player_3)).toBe(9);
+    expect(centralBeacon).toBeDefined();
+
+    for (const [index, [playerId, spawn]] of players.entries()) {
+      const beacon = map.resourceNodes.find((node) => node.id === beaconIds[index]);
+      expect(beacon).toBeDefined();
+      expect(hexDistance(spawn, beacon!.coord)).toBe(4);
+      expect(hexDistance(spawn, centralBeacon!.coord)).toBe(6);
+
+      const primaries = map.resourceNodes.filter((node) => node.id.endsWith(playerId) && node.resourceType !== "credits");
+      expect(primaries).toHaveLength(3);
+      for (const node of primaries) {
         expect(hexDistance(spawn, node.coord)).toBe(2);
       }
     }

@@ -121,7 +121,7 @@ function readStoredPreferredFormat(): OnlineMatchFormat {
     return DEFAULT_ONLINE_MATCH_FORMAT;
   }
   const stored = window.sessionStorage.getItem(getScopedPreferredFormatStorageKey());
-  return stored === "ffa_4p" || stored === "pvp_1v1" ? stored : DEFAULT_ONLINE_MATCH_FORMAT;
+  return stored === "ffa_3p" || stored === "ffa_4p" || stored === "pvp_1v1" ? stored : DEFAULT_ONLINE_MATCH_FORMAT;
 }
 
 function writeStoredPreferredFormat(format: OnlineMatchFormat): void {

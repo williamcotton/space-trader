@@ -105,6 +105,40 @@ describe("createInitialGameState", () => {
     expect(stateA.zones.player_4.hand).toHaveLength(OPENING_HAND_SIZE);
   });
 
+  it("supports deterministic three-player bootstrap with a random opening seat", () => {
+    const stateA = createInitialGameState({
+      runtimeProfileId: "alpha_three_player",
+      randomSource: createSeededRandom(9),
+    });
+    const stateB = createInitialGameState({
+      runtimeProfileId: "alpha_three_player",
+      randomSource: createSeededRandom(9),
+    });
+
+    expect(stateA.map.id).toBe("frontier_triad");
+    expect(stateA.playerOrder).toEqual(["player_1", "player_2", "player_3"]);
+    expect(stateA.activePlayerId).toBe(stateB.activePlayerId);
+    expect(stateA.priorityPlayerId).toBe(stateA.activePlayerId);
+
+    const lowCurrencyPlayers = stateA.playerOrder.filter(
+      (playerId) => stateA.players[playerId]!.resources.credits === PLAYER_ONE_STARTING_CURRENCY
+    );
+    expect(lowCurrencyPlayers).toEqual([stateA.activePlayerId]);
+
+    const nonStartingPlayers = stateA.playerOrder.filter((playerId) => playerId !== stateA.activePlayerId);
+    expect(nonStartingPlayers.every((playerId) => stateA.players[playerId]!.resources.credits === PLAYER_TWO_STARTING_CURRENCY)).toBe(true);
+
+    expect(stateA.players.player_1.faction).toBe("alloy_clan");
+    expect(stateA.players.player_2.faction).toBe("flux_collective");
+    expect(stateA.players.player_3.faction).toBe("biomass_swarm");
+    expect(stateA.players.player_4).toBeUndefined();
+    expect(stateA.entities.base_player_3).toBeDefined();
+    expect(stateA.entities.unit_player_3_scout).toBeDefined();
+    expect(stateA.entities.unit_player_3_harvester).toBeDefined();
+    expect(stateA.zones.player_3.hand).toHaveLength(OPENING_HAND_SIZE);
+    expect(stateA.zones.player_4).toBeUndefined();
+  });
+
   it("derives match metadata from registered content instead of hardcoded map strings", () => {
     const state = createInitialGameState({});
 
