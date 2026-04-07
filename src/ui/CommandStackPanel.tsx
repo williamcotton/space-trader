@@ -90,6 +90,7 @@ export function CommandStackPanel() {
   const passPriorityLocked =
     Boolean(snapshot.winner) ||
     !snapshot.priorityPlayerId ||
+    (snapshot.stackItems.length === 0 && snapshot.consecutivePasses === 0) ||
     Boolean(snapshot.networkLocalPlayerId && snapshot.networkLocalPlayerId !== snapshot.priorityPlayerId);
 
   return (

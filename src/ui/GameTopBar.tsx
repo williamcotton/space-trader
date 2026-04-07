@@ -62,9 +62,10 @@ export function GameTopBar() {
   const factionIds = getRegisteredFactionIds();
   const runtimeProfiles = getRegisteredRuntimeProfiles();
   const resourceOrder = getOrderedRegisteredResourceModules().map((resource) => resource.id);
+  const hasManyPlayers = snapshot.players.length > 2;
 
   return (
-    <header className="game-top-bar" aria-label="Match controls and status">
+    <header className={["game-top-bar", hasManyPlayers ? "many-players" : ""].filter(Boolean).join(" ")} aria-label="Match controls and status">
       <div className="game-top-bar-line">
         <div className="game-top-bar-match">
           <span className="eyebrow">{snapshot.mapName}</span>
@@ -93,7 +94,14 @@ export function GameTopBar() {
           ) : null}
         </div>
 
-        <div className="game-top-bar-players-inline">
+        <div
+          className={[
+            "game-top-bar-players-inline",
+            hasManyPlayers ? "many-players" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           {snapshot.players.map((player) => (
             <article
               key={player.id}
@@ -129,13 +137,13 @@ export function GameTopBar() {
                 {resourceOrder.map((resource) => (
                   <span key={resource} className={`top-bar-resource-pill ${resource}`} title={getResourceTheme(resource).label}>
                     <ResourceIcon resource={resource} size={12} />
-                    <strong>{player.resources[resource]}</strong>
+                    <strong>{player.resources[resource] ?? 0}</strong>
                   </span>
                 ))}
               </div>
               <div className="top-bar-player-meta">
                 {!snapshot.networked ? (
-                  <>
+                  <div className="top-bar-player-actions">
                     <button
                       type="button"
                       className={["top-bar-bot-toggle", player.botAutoplay ? "enabled" : "disabled"].join(" ")}
@@ -170,7 +178,7 @@ export function GameTopBar() {
                     >
                       Win
                     </button>
-                  </>
+                  </div>
                 ) : null}
                 <span className="top-bar-player-zones">
                   H{player.hand} D{player.deck}

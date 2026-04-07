@@ -73,6 +73,9 @@ function validateEndPhase(state: GameState, playerId: string): CommandValidation
 
 function validatePassPriority(state: GameState, playerId: string): CommandValidationResult {
   return requirePriority(state, playerId, "pass priority")
+    ?? (state.stack.length === 0 && state.consecutivePriorityPasses === 0
+      ? { ok: false, reason: "Only the active player can start ending a phase." }
+      : null)
     ?? { ok: true };
 }
 

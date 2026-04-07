@@ -36,6 +36,33 @@ function moveTopCardFromDeckToHand(state: ReturnType<typeof setupState>, playerI
 }
 
 describe("getAutoFlowCommand", () => {
+  it("does not auto-pass an empty-stack priority window that was not opened by END_PHASE", () => {
+    const state = setupState();
+    state.phase = "tactical";
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_2";
+    state.consecutivePriorityPasses = 0;
+    state.stack = [];
+    state.zones.player_2.hand = [];
+
+    expect(getAutoFlowCommand(state)).toBeNull();
+  });
+
+  it("auto-passes an empty-stack phase-end window after the active player has already ended the phase", () => {
+    const state = setupState();
+    state.phase = "tactical";
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_2";
+    state.consecutivePriorityPasses = 1;
+    state.stack = [];
+    state.zones.player_2.hand = [];
+
+    expect(getAutoFlowCommand(state)).toEqual({
+      type: "PASS_PRIORITY",
+      playerId: "player_2",
+    });
+  });
+
   it("auto-advances out of main when the active player has no playable cards", () => {
     const state = setupState();
     state.phase = "main";

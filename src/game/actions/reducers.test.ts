@@ -3283,14 +3283,33 @@ describe("dispatchCommand", () => {
     expect(expectRejected(result)).toContain("active player");
   });
 
-  it("rejects END_PHASE after the active player passes priority away", () => {
+  it("rejects PASS_PRIORITY on an empty stack so opponents cannot skip the active player's phase", () => {
     const state = setupState();
+    state.phase = "tactical";
 
     const pass = dispatchCommand(state, {
       type: "PASS_PRIORITY",
       playerId: "player_1",
     });
-    expect(pass.ok).toBe(true);
+    expect(expectRejected(pass)).toContain("active player");
+    expect(state.priorityPlayerId).toBe("player_1");
+    expect(state.phase).toBe("tactical");
+
+    const playerTwoPass = dispatchCommand(state, {
+      type: "PASS_PRIORITY",
+      playerId: "player_2",
+    });
+    expect(expectRejected(playerTwoPass)).toContain("priority player");
+  });
+
+  it("keeps END_PHASE as the active player's empty-stack phase pass", () => {
+    const state = setupState();
+
+    const end = dispatchCommand(state, {
+      type: "END_PHASE",
+      playerId: "player_1",
+    });
+    expect(end.ok).toBe(true);
     expect(state.priorityPlayerId).toBe("player_2");
 
     const result = dispatchCommand(state, {
@@ -3305,7 +3324,7 @@ describe("dispatchCommand", () => {
     const state = setupState();
 
     const pass = dispatchCommand(state, {
-      type: "PASS_PRIORITY",
+      type: "END_PHASE",
       playerId: "player_1",
     });
     expect(pass.ok).toBe(true);

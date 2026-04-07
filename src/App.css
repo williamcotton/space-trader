@@ -404,12 +404,29 @@ body {
   align-items: center;
 }
 
+.game-top-bar.many-players {
+  width: min(1920px, calc(100vw - 28px));
+  padding: 8px 10px 10px;
+}
+
+.game-top-bar.many-players .game-top-bar-line {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-items: stretch;
+}
+
 .game-top-bar-match {
   display: flex;
   align-items: baseline;
   gap: 8px;
   min-width: 0;
   flex-wrap: wrap;
+}
+
+.game-top-bar.many-players .game-top-bar-match {
+  align-items: center;
+  min-height: 28px;
+  padding: 0 3px;
 }
 
 .game-top-bar-match strong {
@@ -613,6 +630,12 @@ body {
   flex-shrink: 0;
 }
 
+.top-bar-player-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .top-bar-priority-stops {
   grid-column: 1 / -1;
   display: flex;
@@ -620,6 +643,104 @@ body {
   flex-wrap: wrap;
   gap: 5px;
   padding-top: 1px;
+}
+
+.game-top-bar-players-inline.many-players {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-player-pod {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "identity meta"
+    "resources resources"
+    "priority-stops priority-stops";
+  row-gap: 5px;
+  column-gap: 8px;
+  align-items: start;
+  padding: 7px;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-player-identity {
+  grid-area: identity;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-player-resources {
+  grid-area: resources;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-player-meta {
+  grid-area: meta;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-priority-stops {
+  grid-area: priority-stops;
+  grid-column: auto;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-player-resources {
+  overflow: visible;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  padding-top: 2px;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-resource-pill {
+  min-width: 0;
+  min-height: 22px;
+  padding: 2px 4px;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-player-meta {
+  border-left: 0;
+  padding-left: 0;
+  display: grid;
+  gap: 5px;
+  justify-items: end;
+  white-space: normal;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-player-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 172px;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-bot-toggle,
+.game-top-bar-players-inline.many-players .top-bar-debug-resource,
+.game-top-bar-players-inline.many-players .top-bar-debug-kill,
+.game-top-bar-players-inline.many-players .top-bar-debug-win {
+  min-height: 18px;
+  padding: 2px 6px;
+  font-size: 8px;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-player-zones {
+  justify-self: end;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(31, 46, 87, 0.55);
+  border: 1px solid rgba(77, 113, 181, 0.34);
+}
+
+.game-top-bar-players-inline.many-players .top-bar-priority-stops {
+  gap: 4px;
+}
+
+.game-top-bar-players-inline.many-players .top-bar-priority-stop {
+  min-height: 18px;
+  padding: 2px 6px;
+  font-size: 8px;
+}
+
+@media (max-width: 1340px) {
+  .game-top-bar-players-inline.many-players {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .top-bar-priority-stops-label {
