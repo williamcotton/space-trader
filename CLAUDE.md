@@ -49,6 +49,8 @@
   - entity shapes
   - zones
   - initial-state creation
+  - dynamic player-order bootstrap
+  - elimination tracking
   - resource and runtime-profile aware defaults
   - deterministic generated-id counter
 - `src/game/model/enums.ts`
@@ -176,6 +178,7 @@
 
 ### Turn Management
 
+- `src/game/turn/playerOrder.ts`
 - `src/game/turn/phaseMachine.ts`
 - `src/game/turn/stack.ts`
 - `src/game/turn/autoFlow.ts`
@@ -225,9 +228,9 @@
 - `server/src/index.ts`
   - Node server entry point
 - `server/src/matchmaker.ts`
-  - queue pairing and match creation
+  - format-aware queues and match creation
 - `server/src/matchRoom.ts`
-  - authoritative room state and command handling
+  - authoritative room state, player-order fanout, and command handling
 - `server/src/createMatchState.ts`
   - seeded initial match creation
 - `server/src/sessionStore.ts`
@@ -260,6 +263,12 @@
 
 - `game-design.md`
 - `architecture.md`
+- `instructions.md`
+- `networked-multiplayer-feature.md`
+- `four-player-refactor.md`
+- `three-player-feature.md`
+- `attack-refactor.md`
+- `layers-refactor.md`
 - `faction-identity.md`
 - `new-cards.md`
 - `faction-refactor.md`
@@ -291,10 +300,15 @@
   - `end`
   - `discard`
 - Current live economy defaults:
-  - player 1 starts with `2 currency + 2 primary`
-  - player 2 starts with `5 currency + 2 primary`
+  - the starting player starts with `2 currency + 2 primary`
+  - non-starting players start with `5 currency + 2 primary`
   - deposits are `2`
   - passive economy is `+1 currency`
+- Player identity is runtime-seat based:
+  - `state.playerOrder` defines turn / priority seating
+  - `state.eliminatedPlayerIds` removes players from live rotation
+  - 1v1 remains `player_1`, `player_2`
+  - 4-player FFA uses `player_1` through `player_4`
 - Continuous effects are layered and authoritative for stat/keyword changes.
 - Mechanic-owned state lives under `state.mechanicState` in:
   - `match`
@@ -310,6 +324,13 @@
   - `GameRuntime.resetWithContent(...)`
 - Runtime defaults come from registered runtime profiles, not kernel constants.
 - Networked multiplayer is server-authoritative command replay, not client-authoritative state sync.
+- Online matchmaking is format-aware:
+  - `pvp_1v1` uses `alpha_default`
+  - `ffa_4p` uses `alpha_four_player`
+  - `ffa_3p` is planned, not implemented yet
+- Current live Alpha runtime profiles:
+  - `alpha_default` on `frontier_belt`
+  - `alpha_four_player` on `frontier_crossroads`
 - Resource modules now own:
   - `kind` such as currency vs primary
   - display order
@@ -325,7 +346,7 @@
   - stable card-instance ids where possible
   - otherwise `state.nextGeneratedIdCounter`
 - Never derive authoritative ids from mutable state like `log.length`.
-- Current state version is `25`.
+- Current state version is `26`.
 
 ## Current Faction Mechanics Snapshot
 
@@ -358,6 +379,7 @@
 - State schema changes should always be accompanied by migration updates.
 - Registry-backed content can be reset and reloaded deterministically.
 - Server/client multiplayer bugs are often determinism bugs; check ids, seeds, and content parity before assuming transport failure.
+- Online hidden information is still trust-based: clients can reconstruct hidden zones from deterministic setup and command replay. Secure hidden-state views are a separate future project.
 
 ## Current Extension Points
 
@@ -376,5 +398,7 @@ These still imply meaningful engine work, not just content:
 - true token support
 - multi-target choice cards
 - explicit support for deterministic infinite combos
+- secure online hidden-information networking
+- true 3-player FFA map/profile/matchmaking support
 - full content-context isolation beyond the current process-global registries
 - any major change to spell-damage-vs-armor rules

@@ -1,6 +1,6 @@
 # Space Trader Architecture
 
-Last updated: April 2, 2026
+Last updated: April 7, 2026
 
 ## Purpose
 
@@ -20,10 +20,13 @@ It is implementation-first:
 - in-repo Node.js multiplayer server under `server/`
 - two built-in content manifests: Foundation and Alpha
 - one live shipped playable set: Alpha
-- one live runtime profile: Alpha Default
-- one live map in that profile: Frontier Belt
+- two live Alpha runtime profiles:
+  - Alpha Default on Frontier Belt
+  - Alpha Free-For-All on Frontier Crossroads
 - 1v1 turn-based hex tactics
-- local skirmish plus prototype networked 1v1
+- local 4-player FFA prototype
+- prototype networked 1v1 and trust-based networked 4-player FFA
+- planned 3-player FFA documented in `three-player-feature.md`
 - 3 premade faction starter decks, 60 cards each, max 4 copies
 - full stack / priority interaction for spells and abilities
 - harvesting / node-control economy loop
@@ -34,14 +37,14 @@ It is implementation-first:
   - `tactical`
   - `end`
   - `discard`
-- win by reducing enemy base HP to `0`
+- win by reducing enemy base HP to `0`; FFA modes use last-survivor elimination
 
 Current live rules snapshot:
 - base HP: `20`
 - opening hand: `5`
 - opening resources:
-  - player 1: `2 currency + 2 primary`
-  - player 2: `5 currency + 2 primary`
+  - starting player: `2 currency + 2 primary`
+  - non-starting players: `5 currency + 2 primary`
 - deposits:
   - `2` currency
   - `2` primary
@@ -87,7 +90,7 @@ Current live rules snapshot:
   - dispatches typed commands only
 - Network client layer: `src/network/*`
   - session token management
-  - matchmaking / queue transport
+  - mode-aware matchmaking / queue transport
   - server event stream subscription
   - authoritative command submission and resync
 - Runtime layer: `src/game/runtime.ts`
@@ -179,6 +182,7 @@ src/game/
         presentation.ts
         installers/runtime.ts
         maps/frontierBelt.ts
+        maps/frontierCrossroads.ts
         mechanics/
           index.ts
           keywordIds.ts
@@ -189,6 +193,8 @@ src/game/
           bloom.ts
           salvage.ts
           bastion.ts
+          predation.ts
+          emplaced.ts
           uncounterable.ts
 
   mechanics/
@@ -239,6 +245,7 @@ src/game/
     directInteraction.ts
 
   turn/
+    playerOrder.ts
     phaseMachine.ts
     stack.ts
     autoFlow.ts
@@ -307,6 +314,8 @@ Important live fields:
   - `matchId`
   - `turn`
   - `phase`
+  - `playerOrder`
+  - `eliminatedPlayerIds`
   - `activePlayerId`
   - `priorityPlayerId`
   - `consecutivePriorityPasses`
@@ -340,7 +349,7 @@ Important live fields:
   - `tacticalHarvestedUnitIds`
 
 Current state version:
-- `25`
+- `26`
 
 Mechanic-specific counters no longer belong on the root `GameState` surface.
 They now belong in namespaced mechanic state owned by the mechanics themselves.
@@ -430,7 +439,8 @@ Turn structure is explicit and state-machine driven:
 
 Priority model:
 - stack uses explicit `priorityPlayerId`
-- top stack item resolves only after consecutive passes
+- top stack item resolves only after consecutive passes from all live players
+- empty-stack phase advancement also uses the same live-player pass cycle after the active player starts ending the phase
 - stack items carry:
   - controller / owner
   - targets
@@ -443,10 +453,21 @@ Priority model:
 
 The live multiplayer prototype uses server-authoritative command replay rather than full-state sync.
 
+Online formats currently supported by the protocol:
+- `pvp_1v1`
+  - required players: `2`
+  - runtime profile: `alpha_default`
+- `ffa_4p`
+  - required players: `4`
+  - runtime profile: `alpha_four_player`
+
+The planned `ffa_3p` format is documented separately and is not live yet.
+
 Authoritative responsibilities:
 - session identity and reconnect tokens
-- queue / matchmaking
+- format-aware queue / matchmaking
 - match seed and faction assignment
+- player-order assignment
 - canonical match state
 - command validation and ordering
 - auto-flow in live rooms
@@ -463,6 +484,7 @@ Important implications:
 - deterministic startup matters; seeded match creation must match on both sides
 - built-in content availability must match between client and server
 - hidden-information integrity is still limited by the current shared deterministic model
+- 1v1 and 4-player queues must stay separate; the matchmaker should not mix seats across formats
 - networked bugs are often determinism bugs, not transport bugs
 
 ## Data-Driven Card And Stack Architecture
@@ -657,7 +679,8 @@ Important coverage areas:
 - replacement engine
 - continuous effects
 - bot behavior
-- multiplayer session / matchmaker flow
+- multiplayer session / format-aware matchmaker flow
+- multi-seat phase / priority / elimination
 - starter deck validation
 - content loader lifecycle
 - render animation generation
@@ -672,6 +695,8 @@ Important coverage areas:
 - resource semantics and runtime defaults are now content-owned instead of kernel-owned
 - AI / animation / preview / debug behavior can be installed by sets instead of hardcoded in core
 - multiplayer now reuses the same deterministic rules core instead of forking gameplay rules
+- player-order and elimination logic now support more than two live players
+- online queues and rooms are format-aware instead of being hardcoded to exactly two seats
 - HMR workflow is still strong despite schema churn
 
 ## Current Architecture Pressure Points
@@ -725,12 +750,32 @@ It is not yet the final form for:
 - side-by-side loaded game variants in the same process
 - fully isolated expansion sandboxes
 
+### Secure Online Hidden Information
+
+Current online play is trust-based deterministic command replay.
+
+That is good enough for prototype play, but not release-grade hidden information because clients can reconstruct private zones from seed + command history.
+
+Real hidden-information security would require:
+- server-private hidden zones
+- redacted public state views
+- per-player private hand/deck payloads
+- reconnect/resync that does not replay hidden data to every client
+
+### Three-Player FFA
+
+The four-player infrastructure should make three-player support incremental, but it still needs a purpose-built map/profile/online format.
+
+Do not fake this with a 4-player map and one empty seat.
+
 ## Recommended Next Architecture Work
 
 - keep moving toward set-owned installers and runtime behavior
 - avoid reintroducing card-id or faction-id branches in kernel code
 - keep multiplayer authority and reconnection logic on the server side
 - keep generated-id sources deterministic and explicit
+- add 3-player FFA via a triangular map and dedicated `ffa_3p` format when ready
+- treat secure online hidden information as a separate architecture project
 - treat graveyard/reanimation as its own feature wave
 - treat tokens as their own feature wave
 - treat multi-target choice as its own feature wave

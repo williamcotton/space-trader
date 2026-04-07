@@ -1,7 +1,10 @@
 # Space Trader - How To Play (Current Build)
 
 ## Goal
-Destroy the enemy base (reduce its HP to 0).
+Destroy enemy bases.
+
+- In 1v1, reduce the opposing base HP to `0`.
+- In FFA, eliminate opponents by reducing their bases to `0`; last surviving player wins.
 
 ## Core Idea
 You play on a turn/phase system with:
@@ -11,15 +14,19 @@ You play on a turn/phase system with:
 - stack + priority resolution for instant-speed interaction
 
 ## What You See
-- Canvas HUD (top-left): turn, phase, active player, priority, resources, winner, rejection messages.
-- Hand tray (bottom): active player's hand and deck count (`Hand X | Deck Y`).
-- Stack debug panel (bottom-right): quick stack controls and stack preview.
+- Top bar: map, turn, mode selector, player resources, bot toggles, and debug actions.
+- Network Match bar: server URL, online mode, faction selector, queue/match buttons.
+- Canvas battlefield: units, bases, resource nodes, movement overlays, attack-target overlays, and animation feedback.
+- Hand tray: current playable hand view. In networked matches, this is your local hand.
+- Command stack panel: stack preview, history, priority controls, and phase/priority buttons.
+- HUD panel: selected unit, combat preview, targeting prompts, and rejection messages.
 
 ## Controls
 - `N`: End/advance phase.
 - `U`: Select first active-player unit.
 - Arrow keys: Move selected unit (tactical phase only).
-- `A`: Attack first valid target in range (selected combat unit).
+- `A`: Enter/cancel attack-targeting mode for the selected attacker. Click a highlighted enemy unit or base to attack.
+- `Esc`: Cancel pending card or attack targeting.
 - `H`: Harvest with selected resource unit on a controlled node.
 - `P`: Pass priority.
 - `R`: Add debug no-op stack item.
@@ -28,6 +35,7 @@ You play on a turn/phase system with:
 - `B`: Toggle bot autopilot for player 2.
 - `Shift+B`: Toggle bot autopilot for player 1.
 - Mouse click on unit: select/deselect active-player unit.
+- Mouse click while attack-targeting: attack a valid highlighted enemy target, or cancel/retarget depending on what was clicked.
 - Mouse move: hover/target preview.
 - Click card in hand tray: play card from hand (if legal).
 
@@ -46,9 +54,9 @@ You play on a turn/phase system with:
 Press `N` to move through phases.
 
 Default bot behavior:
-- `player_2` bot autopilot starts enabled.
-- `player_1` bot autopilot starts disabled.
-- You can toggle either at runtime (`B` / `Shift+B` or debug panel buttons).
+- In 1v1 local play, `player_2` bot autopilot starts enabled and `player_1` starts disabled.
+- In the 4-player local profile, bots default to disabled.
+- You can toggle bots at runtime from the top bar.
 
 ## Cards and Costs
 Card costs are shown like:
@@ -57,8 +65,9 @@ Card costs are shown like:
 - `C1 B1` = 1 Credit + 1 Biomass
 
 Starting resources are non-zero:
-- each player starts with `3` Credits
-- plus `2` of their faction resource
+- the starting player starts with `2` Credits
+- non-starting players start with `5` Credits
+- every player starts with `2` of their faction resource
 
 ## Playing Cards
 Click a card in the hand tray.
@@ -89,9 +98,22 @@ Notes:
 - If a loaded harvester is destroyed, cargo is lost.
 
 ## Stack and Priority
-- Players alternate priority responses.
-- If both players pass in sequence, top stack item resolves.
+- Players pass priority in seat order.
+- In FFA, priority rotates through all live players.
+- If all live players pass in sequence, the top stack item resolves.
+- Empty-stack phase advancement also waits for the live-player pass cycle after the active player starts ending the phase.
 - Counter cards currently target the **top stack item** only.
+
+## Multiplayer Modes
+- Local mode selector:
+  - `Alpha Default`: 1v1 on `Frontier Belt`
+  - `Alpha Free-For-All`: local 4-player FFA on `Frontier Crossroads`
+- Network mode selector:
+  - `1v1 PvP`: waits for 2 players
+  - `4-Player FFA`: waits for 4 players
+- 3-player FFA is planned but not implemented yet.
+
+Current online play is trust-based command replay. The UI hides the opponent hand, but this is not secure hidden-information networking yet.
 
 ## If Something Fails
 Check `Last Reject` in HUD. Common reasons:
@@ -105,7 +127,8 @@ Check `Last Reject` in HUD. Common reasons:
 ## Quick First Match Flow
 1. Press `U` to select a unit.
 2. Press `N` until Tactical and move/attack.
-3. Capture and harvest nodes with `H`.
-4. Use `N` to reach Main and click a unit card to deploy.
-5. Click instant cards during priority windows; use `P` to resolve stack.
-6. Keep pressure on enemy base until HP reaches 0.
+3. To attack, press `A` with a selected attacker, then click a highlighted enemy unit or base.
+4. Capture and harvest nodes with `H`.
+5. Use `N` to reach Main and click a unit card to deploy.
+6. Click instant cards during priority windows; use `P` to resolve stack.
+7. Keep pressure on enemy bases until only you remain.

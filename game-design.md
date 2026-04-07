@@ -1,6 +1,6 @@
 # Space Trader - Game Design (Living Draft)
 
-Last updated: April 2, 2026
+Last updated: April 7, 2026
 
 ## Purpose
 This is the working game design document for Space Trader.
@@ -21,16 +21,22 @@ The target feel is:
 These are the rules the prototype should generally be designed around unless explicitly changed.
 
 ### Match Structure
-- 1v1 on a single map: `Frontier Belt`
+- 1v1 on `Frontier Belt`
+- Local 4-player FFA on `Frontier Crossroads`
+- 3-player FFA is planned in `three-player-feature.md`, but not live yet
 - Premade decks only
 - Local skirmish plus prototype networked multiplayer
+- Online formats:
+  - `1v1 PvP`
+  - `4-player FFA`
 - Current playable factions:
   - `Alloy Clan`
   - `Flux Collective`
   - `Biomass Swarm`
 
 ### Win Condition
-- Destroy the opposing base
+- Destroy the opposing base in 1v1
+- In FFA, eliminate opponents by destroying bases; last surviving player wins
 - Bases currently use HP attrition, not capture
 - Current base HP target: `20`
 
@@ -54,7 +60,7 @@ These are the rules the prototype should generally be designed around unless exp
 - The game uses a full LIFO stack
 - Both tactic cards and unit cards are cast onto the stack
 - Unit cards do not enter play immediately; they resolve from the stack into battlefield units
-- Priority alternates between players until both pass in sequence
+- Priority rotates through all live players until everyone passes in sequence
 - While the stack is unresolved, phase changes and battlefield actions are halted
 - Only legal stack responses and priority passing are allowed while the stack is non-empty
 
@@ -67,11 +73,10 @@ These are the rules the prototype should generally be designed around unless exp
 - Flavor: cards drawn each turn are downloaded plans from an orbital satellite
 
 ### Starting Economy
-- Each player starts with:
-  - `Player 1: 2 Credits`
-  - `Player 2: 5 Credits`
-  - `2` of that faction's primary resource
-- This asymmetry is currently being used to smooth seat bias in mirrors
+- The starting player starts with `2 Credits`
+- Non-starting players start with `5 Credits`
+- All players start with `2` of their faction's primary resource
+- This asymmetry is currently being used to smooth seat bias; in 3+ player modes the disadvantaged starting seat is randomly selected
 
 ### Resource Model
 - Universal resource:
@@ -107,6 +112,7 @@ Current unit stat vocabulary is:
 - Summoning sickness is enabled
 - Newly deployed units cannot act on the turn they resolve onto the battlefield unless a keyword or effect says otherwise
 - Units act with Civ-like per-turn budgets
+- Attacks use explicit target selection: select a unit, press `A`, then click a valid enemy unit or base
 - Tactical auto-flow exists, but harvesting opportunities should not be skipped automatically
 - Keywords currently matter in live rules, not just future design:
   - `sprout`
@@ -242,6 +248,17 @@ Examples:
 - Alloy: `Ore Mines`
 - Flux: `Ion Vents`
 - Biomass: `Xenobogs`
+
+### FFA Map
+`Frontier Crossroads`
+- 4-player square-style footprint using explicit playable hexes
+- four corner bases
+- each base has equivalent nearby primary-resource access
+- each base has an equivalent nearby `Trade Beacon`
+- central economy is intentionally contested
+
+### Planned 3-Player Map
+The three-player feature should use a purpose-built triangular/radial map rather than a 4-player map with one empty corner.
 
 Future maps can vary visual identity heavily while keeping the same economy rules.
 
@@ -466,14 +483,15 @@ What Biomass should gain next:
 
 ## Current Prototype Scope
 The live prototype should now be understood as:
-- one map: `Frontier Belt`
-- 1v1 skirmish
-- prototype networked 1v1 using the same ruleset
+- 1v1 on `Frontier Belt`
+- local 4-player FFA on `Frontier Crossroads`
+- prototype networked 1v1 and trust-based 4-player FFA using the same command/replay ruleset
+- planned 3-player FFA, not yet implemented
 - premade decks only
 - stack + priority working for both tactics and unit spells
 - resource harvesting loop working
 - tactical movement/combat working
-- minimax-based bot opponent working
+- minimax-based bot seats working, with recent FFA-aware targeting/defense/deploy-slot heuristics
 - enough card variety to make matches tactically interesting
 - enough faction identity to support real monofaction play patterns
 
@@ -553,8 +571,13 @@ Readable feedback is part of the fun. If a combo happens, the player should feel
 - 2026-04-02: Biomass `Predation` and Alloy `Emplaced` now let faction-specific resource-unit attack mechanics exist without leaking set behavior into the kernel.
 - 2026-04-02: `Feeding Frenzy`, `Signal Hijack`, and `Bulwark Refit` established clearer faction-signature tactic space for Biomass, Flux, and Alloy.
 - 2026-04-02: Siege damage now bypasses supply when attacking bases so siege pressure remains a real finisher.
+- 2026-04-07: Local 4-player FFA is now a live prototype mode using `Frontier Crossroads` and full around-the-table priority.
+- 2026-04-07: Online multiplayer now has format-aware queues for `1v1 PvP` and trust-based `4-player FFA`.
+- 2026-04-07: Attack UX changed from first-target shortcut behavior to explicit attack target selection.
+- 2026-04-07: Three-player FFA is planned as a focused follow-up feature with a purpose-built triangular map.
 
 ## Backlog Seeds
+- Build the `3-player FFA` feature from `three-player-feature.md`
 - Add a top-end Flux `Relay` / `Resonance` payoff
 - Add more Alloy formation / siege / salvage payoffs
 - Add Biomass regrowth / death-value support
