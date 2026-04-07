@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dispatchCommand } from "../actions/reducers";
 import { requireMapDefinition } from "../content/maps/catalog";
+import { hexDistance } from "../model/hex";
 import { createInitialGameState } from "../model/state";
 import { decideMinimaxBotCommand } from "./minimaxBot";
 
@@ -281,5 +282,45 @@ describe("decideMinimaxBotCommand", () => {
       playerId: "player_2",
       cardInstanceId: combatUnitInstanceId,
     });
+  });
+
+  it("moves toward the nearest enemy base in a four-player tactical state", () => {
+    const state = createInitialGameState({
+      runtimeProfileId: "alpha_four_player",
+      randomSource: () => 0.6,
+    });
+    state.phase = "tactical";
+    state.activePlayerId = "player_3";
+    state.priorityPlayerId = "player_3";
+    state.stack = [];
+
+    for (const entityId of Object.keys(state.entities)) {
+      const entity = state.entities[entityId];
+      if (entity?.kind === "unit" && entityId !== "unit_player_3_scout") {
+        delete state.entities[entityId];
+      }
+    }
+
+    const attacker = state.entities.unit_player_3_scout;
+    const nearestBase = state.entities[state.players.player_4.baseEntityId];
+    expect(attacker?.kind).toBe("unit");
+    expect(nearestBase?.kind).toBe("base");
+    if (!attacker || attacker.kind !== "unit" || !nearestBase || nearestBase.kind !== "base") {
+      throw new Error("Expected four-player tactical entities.");
+    }
+
+    attacker.coord = { q: nearestBase.coord.q, r: nearestBase.coord.r - 2 };
+    attacker.movesRemaining = 1;
+    attacker.attacksRemaining = 0;
+    attacker.hasSummoningSickness = false;
+    state.selectedEntityId = attacker.id;
+
+    const command = decideMinimaxBotCommand(state, "player_3");
+    expect(command?.type).toBe("MOVE_UNIT");
+    if (!command || command.type !== "MOVE_UNIT") {
+      throw new Error("Expected four-player minimax movement command.");
+    }
+
+    expect(hexDistance(command.to, nearestBase.coord)).toBe(1);
   });
 });

@@ -1,14 +1,14 @@
 import type { GameCommand } from "../../actions/commands";
 import { getCardDefinition } from "../../content/cards/catalog";
+import type { ResourceType } from "../../model/enums";
 import { areSameHex, getMapAxialBounds, hexDistance, isWithinMapBounds } from "../../model/hex";
-import { getEnemyEntities, getPlayerBase, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../../model/queries";
+import { getEnemyBases, getEnemyEntities, getPlayerBase, getPlayerUnits, HEX_DIRECTIONS } from "../../model/queries";
 import type { PlayerId } from "../../model/ids";
-import type { GameState, HexCoord, UnitEntity } from "../../model/state";
+import type { BaseEntity, EntityState, GameState, HexCoord, MapResourceNode, UnitEntity } from "../../model/state";
 import { canAttackEntityDirectly, canUnitDeclareAttack, canUnitMove } from "../../rules/directInteraction";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../../systems/harvesting";
 import { resolveCombatAttack } from "../../systems/combat";
 import { getEffectiveUnitAttackRange } from "../../systems/unitStats";
-import { getOpponentPlayer } from "../../turn/stack";
 import {
   rankDiscardCardCommands,
   rankMainPhaseCardCommands,
@@ -18,7 +18,6 @@ import {
   AI_WEIGHTS,
   getClosestCoord,
   getPriorityResourceOrderFromHand,
-  shouldHarvestResourceType,
 } from "../mvpBot/shared";
 import type { SearchActionPlan } from "./types";
 
@@ -28,6 +27,34 @@ const MAX_MAIN_PHASE_CARD_PLANS = 4;
 const MAX_ATTACK_PLANS_PER_UNIT = 3;
 const MAX_MOVE_PLANS_PER_UNIT = 3;
 const MAX_TOTAL_TACTICAL_PLANS = 18;
+
+type TacticalPlanContext = {
+  enemyBases: BaseEntity[];
+  enemyEntities: EntityState[];
+  occupiedCoordKeys: Set<string>;
+  playerCombatUnits: UnitEntity[];
+  preferredResources: Set<ResourceType>;
+  resourceNodesByCoord: Map<string, MapResourceNode>;
+  resourcePriority: ResourceType[];
+};
+
+function coordKey(coord: HexCoord): string {
+  return `${coord.q},${coord.r}`;
+}
+
+function createTacticalPlanContext(state: Readonly<GameState>, playerId: PlayerId): TacticalPlanContext {
+  const resourcePriority = getPriorityResourceOrderFromHand(state as GameState, playerId);
+
+  return {
+    enemyBases: getEnemyBases(state as GameState, playerId),
+    enemyEntities: getEnemyEntities(state as GameState, playerId),
+    occupiedCoordKeys: new Set(Object.values(state.entities).map((entity) => coordKey(entity.coord))),
+    playerCombatUnits: getPlayerUnits(state as GameState, playerId).filter((unit) => unit.role === "combat"),
+    preferredResources: new Set(resourcePriority.slice(0, 2)),
+    resourceNodesByCoord: new Map(state.map.resourceNodes.map((node) => [coordKey(node.coord), node])),
+    resourcePriority,
+  };
+}
 
 function serializeCommand(command: GameCommand): string {
   switch (command.type) {
@@ -75,23 +102,27 @@ function pushBestPlan(planMap: Map<string, SearchActionPlan>, plan: SearchAction
 function isSafeResourceNode(
   state: Readonly<GameState>,
   playerId: PlayerId,
-  node: GameState["map"]["resourceNodes"][number]
+  node: GameState["map"]["resourceNodes"][number],
+  enemyBases: readonly BaseEntity[]
 ): boolean {
   const ownBase = getPlayerBase(state as GameState, playerId);
-  const enemyBase = getPlayerBase(state as GameState, getOpponentPlayer(playerId));
-  if (!ownBase || !enemyBase) {
+  if (!ownBase || enemyBases.length === 0) {
     return true;
   }
 
-  return hexDistance(ownBase.coord, node.coord) <= hexDistance(enemyBase.coord, node.coord) + 1;
+  const closestEnemyBaseDistance = Math.min(...enemyBases.map((base) => hexDistance(base.coord, node.coord)));
+  return hexDistance(ownBase.coord, node.coord) <= closestEnemyBaseDistance + 1;
 }
 
-function chooseResourceNodeObjective(state: Readonly<GameState>, playerId: PlayerId, unit: UnitEntity): HexCoord | null {
-  const resourcePriority = getPriorityResourceOrderFromHand(state as GameState, playerId);
-
-  for (const resource of resourcePriority) {
+function chooseResourceNodeObjective(
+  state: Readonly<GameState>,
+  playerId: PlayerId,
+  unit: UnitEntity,
+  ctx: TacticalPlanContext
+): HexCoord | null {
+  for (const resource of ctx.resourcePriority) {
     const safeContested = state.map.resourceNodes
-      .filter((node) => node.resourceType === resource && node.controlledBy !== playerId && isSafeResourceNode(state, playerId, node))
+      .filter((node) => node.resourceType === resource && node.controlledBy !== playerId && isSafeResourceNode(state, playerId, node, ctx.enemyBases))
       .map((node) => node.coord);
     const safeContestedTarget = getClosestCoord(unit.coord, safeContested);
     if (safeContestedTarget) {
@@ -99,7 +130,7 @@ function chooseResourceNodeObjective(state: Readonly<GameState>, playerId: Playe
     }
 
     const safeControlled = state.map.resourceNodes
-      .filter((node) => node.resourceType === resource && node.controlledBy === playerId && isSafeResourceNode(state, playerId, node))
+      .filter((node) => node.resourceType === resource && node.controlledBy === playerId && isSafeResourceNode(state, playerId, node, ctx.enemyBases))
       .map((node) => node.coord);
     const safeControlledTarget = getClosestCoord(unit.coord, safeControlled);
     if (safeControlledTarget) {
@@ -123,10 +154,13 @@ function chooseResourceNodeObjective(state: Readonly<GameState>, playerId: Playe
   );
 }
 
-function chooseObjectiveCoord(state: Readonly<GameState>, playerId: PlayerId, unit: UnitEntity): HexCoord | null {
+function chooseObjectiveCoord(
+  state: Readonly<GameState>,
+  playerId: PlayerId,
+  unit: UnitEntity,
+  ctx: TacticalPlanContext
+): HexCoord | null {
   const ownBase = getPlayerBase(state as GameState, playerId);
-  const opponentId = getOpponentPlayer(playerId);
-  const enemyBase = getPlayerBase(state as GameState, opponentId);
 
   if (unit.role === "resource") {
     if (unit.carries && ownBase) {
@@ -136,11 +170,11 @@ function chooseObjectiveCoord(state: Readonly<GameState>, playerId: PlayerId, un
       return getClosestCoord(unit.coord, dropoffTiles);
     }
 
-    return chooseResourceNodeObjective(state, playerId, unit);
+    return chooseResourceNodeObjective(state, playerId, unit, ctx);
   }
 
   if (unit.role === "combat") {
-    const priorityEnemies = getEnemyEntities(state as GameState, playerId)
+    const priorityEnemies = ctx.enemyEntities
       .filter((entity) => entity.kind === "unit" && entity.role === "resource")
       .map((entity) => entity.coord);
     const resourceTarget = getClosestCoord(unit.coord, priorityEnemies);
@@ -149,7 +183,7 @@ function chooseObjectiveCoord(state: Readonly<GameState>, playerId: PlayerId, un
     }
 
     if (ownBase) {
-      const nearbyThreats = getEnemyEntities(state as GameState, playerId)
+      const nearbyThreats = ctx.enemyEntities
         .filter((entity) => entity.kind === "unit" && hexDistance(entity.coord, ownBase.coord) <= AI_WEIGHTS.nearbyEnemyRadius)
         .map((entity) => entity.coord);
       const defenseTarget = getClosestCoord(unit.coord, nearbyThreats);
@@ -159,7 +193,7 @@ function chooseObjectiveCoord(state: Readonly<GameState>, playerId: PlayerId, un
     }
   }
 
-  return enemyBase ? enemyBase.coord : null;
+  return getClosestCoord(unit.coord, ctx.enemyBases.map((base) => base.coord));
 }
 
 function scoreAttackPlan(state: Readonly<GameState>, unit: UnitEntity, targetId: string): number {
@@ -183,9 +217,15 @@ function scoreAttackPlan(state: Readonly<GameState>, unit: UnitEntity, targetId:
   return killScore + baseScore + roleScore + cargoScore + preview.finalDamage * 18;
 }
 
-function scoreMovePlan(state: Readonly<GameState>, playerId: PlayerId, unit: UnitEntity, coord: HexCoord): number {
-  const objective = chooseObjectiveCoord(state, playerId, unit);
-  const attackRange = getEffectiveUnitAttackRange(state as GameState, unit);
+function scoreMovePlan(
+  state: Readonly<GameState>,
+  playerId: PlayerId,
+  unit: UnitEntity,
+  coord: HexCoord,
+  ctx: TacticalPlanContext,
+  objective: HexCoord | null,
+  attackRange: number
+): number {
   let score = 0;
 
   if (objective) {
@@ -196,14 +236,14 @@ function scoreMovePlan(state: Readonly<GameState>, playerId: PlayerId, unit: Uni
   }
 
   if (unit.role === "resource") {
-    const node = state.map.resourceNodes.find((entry) => areSameHex(entry.coord, coord));
+    const node = ctx.resourceNodesByCoord.get(coordKey(coord));
     if (unit.carries) {
       const ownBase = getPlayerBase(state as GameState, playerId);
       if (ownBase && hexDistance(ownBase.coord, coord) === 1) {
         score += 100;
       }
     } else if (node) {
-      const preferredResource = shouldHarvestResourceType(state as GameState, playerId, node.resourceType);
+      const preferredResource = ctx.preferredResources.has(node.resourceType);
       if (preferredResource) {
         if (node.controlledBy !== playerId) {
           score += 48;
@@ -214,28 +254,27 @@ function scoreMovePlan(state: Readonly<GameState>, playerId: PlayerId, unit: Uni
       } else {
         score -= node.controlledBy !== playerId ? 32 : 20;
       }
-      if (isSafeResourceNode(state, playerId, node)) {
+      if (isSafeResourceNode(state, playerId, node, ctx.enemyBases)) {
         score += 16;
       }
     }
   }
 
   if (unit.role === "combat") {
-    const attackTargets = getEnemyEntities(state as GameState, playerId).filter((target) =>
+    const attackTargets = ctx.enemyEntities.filter((target) =>
       canAttackEntityDirectly(state, playerId, target) &&
       hexDistance(coord, target.coord) <= attackRange
     );
     score += attackTargets.length * 32;
 
-    const enemyBase = getPlayerBase(state as GameState, getOpponentPlayer(playerId));
-    if (enemyBase && canAttackEntityDirectly(state, playerId, enemyBase) && hexDistance(coord, enemyBase.coord) <= attackRange) {
+    if (ctx.enemyBases.some((base) => canAttackEntityDirectly(state, playerId, base) && hexDistance(coord, base.coord) <= attackRange)) {
       score += 90;
     }
   }
 
   if (unit.role === "utility") {
-    const allies = getPlayerUnits(state as GameState, playerId).filter((ally) => ally.role === "combat" && ally.id !== unit.id);
-    const nearestCombat = allies
+    const nearestCombat = ctx.playerCombatUnits
+      .filter((ally) => ally.id !== unit.id)
       .map((ally) => hexDistance(coord, ally.coord))
       .sort((a, b) => a - b)[0];
     if (typeof nearestCombat === "number") {
@@ -284,7 +323,8 @@ function buildHarvestPlans(
   state: Readonly<GameState>,
   playerId: PlayerId,
   unit: UnitEntity,
-  prefix: GameCommand[]
+  prefix: GameCommand[],
+  ctx: TacticalPlanContext
 ): SearchActionPlan[] {
   if (!canUnitHarvestNode(unit, playerId)) {
     return [];
@@ -294,7 +334,7 @@ function buildHarvestPlans(
   if (!node || node.controlledBy !== playerId) {
     return [];
   }
-  if (!shouldHarvestResourceType(state as GameState, playerId, node.resourceType)) {
+  if (!ctx.preferredResources.has(node.resourceType)) {
     return [];
   }
 
@@ -323,19 +363,22 @@ function buildMovePlans(
   state: Readonly<GameState>,
   playerId: PlayerId,
   unit: UnitEntity,
-  prefix: GameCommand[]
+  prefix: GameCommand[],
+  ctx: TacticalPlanContext
 ): SearchActionPlan[] {
   if (!canUnitMove(unit) || unit.movesRemaining <= 0) {
     return [];
   }
 
+  const objective = chooseObjectiveCoord(state, playerId, unit, ctx);
+  const attackRange = getEffectiveUnitAttackRange(state as GameState, unit);
   const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
   const candidates: Array<{ coord: HexCoord; moveDistance: number; score: number }> = [];
 
   for (let r = rMin; r <= rMax; r += 1) {
     for (let q = qMin; q <= qMax; q += 1) {
       const coord = { q, r };
-      if (!isWithinMapBounds(coord, state.map) || areSameHex(coord, unit.coord) || hasEntityAtCoord(state as GameState, coord)) {
+      if (!isWithinMapBounds(coord, state.map) || areSameHex(coord, unit.coord) || ctx.occupiedCoordKeys.has(coordKey(coord))) {
         continue;
       }
 
@@ -347,7 +390,7 @@ function buildMovePlans(
       candidates.push({
         coord,
         moveDistance,
-        score: scoreMovePlan(state, playerId, unit, coord),
+        score: scoreMovePlan(state, playerId, unit, coord, ctx, objective, attackRange),
       });
     }
   }
@@ -381,6 +424,7 @@ function buildMovePlans(
 
 function generateTacticalPlans(state: Readonly<GameState>, playerId: PlayerId): SearchActionPlan[] {
   const plans: SearchActionPlan[] = [];
+  const ctx = createTacticalPlanContext(state, playerId);
 
   for (const unit of getPlayerUnits(state as GameState, playerId)) {
     const prefix =
@@ -395,8 +439,8 @@ function generateTacticalPlans(state: Readonly<GameState>, playerId: PlayerId): 
           ];
 
     plans.push(...buildAttackPlans(state, playerId, unit, prefix));
-    plans.push(...buildHarvestPlans(state, playerId, unit, prefix));
-    plans.push(...buildMovePlans(state, playerId, unit, prefix));
+    plans.push(...buildHarvestPlans(state, playerId, unit, prefix, ctx));
+    plans.push(...buildMovePlans(state, playerId, unit, prefix, ctx));
   }
 
   return plans

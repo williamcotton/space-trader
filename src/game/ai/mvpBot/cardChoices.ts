@@ -3,12 +3,11 @@ import { getCardDefinition, getResolvedCardPlayEffectConfigs, type CardDefinitio
 import { getStackEffectDefinition, isCounterResponse } from "../../content/stackEffects";
 import type { PlayerId } from "../../model/ids";
 import { MAX_HAND_SIZE, type GameState } from "../../model/state";
-import { canAffordCardCost, getFirstOpenBaseAdjacentTile } from "../../model/queries";
+import { canAffordCardCost, getEnemyEntities, getFirstOpenBaseAdjacentTile } from "../../model/queries";
 import { getLegalPlayCardTargetOptions } from "../../rules/cardPlayOptions";
 import { getActiveCardPlayModifierIds } from "../../registries/cardPlayModifiers";
 import { getSpellScoringResolver } from "../../registries/spellScoring";
 import { getTriggerConditionScoreBonus } from "../../registries/aiMechanics";
-import { getOpponentPlayer } from "../../turn/stack";
 import {
   AI_WEIGHTS,
   getEconomyFocusCards,
@@ -279,7 +278,7 @@ export function rankMainPhaseCardCommands(state: GameState, botPlayerId: PlayerI
   const playerFaction = state.players[botPlayerId].faction;
   const focusCards = getEconomyFocusCards(state, botPlayerId);
   const boardCounts = getUnitRoleCounts(state, botPlayerId);
-  const enemyCombatCount = getUnitRoleCounts(state, getOpponentPlayer(botPlayerId)).combat;
+  const enemyCombatCount = getEnemyEntities(state, botPlayerId).filter((entity) => entity.kind === "unit" && entity.role === "combat").length;
   const hasMissingResourceForHand = focusCards.some((card) => {
     for (const resource of getResourceOrder()) {
       if ((card.cost[resource] ?? 0) > resources[resource]) {

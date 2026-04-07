@@ -1,12 +1,12 @@
 import { getRegisteredCurrencyResourceId } from "../../content/registry";
 import { hexDistance } from "../../model/hex";
-import { getEnemyEntities, getPlayerBase, getPlayerUnits } from "../../model/queries";
+import { getEnemyBases, getEnemyEntities, getPlayerBase, getPlayerUnits } from "../../model/queries";
 import type { PlayerId } from "../../model/ids";
 import { getConfiguredDepositAmount, type GameState, type UnitEntity } from "../../model/state";
 import { canAttackEntityDirectly, canUnitAttack } from "../../rules/directInteraction";
 import { getResourceNodeAtCoord, isBaseAdjacentDropoffTile } from "../../systems/harvesting";
 import { getEffectiveUnitAttackRange, getEffectiveUnitMoveRange } from "../../systems/unitStats";
-import { getOpponentPlayer } from "../../turn/stack";
+import { getLivePlayerIds, isPlayerEliminated } from "../../turn/playerOrder";
 
 const WIN_SCORE = 1_000_000;
 
@@ -42,7 +42,6 @@ function getUnitMaterialScore(state: Readonly<GameState>, unit: UnitEntity): num
 }
 
 function scoreUnitPosition(state: Readonly<GameState>, playerId: PlayerId, unit: UnitEntity): number {
-  const opponentId = getOpponentPlayer(playerId);
   const attackRange = getEffectiveUnitAttackRange(state as GameState, unit);
   let score = 0;
 
@@ -78,7 +77,12 @@ function scoreUnitPosition(state: Readonly<GameState>, playerId: PlayerId, unit:
   }
 
   if (unit.role === "combat") {
-    const enemyBase = getPlayerBase(state as GameState, opponentId);
+    const enemyBase = getEnemyBases(state as GameState, playerId)
+      .map((base) => ({
+        base,
+        distance: hexDistance(unit.coord, base.coord),
+      }))
+      .sort((a, b) => a.distance - b.distance || a.base.id.localeCompare(b.base.id))[0]?.base;
     if (enemyBase) {
       score += Math.max(0, 9 - hexDistance(unit.coord, enemyBase.coord)) * 10;
       if (canAttackEntityDirectly(state, playerId, enemyBase) && hexDistance(unit.coord, enemyBase.coord) <= attackRange) {
@@ -111,6 +115,10 @@ function scoreUnitPosition(state: Readonly<GameState>, playerId: PlayerId, unit:
 function scorePlayerState(state: Readonly<GameState>, playerId: PlayerId): number {
   const currencyResourceId = getRegisteredCurrencyResourceId();
   const player = state.players[playerId];
+  if (!player || isPlayerEliminated(state as GameState, playerId)) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
   const base = getPlayerBase(state as GameState, playerId);
 
   let score = 0;
@@ -141,22 +149,25 @@ function scorePlayerState(state: Readonly<GameState>, playerId: PlayerId): numbe
 }
 
 export function evaluateState(state: Readonly<GameState>, botPlayerId: PlayerId): number {
-  const opponentId = getOpponentPlayer(botPlayerId);
-
   if (state.winner === botPlayerId) {
     return WIN_SCORE;
   }
 
-  if (state.winner === opponentId) {
+  if (state.winner || isPlayerEliminated(state as GameState, botPlayerId)) {
     return -WIN_SCORE;
   }
 
   const ownScore = scorePlayerState(state, botPlayerId);
-  const opponentScore = scorePlayerState(state, opponentId);
+  const enemyScores = getLivePlayerIds(state as GameState)
+    .filter((playerId) => playerId !== botPlayerId)
+    .map((playerId) => scorePlayerState(state, playerId))
+    .filter((score) => Number.isFinite(score));
+  const bestEnemyScore = enemyScores.length > 0 ? Math.max(...enemyScores) : 0;
+  const averageEnemyScore = enemyScores.length > 0 ? enemyScores.reduce((sum, score) => sum + score, 0) / enemyScores.length : 0;
   const stackPressure =
     state.stack.length === 0
       ? 0
       : (state.stack[state.stack.length - 1]?.controllerId === botPlayerId ? 35 : -35) * state.stack.length;
 
-  return ownScore - opponentScore + stackPressure;
+  return ownScore - bestEnemyScore * 0.7 - averageEnemyScore * 0.3 + stackPressure;
 }

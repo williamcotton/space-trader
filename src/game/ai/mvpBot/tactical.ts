@@ -1,8 +1,8 @@
 import type { GameCommand } from "../../actions/commands";
 import { areSameHex, getMapAxialBounds, hexDistance, isWithinMapBounds } from "../../model/hex";
 import type { PlayerId } from "../../model/ids";
-import type { GameState, HexCoord, UnitEntity } from "../../model/state";
-import { getEnemyEntities, getPlayerBase, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../../model/queries";
+import type { BaseEntity, GameState, HexCoord, UnitEntity } from "../../model/state";
+import { getEnemyBases, getEnemyEntities, getPlayerBase, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../../model/queries";
 import {
   canAttackEntityDirectly,
   canUnitDeclareAttack,
@@ -10,7 +10,6 @@ import {
 } from "../../rules/directInteraction";
 import { resolveCombatAttack } from "../../systems/combat";
 import { getEffectiveUnitAttackRange } from "../../systems/unitStats";
-import { getOpponentPlayer } from "../../turn/stack";
 import {
   AI_WEIGHTS,
   getClosestCoord,
@@ -82,28 +81,38 @@ function chooseHarvestCommand(state: GameState, botPlayerId: PlayerId, unit: Uni
   };
 }
 
+function getClosestEnemyBase(state: GameState, botPlayerId: PlayerId, from: HexCoord): BaseEntity | null {
+  return getEnemyBases(state, botPlayerId)
+    .map((base) => ({
+      base,
+      distance: hexDistance(from, base.coord),
+    }))
+    .sort((a, b) => a.distance - b.distance || a.base.id.localeCompare(b.base.id))[0]?.base ?? null;
+}
+
 function isSafeResourceNode(
   state: GameState,
   botPlayerId: PlayerId,
-  node: GameState["map"]["resourceNodes"][number]
+  node: GameState["map"]["resourceNodes"][number],
+  enemyBases = getEnemyBases(state, botPlayerId)
 ): boolean {
   const botBase = getPlayerBase(state, botPlayerId);
-  const enemyBase = getPlayerBase(state, getOpponentPlayer(botPlayerId));
-  if (!botBase || !enemyBase || botBase.kind !== "base" || enemyBase.kind !== "base") {
+  if (!botBase || botBase.kind !== "base" || enemyBases.length === 0) {
     return true;
   }
 
   const distanceToBotBase = hexDistance(botBase.coord, node.coord);
-  const distanceToEnemyBase = hexDistance(enemyBase.coord, node.coord);
+  const distanceToEnemyBase = Math.min(...enemyBases.map((enemyBase) => hexDistance(enemyBase.coord, node.coord)));
   return distanceToBotBase <= distanceToEnemyBase + 1;
 }
 
 function chooseResourceNodeObjective(state: GameState, botPlayerId: PlayerId, unit: UnitEntity): HexCoord | null {
   const resourcePriority = getPriorityResourceOrderFromHand(state, botPlayerId);
+  const enemyBases = getEnemyBases(state, botPlayerId);
 
   for (const resource of resourcePriority) {
     const safeContestedNodes = state.map.resourceNodes
-      .filter((node) => node.resourceType === resource && node.controlledBy !== botPlayerId && isSafeResourceNode(state, botPlayerId, node))
+      .filter((node) => node.resourceType === resource && node.controlledBy !== botPlayerId && isSafeResourceNode(state, botPlayerId, node, enemyBases))
       .map((node) => node.coord);
     const safeContestedTarget = getClosestCoord(unit.coord, safeContestedNodes);
     if (safeContestedTarget) {
@@ -111,7 +120,7 @@ function chooseResourceNodeObjective(state: GameState, botPlayerId: PlayerId, un
     }
 
     const safeControlledNodes = state.map.resourceNodes
-      .filter((node) => node.resourceType === resource && node.controlledBy === botPlayerId && isSafeResourceNode(state, botPlayerId, node))
+      .filter((node) => node.resourceType === resource && node.controlledBy === botPlayerId && isSafeResourceNode(state, botPlayerId, node, enemyBases))
       .map((node) => node.coord);
     const safeControlledTarget = getClosestCoord(unit.coord, safeControlledNodes);
     if (safeControlledTarget) {
@@ -137,7 +146,7 @@ function chooseResourceNodeObjective(state: GameState, botPlayerId: PlayerId, un
 
   const safeAnyContested = getClosestCoord(
     unit.coord,
-    state.map.resourceNodes.filter((node) => node.controlledBy !== botPlayerId && isSafeResourceNode(state, botPlayerId, node)).map((node) => node.coord)
+    state.map.resourceNodes.filter((node) => node.controlledBy !== botPlayerId && isSafeResourceNode(state, botPlayerId, node, enemyBases)).map((node) => node.coord)
   );
   if (safeAnyContested) {
     return safeAnyContested;
@@ -145,7 +154,7 @@ function chooseResourceNodeObjective(state: GameState, botPlayerId: PlayerId, un
 
   const safeAnyControlled = getClosestCoord(
     unit.coord,
-    state.map.resourceNodes.filter((node) => node.controlledBy === botPlayerId && isSafeResourceNode(state, botPlayerId, node)).map((node) => node.coord)
+    state.map.resourceNodes.filter((node) => node.controlledBy === botPlayerId && isSafeResourceNode(state, botPlayerId, node, enemyBases)).map((node) => node.coord)
   );
   if (safeAnyControlled) {
     return safeAnyControlled;
@@ -166,9 +175,8 @@ function chooseResourceNodeObjective(state: GameState, botPlayerId: PlayerId, un
 }
 
 function chooseObjectiveCoord(state: GameState, botPlayerId: PlayerId, unit: UnitEntity): HexCoord | null {
-  const opponentId = getOpponentPlayer(botPlayerId);
   const botBase = state.entities[state.players[botPlayerId].baseEntityId];
-  const enemyBase = state.entities[state.players[opponentId].baseEntityId];
+  const enemyBase = getClosestEnemyBase(state, botPlayerId, unit.coord);
 
   if (unit.role === "resource") {
     if (unit.carries && botBase && botBase.kind === "base") {
@@ -191,12 +199,12 @@ function chooseObjectiveCoord(state: GameState, botPlayerId: PlayerId, unit: Uni
       }
     }
 
-    if (enemyBase && enemyBase.kind === "base") {
+    if (enemyBase) {
       return enemyBase.coord;
     }
   }
 
-  return enemyBase && enemyBase.kind === "base" ? enemyBase.coord : null;
+  return enemyBase ? enemyBase.coord : null;
 }
 
 function chooseMoveCommand(state: GameState, botPlayerId: PlayerId, unit: UnitEntity): GameCommand | null {

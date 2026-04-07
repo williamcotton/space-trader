@@ -1,7 +1,7 @@
 import type { PlayerId } from "../../model/ids";
 import type { GameState } from "../../model/state";
 import { getPlayerUnits } from "../../model/queries";
-import { getOpponentPlayer } from "../../turn/stack";
+import { getLivePlayerIds } from "../../turn/playerOrder";
 import { evaluateState } from "./evaluate";
 import { generateActionPlans } from "./generate";
 import { applyCommandSequence, cloneGameState } from "./simulate";
@@ -13,32 +13,34 @@ type SearchBudget = {
 };
 
 function getSearchConfig(state: Readonly<GameState>, playerId: PlayerId): SearchConfig {
-  const totalUnits = getPlayerUnits(state as GameState, playerId).length + getPlayerUnits(state as GameState, getOpponentPlayer(playerId)).length;
+  const livePlayers = getLivePlayerIds(state as GameState);
+  const totalUnits = livePlayers.reduce((sum, livePlayerId) => sum + getPlayerUnits(state as GameState, livePlayerId).length, 0);
+  const isFreeForAll = livePlayers.length > 2;
 
   if (state.stack.length > 0) {
     return {
-      maxDepth: 2,
-      maxNodes: totalUnits > 8 ? 120 : 160,
+      maxDepth: isFreeForAll ? 1 : 2,
+      maxNodes: isFreeForAll ? 48 : totalUnits > 8 ? 120 : 160,
     };
   }
 
   if (state.phase === "tactical" && state.activePlayerId === playerId) {
     return {
-      maxDepth: 3,
-      maxNodes: totalUnits > 8 ? 180 : 260,
+      maxDepth: isFreeForAll ? 2 : 3,
+      maxNodes: isFreeForAll ? (totalUnits > 16 ? 72 : 96) : totalUnits > 8 ? 180 : 260,
     };
   }
 
   if (state.phase === "main" && state.activePlayerId === playerId) {
     return {
       maxDepth: 2,
-      maxNodes: totalUnits > 8 ? 140 : 180,
+      maxNodes: isFreeForAll ? 72 : totalUnits > 8 ? 140 : 180,
     };
   }
 
   return {
-    maxDepth: 2,
-    maxNodes: 120,
+    maxDepth: isFreeForAll ? 1 : 2,
+    maxNodes: isFreeForAll ? 48 : 120,
   };
 }
 
@@ -64,8 +66,6 @@ function searchScore(
     return evaluateState(state, rootPlayerId);
   }
 
-  budget.nodeCount += 1;
-
   if (actor === rootPlayerId) {
     let best = Number.NEGATIVE_INFINITY;
 
@@ -74,6 +74,7 @@ function searchScore(
         break;
       }
 
+      budget.nodeCount += 1;
       const nextState = cloneGameState(state);
       if (!applyCommandSequence(nextState, plan.commands)) {
         continue;
@@ -97,6 +98,7 @@ function searchScore(
       break;
     }
 
+    budget.nodeCount += 1;
     const nextState = cloneGameState(state);
     if (!applyCommandSequence(nextState, plan.commands)) {
       continue;
@@ -139,6 +141,7 @@ export function chooseBestActionPlan(state: Readonly<GameState>, rootPlayerId: P
       break;
     }
 
+    budget.nodeCount += 1;
     const nextState = cloneGameState(state);
     if (!applyCommandSequence(nextState, plan.commands)) {
       continue;
