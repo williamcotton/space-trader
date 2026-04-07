@@ -2,7 +2,15 @@ import type { GameCommand } from "../../actions/commands";
 import { areSameHex, getMapAxialBounds, hexDistance, isWithinMapBounds } from "../../model/hex";
 import type { PlayerId } from "../../model/ids";
 import type { BaseEntity, GameState, HexCoord, UnitEntity } from "../../model/state";
-import { getEnemyBases, getEnemyEntities, getPlayerBase, getPlayerUnits, hasEntityAtCoord, HEX_DIRECTIONS } from "../../model/queries";
+import {
+  getEnemyBases,
+  getEnemyEntities,
+  getFirstOpenBaseAdjacentTile,
+  getPlayerBase,
+  getPlayerUnits,
+  hasEntityAtCoord,
+  HEX_DIRECTIONS,
+} from "../../model/queries";
 import {
   canAttackEntityDirectly,
   canUnitDeclareAttack,
@@ -15,6 +23,7 @@ import {
   getClosestCoord,
   getPriorityResourceOrderFromHand,
   getSelectedOwnedUnit,
+  hasAffordableUnitCardInHand,
   shouldHarvestResourceType,
 } from "./shared";
 
@@ -30,6 +39,7 @@ function chooseAttackCommand(state: GameState, botPlayerId: PlayerId, unit: Unit
       const preview = resolveCombatAttack(state, unit, target);
       const killScore = preview.targetDestroyed ? AI_WEIGHTS.attackKillScore : 0;
       const baseScore = target.kind === "base" ? AI_WEIGHTS.attackBaseScore : 0;
+      const botBase = getPlayerBase(state, botPlayerId);
       const unitRoleScore =
         target.kind !== "unit"
           ? 0
@@ -39,10 +49,14 @@ function chooseAttackCommand(state: GameState, botPlayerId: PlayerId, unit: Unit
               ? AI_WEIGHTS.attackUtilityUnitBonus
               : AI_WEIGHTS.attackCombatUnitBonus;
       const cargoScore = target.kind === "unit" && target.carries ? AI_WEIGHTS.attackCargoBonus : 0;
+      const baseThreatScore =
+        target.kind === "unit" && botBase && hexDistance(target.coord, botBase.coord) <= AI_WEIGHTS.baseThreatRadius
+          ? AI_WEIGHTS.baseThreatAttackBonus + (AI_WEIGHTS.baseThreatRadius + 1 - hexDistance(target.coord, botBase.coord)) * 28
+          : 0;
 
       return {
         target,
-        score: killScore + baseScore + unitRoleScore + cargoScore + preview.finalDamage,
+        score: killScore + baseScore + unitRoleScore + cargoScore + baseThreatScore + preview.finalDamage,
       };
     })
     .sort((a, b) => b.score - a.score || a.target.id.localeCompare(b.target.id));
@@ -192,7 +206,7 @@ function chooseObjectiveCoord(state: GameState, botPlayerId: PlayerId, unit: Uni
   if (unit.role === "combat") {
     if (botBase && botBase.kind === "base") {
       const nearbyEnemies = getEnemyEntities(state, botPlayerId)
-        .filter((entity) => entity.kind === "unit" && hexDistance(entity.coord, botBase.coord) <= AI_WEIGHTS.nearbyEnemyRadius)
+        .filter((entity) => entity.kind === "unit" && hexDistance(entity.coord, botBase.coord) <= AI_WEIGHTS.baseThreatRadius)
         .map((entity) => entity.coord);
       if (nearbyEnemies.length > 0) {
         return getClosestCoord(unit.coord, nearbyEnemies);
@@ -207,9 +221,65 @@ function chooseObjectiveCoord(state: GameState, botPlayerId: PlayerId, unit: Uni
   return enemyBase ? enemyBase.coord : null;
 }
 
+function chooseDeploySlotClearanceMoveCommand(state: GameState, botPlayerId: PlayerId, unit: UnitEntity): GameCommand | null {
+  const botBase = getPlayerBase(state, botPlayerId);
+  if (
+    !botBase ||
+    hexDistance(unit.coord, botBase.coord) !== 1 ||
+    !hasAffordableUnitCardInHand(state, botPlayerId) ||
+    getFirstOpenBaseAdjacentTile(state, botPlayerId)
+  ) {
+    return null;
+  }
+
+  const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
+  const candidateSteps: { coord: HexCoord; baseDistance: number; moveDistance: number }[] = [];
+  for (let r = rMin; r <= rMax; r += 1) {
+    for (let q = qMin; q <= qMax; q += 1) {
+      const coord = { q, r };
+      if (!isWithinMapBounds(coord, state.map) || areSameHex(coord, unit.coord) || hasEntityAtCoord(state, coord)) {
+        continue;
+      }
+
+      const moveDistance = hexDistance(unit.coord, coord);
+      const baseDistance = hexDistance(coord, botBase.coord);
+      if (moveDistance > unit.movesRemaining || baseDistance <= 1) {
+        continue;
+      }
+
+      candidateSteps.push({
+        coord,
+        baseDistance,
+        moveDistance,
+      });
+    }
+  }
+
+  candidateSteps.sort(
+    (a, b) => b.baseDistance - a.baseDistance || b.moveDistance - a.moveDistance || a.coord.q - b.coord.q || a.coord.r - b.coord.r
+  );
+
+  const best = candidateSteps[0];
+  if (!best) {
+    return null;
+  }
+
+  return {
+    type: "MOVE_UNIT",
+    playerId: botPlayerId,
+    entityId: unit.id,
+    to: best.coord,
+  };
+}
+
 function chooseMoveCommand(state: GameState, botPlayerId: PlayerId, unit: UnitEntity): GameCommand | null {
   if (!canUnitMove(unit) || unit.movesRemaining <= 0) {
     return null;
+  }
+
+  const slotClearanceMove = chooseDeploySlotClearanceMoveCommand(state, botPlayerId, unit);
+  if (slotClearanceMove) {
+    return slotClearanceMove;
   }
 
   const objective = chooseObjectiveCoord(state, botPlayerId, unit);

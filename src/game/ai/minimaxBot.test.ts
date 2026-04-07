@@ -284,6 +284,99 @@ describe("decideMinimaxBotCommand", () => {
     });
   });
 
+  it("still plays an affordable main-phase unit when the caster has instant responses in hand", () => {
+    const state = setupState();
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.zones.player_1.hand = [];
+
+    const combatUnitInstanceId = moveCardFromDeckToHand(state, "player_1", "frontline_scout_card");
+    moveCardFromDeckToHand(state, "player_1", "brace_protocol");
+
+    state.players.player_1.resources.credits = 10;
+    state.players.player_1.resources.alloy = 10;
+    state.players.player_1.resources.flux = 0;
+    state.players.player_1.resources.biomass = 0;
+
+    const command = decideMinimaxBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId: combatUnitInstanceId,
+    });
+  });
+
+  it("moves a base-adjacent unit away when affordable units are stuck behind a full deploy ring", () => {
+    const state = setupState();
+    advanceToTactical(state);
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.stack = [];
+    state.zones.player_1.hand = [];
+    moveCardFromDeckToHand(state, "player_1", "frontline_scout_card");
+
+    state.players.player_1.resources.credits = 10;
+    state.players.player_1.resources.alloy = 10;
+    state.players.player_1.resources.flux = 0;
+    state.players.player_1.resources.biomass = 0;
+
+    keepOnlyEntities(state, [
+      state.players.player_1.baseEntityId,
+      state.players.player_2.baseEntityId,
+      "unit_player_1_scout",
+      "unit_player_1_harvester",
+    ]);
+
+    const base = state.entities[state.players.player_1.baseEntityId];
+    const selectedBlocker = state.entities.unit_player_1_scout;
+    const harvesterBlocker = state.entities.unit_player_1_harvester;
+    expect(base?.kind).toBe("base");
+    expect(selectedBlocker?.kind).toBe("unit");
+    expect(harvesterBlocker?.kind).toBe("unit");
+    if (!base || base.kind !== "base" || !selectedBlocker || selectedBlocker.kind !== "unit" || !harvesterBlocker || harvesterBlocker.kind !== "unit") {
+      throw new Error("Expected deploy-ring blocker entities.");
+    }
+
+    selectedBlocker.coord = { q: base.coord.q + 1, r: base.coord.r };
+    selectedBlocker.movesRemaining = 1;
+    selectedBlocker.attacksRemaining = 0;
+    selectedBlocker.hasSummoningSickness = false;
+    state.selectedEntityId = selectedBlocker.id;
+
+    const occupiedAdjacent = [
+      { q: base.coord.q + 1, r: base.coord.r - 1 },
+      { q: base.coord.q, r: base.coord.r - 1 },
+      { q: base.coord.q - 1, r: base.coord.r },
+      { q: base.coord.q - 1, r: base.coord.r + 1 },
+      { q: base.coord.q, r: base.coord.r + 1 },
+    ];
+    harvesterBlocker.coord = occupiedAdjacent[0]!;
+    harvesterBlocker.movesRemaining = 0;
+    harvesterBlocker.attacksRemaining = 0;
+
+    for (let index = 1; index < occupiedAdjacent.length; index += 1) {
+      const coord = occupiedAdjacent[index]!;
+      state.entities[`unit_player_1_deploy_blocker_${index}`] = {
+        ...selectedBlocker,
+        id: `unit_player_1_deploy_blocker_${index}`,
+        coord,
+        movesRemaining: 0,
+        attacksRemaining: 0,
+      };
+    }
+
+    const command = decideMinimaxBotCommand(state, "player_1");
+    expect(command?.type).toBe("MOVE_UNIT");
+    if (!command || command.type !== "MOVE_UNIT") {
+      throw new Error("Expected deploy-slot clearance move.");
+    }
+
+    expect(command.entityId).toBe(selectedBlocker.id);
+    expect(hexDistance(command.to, base.coord)).toBeGreaterThan(1);
+  });
+
   it("moves toward the nearest enemy base in a four-player tactical state", () => {
     const state = createInitialGameState({
       runtimeProfileId: "alpha_four_player",
@@ -364,6 +457,49 @@ describe("decideMinimaxBotCommand", () => {
       playerId: "player_1",
       attackerId: attacker.id,
       targetId: target.id,
+    });
+  });
+
+  it("moves combat units back toward enemies threatening its own base before chasing resources", () => {
+    const state = setupState();
+    advanceToTactical(state);
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.stack = [];
+
+    keepOnlyEntities(state, [
+      state.players.player_1.baseEntityId,
+      state.players.player_2.baseEntityId,
+      "unit_player_1_scout",
+      "unit_player_2_scout",
+      "unit_player_2_harvester",
+    ]);
+
+    const defender = state.entities.unit_player_1_scout;
+    const baseThreat = state.entities.unit_player_2_scout;
+    const resourceTarget = state.entities.unit_player_2_harvester;
+    expect(defender?.kind).toBe("unit");
+    expect(baseThreat?.kind).toBe("unit");
+    expect(resourceTarget?.kind).toBe("unit");
+    if (!defender || defender.kind !== "unit" || !baseThreat || baseThreat.kind !== "unit" || !resourceTarget || resourceTarget.kind !== "unit") {
+      throw new Error("Expected defensive movement entities.");
+    }
+
+    defender.coord = { q: -1, r: -2 };
+    defender.movesRemaining = 1;
+    defender.attacksRemaining = 1;
+    defender.hasSummoningSickness = false;
+    baseThreat.coord = { q: -3, r: -2 };
+    baseThreat.hp = baseThreat.maxHp;
+    resourceTarget.coord = { q: 1, r: -2 };
+    state.selectedEntityId = defender.id;
+
+    const command = decideMinimaxBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "MOVE_UNIT",
+      playerId: "player_1",
+      entityId: defender.id,
+      to: { q: -2, r: -2 },
     });
   });
 });

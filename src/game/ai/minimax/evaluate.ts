@@ -7,6 +7,7 @@ import { canAttackEntityDirectly, canUnitAttack } from "../../rules/directIntera
 import { getResourceNodeAtCoord, isBaseAdjacentDropoffTile } from "../../systems/harvesting";
 import { getEffectiveUnitAttackRange, getEffectiveUnitMoveRange } from "../../systems/unitStats";
 import { getLivePlayerIds, isPlayerEliminated } from "../../turn/playerOrder";
+import { AI_WEIGHTS } from "../mvpBot/shared";
 
 const WIN_SCORE = 1_000_000;
 
@@ -77,6 +78,20 @@ function scoreUnitPosition(state: Readonly<GameState>, playerId: PlayerId, unit:
   }
 
   if (unit.role === "combat") {
+    const ownBase = getPlayerBase(state as GameState, playerId);
+    if (ownBase) {
+      const nearestBaseThreatDistance = getEnemyEntities(state as GameState, playerId)
+        .filter((entity) => entity.kind === "unit" && hexDistance(entity.coord, ownBase.coord) <= AI_WEIGHTS.baseThreatRadius)
+        .map((entity) => hexDistance(unit.coord, entity.coord))
+        .sort((a, b) => a - b)[0];
+      if (typeof nearestBaseThreatDistance === "number") {
+        score += Math.max(0, 8 - nearestBaseThreatDistance) * 34;
+        if (nearestBaseThreatDistance <= attackRange && unit.attacksRemaining > 0) {
+          score += 90;
+        }
+      }
+    }
+
     const enemyBase = getEnemyBases(state as GameState, playerId)
       .map((base) => ({
         base,

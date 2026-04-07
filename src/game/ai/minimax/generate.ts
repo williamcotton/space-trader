@@ -2,7 +2,14 @@ import type { GameCommand } from "../../actions/commands";
 import { getCardDefinition } from "../../content/cards/catalog";
 import type { ResourceType } from "../../model/enums";
 import { areSameHex, getMapAxialBounds, hexDistance, isWithinMapBounds } from "../../model/hex";
-import { getEnemyBases, getEnemyEntities, getPlayerBase, getPlayerUnits, HEX_DIRECTIONS } from "../../model/queries";
+import {
+  getEnemyBases,
+  getEnemyEntities,
+  getFirstOpenBaseAdjacentTile,
+  getPlayerBase,
+  getPlayerUnits,
+  HEX_DIRECTIONS,
+} from "../../model/queries";
 import type { PlayerId } from "../../model/ids";
 import type { BaseEntity, EntityState, GameState, HexCoord, MapResourceNode, UnitEntity } from "../../model/state";
 import { canAttackEntityDirectly, canUnitDeclareAttack, canUnitMove } from "../../rules/directInteraction";
@@ -18,6 +25,7 @@ import {
   AI_WEIGHTS,
   getClosestCoord,
   getPriorityResourceOrderFromHand,
+  hasAffordableUnitCardInHand,
 } from "../mvpBot/shared";
 import type { SearchActionPlan } from "./types";
 
@@ -29,9 +37,12 @@ const MAX_MOVE_PLANS_PER_UNIT = 3;
 const MAX_TOTAL_TACTICAL_PLANS = 18;
 
 type TacticalPlanContext = {
+  baseThreats: UnitEntity[];
   enemyBases: BaseEntity[];
   enemyEntities: EntityState[];
+  needsDeploySlotClearance: boolean;
   occupiedCoordKeys: Set<string>;
+  ownBase: BaseEntity | null;
   playerCombatUnits: UnitEntity[];
   preferredResources: Set<ResourceType>;
   resourceNodesByCoord: Map<string, MapResourceNode>;
@@ -44,11 +55,21 @@ function coordKey(coord: HexCoord): string {
 
 function createTacticalPlanContext(state: Readonly<GameState>, playerId: PlayerId): TacticalPlanContext {
   const resourcePriority = getPriorityResourceOrderFromHand(state as GameState, playerId);
+  const enemyEntities = getEnemyEntities(state as GameState, playerId);
+  const ownBase = getPlayerBase(state as GameState, playerId);
 
   return {
+    baseThreats: ownBase
+      ? enemyEntities
+        .filter((entity): entity is UnitEntity => entity.kind === "unit" && hexDistance(entity.coord, ownBase.coord) <= AI_WEIGHTS.baseThreatRadius)
+        .sort((a, b) => hexDistance(a.coord, ownBase.coord) - hexDistance(b.coord, ownBase.coord) || a.id.localeCompare(b.id))
+      : [],
     enemyBases: getEnemyBases(state as GameState, playerId),
-    enemyEntities: getEnemyEntities(state as GameState, playerId),
+    enemyEntities,
+    needsDeploySlotClearance:
+      hasAffordableUnitCardInHand(state as GameState, playerId) && !getFirstOpenBaseAdjacentTile(state as GameState, playerId),
     occupiedCoordKeys: new Set(Object.values(state.entities).map((entity) => coordKey(entity.coord))),
+    ownBase,
     playerCombatUnits: getPlayerUnits(state as GameState, playerId).filter((unit) => unit.role === "combat"),
     preferredResources: new Set(resourcePriority.slice(0, 2)),
     resourceNodesByCoord: new Map(state.map.resourceNodes.map((node) => [coordKey(node.coord), node])),
@@ -174,6 +195,11 @@ function chooseObjectiveCoord(
   }
 
   if (unit.role === "combat") {
+    const baseThreatTarget = getClosestCoord(unit.coord, ctx.baseThreats.map((entity) => entity.coord));
+    if (baseThreatTarget) {
+      return baseThreatTarget;
+    }
+
     const priorityEnemies = ctx.enemyEntities
       .filter((entity) => entity.kind === "unit" && entity.role === "resource")
       .map((entity) => entity.coord);
@@ -196,7 +222,7 @@ function chooseObjectiveCoord(
   return getClosestCoord(unit.coord, ctx.enemyBases.map((base) => base.coord));
 }
 
-function scoreAttackPlan(state: Readonly<GameState>, unit: UnitEntity, targetId: string): number {
+function scoreAttackPlan(state: Readonly<GameState>, unit: UnitEntity, targetId: string, ctx: TacticalPlanContext): number {
   const target = state.entities[targetId];
   if (!target) {
     return Number.NEGATIVE_INFINITY;
@@ -214,7 +240,11 @@ function scoreAttackPlan(state: Readonly<GameState>, unit: UnitEntity, targetId:
           ? 64
           : 80;
   const cargoScore = target.kind === "unit" && target.carries ? 35 : 0;
-  return killScore + baseScore + roleScore + cargoScore + preview.finalDamage * 18;
+  const baseThreatScore =
+    target.kind === "unit" && ctx.ownBase && hexDistance(target.coord, ctx.ownBase.coord) <= AI_WEIGHTS.baseThreatRadius
+      ? AI_WEIGHTS.baseThreatAttackBonus + (AI_WEIGHTS.baseThreatRadius + 1 - hexDistance(target.coord, ctx.ownBase.coord)) * 28
+      : 0;
+  return killScore + baseScore + roleScore + cargoScore + baseThreatScore + preview.finalDamage * 18;
 }
 
 function scoreMovePlan(
@@ -227,6 +257,15 @@ function scoreMovePlan(
   attackRange: number
 ): number {
   let score = 0;
+
+  if (ctx.needsDeploySlotClearance && ctx.ownBase && hexDistance(unit.coord, ctx.ownBase.coord) === 1) {
+    const nextBaseDistance = hexDistance(coord, ctx.ownBase.coord);
+    if (nextBaseDistance > 1) {
+      score += 220 + nextBaseDistance * 8;
+    } else {
+      score -= 80;
+    }
+  }
 
   if (objective) {
     const currentDistance = hexDistance(unit.coord, objective);
@@ -261,6 +300,14 @@ function scoreMovePlan(
   }
 
   if (unit.role === "combat") {
+    const closestBaseThreat = getClosestCoord(coord, ctx.baseThreats.map((entity) => entity.coord));
+    if (closestBaseThreat) {
+      const currentDistance = hexDistance(unit.coord, closestBaseThreat);
+      const nextDistance = hexDistance(coord, closestBaseThreat);
+      score += (currentDistance - nextDistance) * AI_WEIGHTS.baseThreatMoveBonus;
+      score += Math.max(0, AI_WEIGHTS.baseThreatRadius + 1 - nextDistance) * 12;
+    }
+
     const attackTargets = ctx.enemyEntities.filter((target) =>
       canAttackEntityDirectly(state, playerId, target) &&
       hexDistance(coord, target.coord) <= attackRange
@@ -289,7 +336,8 @@ function buildAttackPlans(
   state: Readonly<GameState>,
   playerId: PlayerId,
   unit: UnitEntity,
-  prefix: GameCommand[]
+  prefix: GameCommand[],
+  ctx: TacticalPlanContext
 ): SearchActionPlan[] {
   if (unit.attacksRemaining <= 0 || !canUnitDeclareAttack(state, unit)) {
     return [];
@@ -311,7 +359,7 @@ function buildAttackPlans(
             targetId: target.id,
           },
         ],
-        scoreAttackPlan(state, unit, target.id),
+        scoreAttackPlan(state, unit, target.id, ctx),
         `attack:${unit.id}:${target.id}`
       )
     )
@@ -438,7 +486,7 @@ function generateTacticalPlans(state: Readonly<GameState>, playerId: PlayerId): 
             },
           ];
 
-    plans.push(...buildAttackPlans(state, playerId, unit, prefix));
+    plans.push(...buildAttackPlans(state, playerId, unit, prefix, ctx));
     plans.push(...buildHarvestPlans(state, playerId, unit, prefix, ctx));
     plans.push(...buildMovePlans(state, playerId, unit, prefix, ctx));
   }

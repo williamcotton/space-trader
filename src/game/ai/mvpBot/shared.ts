@@ -5,7 +5,7 @@ import type { ResourceType } from "../../model/enums";
 import { hexDistance } from "../../model/hex";
 import type { PlayerId } from "../../model/ids";
 import { getPrimaryResourceForFaction, type GameState, type HexCoord, type UnitEntity } from "../../model/state";
-import { getPlayerUnits } from "../../model/queries";
+import { canAffordCardCost, getPlayerUnits } from "../../model/queries";
 
 export const AI_WEIGHTS = {
   // chooseTacticCardCommand thresholds
@@ -57,6 +57,9 @@ export const AI_WEIGHTS = {
 
   // movement
   nearbyEnemyRadius: 3,
+  baseThreatRadius: 4,
+  baseThreatAttackBonus: 140,
+  baseThreatMoveBonus: 48,
 } as const;
 
 export type ScoredCardCommand = {
@@ -108,6 +111,13 @@ export function getUnitRoleCounts(state: GameState, playerId: PlayerId): Record<
   }
 
   return counts;
+}
+
+export function hasAffordableUnitCardInHand(state: GameState, playerId: PlayerId): boolean {
+  return state.zones[playerId].hand.some((cardInstance) => {
+    const card = getCardDefinition(cardInstance.cardId);
+    return Boolean(card && card.kind === "unit" && canAffordCardCost(state, playerId, card.cost));
+  });
 }
 
 function getPriorityOrderForResourceSet(
