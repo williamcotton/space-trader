@@ -48,10 +48,11 @@ export const AI_WEIGHTS = {
   deployCostMult: 4,
 
   // attack scoring
-  attackKillScore: 100,
-  attackBaseScore: 120,
-  attackResourceUnitBonus: 22,
-  attackUtilityUnitBonus: 10,
+  attackKillScore: 260,
+  attackBaseScore: 70,
+  attackCombatUnitBonus: 36,
+  attackResourceUnitBonus: 42,
+  attackUtilityUnitBonus: 24,
   attackCargoBonus: 14,
 
   // movement

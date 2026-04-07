@@ -323,4 +323,47 @@ describe("decideMinimaxBotCommand", () => {
 
     expect(hexDistance(command.to, nearestBase.coord)).toBe(1);
   });
+
+  it("kills an adjacent low-health unit instead of making a nonlethal base attack", () => {
+    const state = setupState();
+    advanceToTactical(state);
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.stack = [];
+
+    keepOnlyEntities(state, [
+      state.players.player_1.baseEntityId,
+      state.players.player_2.baseEntityId,
+      "unit_player_1_scout",
+      "unit_player_2_scout",
+    ]);
+
+    const attacker = state.entities.unit_player_1_scout;
+    const target = state.entities.unit_player_2_scout;
+    const enemyBase = state.entities[state.players.player_2.baseEntityId];
+    expect(attacker?.kind).toBe("unit");
+    expect(target?.kind).toBe("unit");
+    expect(enemyBase?.kind).toBe("base");
+    if (!attacker || attacker.kind !== "unit" || !target || target.kind !== "unit" || !enemyBase || enemyBase.kind !== "base") {
+      throw new Error("Expected attack-priority entities.");
+    }
+
+    attacker.coord = { q: 0, r: 0 };
+    attacker.hasSummoningSickness = false;
+    attacker.attacksRemaining = 1;
+    attacker.movesRemaining = 0;
+    target.coord = { q: 0, r: 1 };
+    target.hp = 1;
+    enemyBase.coord = { q: 1, r: 0 };
+    enemyBase.hp = enemyBase.maxHp;
+    state.selectedEntityId = attacker.id;
+
+    const command = decideMinimaxBotCommand(state, "player_1");
+    expect(command).toEqual({
+      type: "ATTACK_UNIT",
+      playerId: "player_1",
+      attackerId: attacker.id,
+      targetId: target.id,
+    });
+  });
 });

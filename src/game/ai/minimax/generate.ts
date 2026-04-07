@@ -203,16 +203,16 @@ function scoreAttackPlan(state: Readonly<GameState>, unit: UnitEntity, targetId:
   }
 
   const preview = resolveCombatAttack(state as GameState, unit, target);
-  const killScore = preview.targetDestroyed ? 180 : 0;
-  const baseScore = target.kind === "base" ? 220 : 0;
+  const killScore = preview.targetDestroyed ? (target.kind === "base" ? 10_000 : 420) : 0;
+  const baseScore = target.kind === "base" ? 120 : 0;
   const roleScore =
     target.kind !== "unit"
       ? 0
       : target.role === "resource"
-        ? 55
+        ? 95
         : target.role === "utility"
-          ? 24
-          : 0;
+          ? 64
+          : 80;
   const cargoScore = target.kind === "unit" && target.carries ? 35 : 0;
   return killScore + baseScore + roleScore + cargoScore + preview.finalDamage * 18;
 }

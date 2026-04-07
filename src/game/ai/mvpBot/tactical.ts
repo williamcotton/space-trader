@@ -37,7 +37,7 @@ function chooseAttackCommand(state: GameState, botPlayerId: PlayerId, unit: Unit
             ? AI_WEIGHTS.attackResourceUnitBonus
             : target.role === "utility"
               ? AI_WEIGHTS.attackUtilityUnitBonus
-              : 0;
+              : AI_WEIGHTS.attackCombatUnitBonus;
       const cargoScore = target.kind === "unit" && target.carries ? AI_WEIGHTS.attackCargoBonus : 0;
 
       return {

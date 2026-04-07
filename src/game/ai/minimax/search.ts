@@ -1,6 +1,8 @@
+import type { GameCommand } from "../../actions/commands";
 import type { PlayerId } from "../../model/ids";
 import type { GameState } from "../../model/state";
 import { getPlayerUnits } from "../../model/queries";
+import { resolveCombatAttack } from "../../systems/combat";
 import { getLivePlayerIds } from "../../turn/playerOrder";
 import { evaluateState } from "./evaluate";
 import { generateActionPlans } from "./generate";
@@ -42,6 +44,49 @@ function getSearchConfig(state: Readonly<GameState>, playerId: PlayerId): Search
     maxDepth: isFreeForAll ? 1 : 2,
     maxNodes: isFreeForAll ? 48 : 120,
   };
+}
+
+function getAttackCommand(plan: SearchActionPlan): Extract<GameCommand, { type: "ATTACK_UNIT" }> | null {
+  return plan.commands.find((command): command is Extract<GameCommand, { type: "ATTACK_UNIT" }> => command.type === "ATTACK_UNIT") ?? null;
+}
+
+function getLethalAttackPlanScore(state: Readonly<GameState>, plan: SearchActionPlan): { targetKind: "base" | "unit"; score: number } | null {
+  const command = getAttackCommand(plan);
+  if (!command) {
+    return null;
+  }
+
+  const attacker = state.entities[command.attackerId];
+  const target = state.entities[command.targetId];
+  if (!attacker || attacker.kind !== "unit" || !target) {
+    return null;
+  }
+
+  const preview = resolveCombatAttack(state as GameState, attacker, target);
+  if (!preview.targetDestroyed) {
+    return null;
+  }
+
+  return {
+    targetKind: target.kind,
+    score: plan.scoreHint + (target.kind === "base" ? 1_000_000 : 10_000),
+  };
+}
+
+function chooseImmediateLethalAttackPlan(state: Readonly<GameState>, playerId: PlayerId, plans: readonly SearchActionPlan[]): SearchActionPlan | null {
+  if (state.phase !== "tactical" || state.activePlayerId !== playerId || state.stack.length > 0) {
+    return null;
+  }
+
+  const lethalPlans = plans
+    .map((plan) => ({
+      plan,
+      lethal: getLethalAttackPlanScore(state, plan),
+    }))
+    .filter((entry): entry is { plan: SearchActionPlan; lethal: { targetKind: "base" | "unit"; score: number } } => entry.lethal !== null)
+    .sort((a, b) => b.lethal.score - a.lethal.score || b.plan.scoreHint - a.plan.scoreHint || a.plan.key.localeCompare(b.plan.key));
+
+  return lethalPlans[0]?.plan ?? null;
 }
 
 function searchScore(
@@ -124,6 +169,11 @@ export function chooseBestActionPlan(state: Readonly<GameState>, rootPlayerId: P
   const plans = generateActionPlans(state, rootPlayerId);
   if (plans.length === 0) {
     return null;
+  }
+
+  const immediateLethalAttack = chooseImmediateLethalAttackPlan(state, rootPlayerId, plans);
+  if (immediateLethalAttack) {
+    return immediateLethalAttack;
   }
 
   const budget: SearchBudget = {
