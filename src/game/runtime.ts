@@ -1670,6 +1670,10 @@ migrateRuntimeState(runtime.state);
 
 runtime.replaceSystems(updateGame, renderGame);
 
+if (import.meta.env.DEV) {
+  (window as any).__gameRuntime = runtime;
+}
+
 export function getGameRuntime(): GameRuntime {
   return runtime;
 }
