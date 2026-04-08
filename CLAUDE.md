@@ -284,6 +284,15 @@
 - `npm run server:build`
 - `npm run server:start`
 
+### Introduction Screenshots
+
+To regenerate the annotated tutorial screenshots in `docs/introduction/`:
+
+1. Start the dev server in one terminal: `npm run dev`
+2. In another terminal: `npx tsx scripts/capture-introduction-screenshots.ts`
+
+The script launches a Playwright Chromium browser, injects specific game states for each tutorial step, draws SVG arrow annotations pointing to key UI elements, and saves screenshots to `docs/introduction/`. The game runtime is exposed on `window.__gameRuntime` in dev mode. If the UI layout, hex grid rendering, or HUD components change, re-run the script and verify the 12 output images.
+
 ## Current Architecture Decisions
 
 - Canonical gameplay state lives in `src/game/runtime.ts`, not React state.
