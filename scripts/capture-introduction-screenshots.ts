@@ -58,8 +58,8 @@ async function hexToPagePixels(
     const canvas = document.querySelector("canvas")!;
     const rect = canvas.getBoundingClientRect();
 
-    const { getHexMetrics } = await import("/src/game/render/layout.ts");
-    const { axialToPixel } = await import("/src/game/model/hex.ts");
+    const { getHexMetrics } = await import("../src/game/render/layout.ts");
+    const { axialToPixel } = await import("../src/game/model/hex.ts");
 
     const metrics = getHexMetrics(runtime.viewport, runtime.state.map);
     const cssScale = rect.width / canvas.width;
@@ -218,7 +218,7 @@ async function resetGame(page: Page): Promise<void> {
         player_1: "alloy_clan",
         player_2: "flux_collective",
       },
-      seed: "tutorial-screenshots",
+      seed: 20260408,
     });
 
     runtime.animations = [];
@@ -595,11 +595,11 @@ const steps: TutorialStep[] = [
         arrows: [
           {
             label: "Selected unit",
-            from: { x: scoutPos.x + 80, y: scoutPos.y - 50 },
+            from: { x: scoutPos.x + 80, y: scoutPos.y - 70 },
             to: scoutPos,
           },
           {
-            label: "Movement range (use arrow keys)",
+            label: "Click a highlighted hex to move",
             from: { x: moveTarget.x + 100, y: moveTarget.y - 40 },
             to: moveTarget,
             color: "#69f0ae",

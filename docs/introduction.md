@@ -78,7 +78,7 @@ Newly deployed units have **summoning sickness** and cannot act until your next 
 
 ## Moving Units
 
-In the **Tactical** phase, click a unit (or press **U**) to select it, then use the **arrow keys** to move it. The highlighted hexes show where it can reach.
+In the **Tactical** phase, click a unit (or press **U**) to select it, then click a highlighted destination hex to move there. Click-to-move uses the unit's full move budget, so a unit can move multiple hexes at once and jump over open controlled spaces within range.
 
 ![Moving](introduction/06-move-unit.png)
 
@@ -159,7 +159,7 @@ Siege units deal bonus damage to bases and bypass the supply penalty when attack
 |-----|--------|
 | **N** | Advance phase |
 | **U** | Select first unit |
-| **Arrow keys** | Move selected unit |
+| **Click highlighted hex** | Move selected unit |
 | **A** | Enter attack mode |
 | **H** | Harvest with resource unit |
 | **P** | Pass priority |

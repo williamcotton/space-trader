@@ -1670,7 +1670,7 @@ migrateRuntimeState(runtime.state);
 
 runtime.replaceSystems(updateGame, renderGame);
 
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && typeof window !== "undefined") {
   (window as any).__gameRuntime = runtime;
 }
 

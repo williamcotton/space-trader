@@ -128,7 +128,7 @@ Show a freshly deployed Alloy Guard adjacent to the player 1 base. The unit shou
 ## Step 6: Moving a Unit
 
 **What the player learns:**
-In the Tactical phase, select a unit and use arrow keys to move it. Units have a move budget shown in their stats.
+In the Tactical phase, select a unit and click a highlighted destination hex to move there. Click-to-move spends the unit's move budget and can jump over open controlled spaces within range.
 
 **Screenshot: `06-move-unit.png`**
 Show a unit selected with movement range overlay visible on the hex grid.
@@ -142,7 +142,7 @@ Show a unit selected with movement range overlay visible on the hex grid.
 **Callouts:**
 - "Select a unit (click or press U)"
 - "Movement range" (arrows to highlighted reachable hexes)
-- "Use arrow keys to move"
+- "Click a highlighted hex to move"
 
 ---
 
@@ -286,7 +286,7 @@ Summary of key controls and concepts for reference during play.
 |-----|--------|
 | `N` | Advance phase |
 | `U` | Select first unit |
-| Arrow keys | Move selected unit |
+| Click highlighted hex | Move selected unit |
 | `A` | Enter attack mode |
 | `H` | Harvest with resource unit |
 | `P` | Pass priority |
