@@ -3,7 +3,13 @@ import type { GameState } from "./model/state";
 import { getHexMetrics } from "./render/layout";
 import { drawMoveRangeOverlay, drawResourceNodeControlOverlays, drawStaticBoardLayer } from "./render/grid";
 import { drawBase, drawUnit } from "./render/entities";
-import { drawStackAnchor, drawHoverHexAndTargetPreview, drawMapFrame } from "./render/overlays";
+import {
+  drawAuraFootprintOverlay,
+  drawAuraImpactOverlay,
+  drawStackAnchor,
+  drawHoverHexAndTargetPreview,
+  drawMapFrame,
+} from "./render/overlays";
 import { drawAnimations } from "./render/animationDrawing";
 
 export function updateGame(state: GameState, frame: GameFrame): void {
@@ -21,6 +27,7 @@ export function renderGame(state: GameState, frame: GameFrame): void {
   drawStaticBoardLayer(state, frame, context, originX, originY, hexSize);
   drawResourceNodeControlOverlays(state, context, originX, originY, hexSize);
   drawMoveRangeOverlay(frame, context, originX, originY, hexSize);
+  drawAuraFootprintOverlay(state, frame, context, originX, originY, hexSize);
   drawHoverHexAndTargetPreview(state, frame, context, originX, originY, hexSize);
   const stackActivityLevel = frame.transients.animations.some((animation) => {
     return animation.kind === "stack_cast" || animation.kind === "stack_counter" || animation.kind === "spell_resolve" || animation.kind === "hex_shower";
@@ -41,6 +48,7 @@ export function renderGame(state: GameState, frame: GameFrame): void {
     drawUnit(state, entities[i], context, originX, originY, hexSize);
   }
 
+  drawAuraImpactOverlay(state, frame, context, originX, originY, hexSize);
   drawAnimations(context, frame, originX, originY, hexSize, "foreground");
   drawMapFrame(context, frame);
 }
