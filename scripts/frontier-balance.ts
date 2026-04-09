@@ -1,5 +1,6 @@
 import { dispatchCommand } from "../src/game/actions/reducers";
 import { decideMinimaxBotCommand } from "../src/game/ai/minimaxBot";
+import { decideMvpBotCommand } from "../src/game/ai/mvpBot";
 import { ensureDefaultContentLoaded } from "../src/game/content/loader";
 import { FACTIONS, type Faction, type ResourceType } from "../src/game/model/enums";
 import {
@@ -15,10 +16,13 @@ import {
 } from "../src/game/model/state";
 import { getAutoFlowCommand } from "../src/game/turn/autoFlow";
 
+type SimulationBot = "mvp" | "minimax";
+
 type SimulationConfig = {
   games: number;
   maxTurns: number;
   seed: number;
+  bot: SimulationBot;
   playerOneCredits: number;
   playerOnePrimary: number;
   playerTwoCredits: number;
@@ -65,6 +69,7 @@ const DEFAULT_CONFIG: SimulationConfig = {
   games: 1000,
   maxTurns: 200,
   seed: 20260322,
+  bot: "mvp",
   playerOneCredits: PLAYER_ONE_STARTING_CURRENCY,
   playerOnePrimary: STARTING_PRIMARY_RESOURCE,
   playerTwoCredits: PLAYER_TWO_STARTING_CURRENCY,
@@ -89,6 +94,7 @@ function printUsage(): void {
   console.log(`  --games <n>                  Number of simulated games`);
   console.log(`  --max-turns <n>              Turn cap before timeout`);
   console.log(`  --seed <n>                   Base RNG seed`);
+  console.log(`  --bot <mvp|minimax>          Bot used by the simulator (default: mvp)`);
   console.log(`  --p1-credits <n>             Override player 1 starting credits`);
   console.log(`  --p1-primary <n>             Override player 1 starting faction resource`);
   console.log(`  --p2-credits <n>             Override player 2 starting credits`);
@@ -175,6 +181,14 @@ function parseConfig(argv: string[]): SimulationConfig {
     }
     if (arg === "--seed") {
       config.seed = Number(value);
+      index += 1;
+      continue;
+    }
+    if (arg === "--bot") {
+      if (value !== "mvp" && value !== "minimax") {
+        throw new Error(`Invalid --bot value: ${value}`);
+      }
+      config.bot = value;
       index += 1;
       continue;
     }
@@ -373,7 +387,7 @@ function simulateMatch(playerOneFaction: Faction, playerTwoFaction: Faction, con
       break;
     }
 
-    const command = decideMinimaxBotCommand(state, actor);
+    const command = config.bot === "minimax" ? decideMinimaxBotCommand(state, actor) : decideMvpBotCommand(state, actor);
     if (!command) {
       break;
     }
@@ -514,7 +528,7 @@ function printSimulationSummary(summary: SimulationSummary): void {
   const mirrorPlayerTwoRate = mirrorDecisiveGames === 0 ? 0.5 : mirrorSeatStats.playerTwoWins / mirrorDecisiveGames;
   console.log(`Frontier Belt bot simulation`);
   console.log(
-    `games=${config.games} maxTurns=${config.maxTurns} seed=${config.seed} ` +
+    `games=${config.games} maxTurns=${config.maxTurns} seed=${config.seed} bot=${config.bot} ` +
       `p1Credits=${config.playerOneCredits} p1Primary=${config.playerOnePrimary} ` +
       `p2Credits=${config.playerTwoCredits} p2Primary=${config.playerTwoPrimary} ` +
       `primaryDeposit=${config.primaryDepositAmount}`
