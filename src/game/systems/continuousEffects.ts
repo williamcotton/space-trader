@@ -1,9 +1,14 @@
 import type { EntityId, PlayerId } from "../model/ids";
 import type { UnitRole } from "../model/enums";
 import type { GameState, UnitEntity } from "../model/state";
-import { hexDistance } from "../model/hex";
 import type { ReplacementEffectPayload } from "./replacementEngine";
-import { getRegisteredUnitStatAdjustments } from "../registries/unitStatHooks";
+import {
+  buildResolvedUnitSnapshot,
+  doesEffectApplyToEntity,
+  type ContinuousEffectSnapshot,
+  type EffectResolver,
+  type UnitStatName,
+} from "./effectPipeline";
 
 // --- Layer constants (MTG-inspired ordering) ---
 
@@ -20,13 +25,13 @@ export const LAYER = {
 
 export type StatModifier = {
   type: "stat_modifier";
-  stat: "attackDamage" | "armor" | "siegeDamageBonus" | "moveRange" | "attackRange" | "hp" | "maxHp";
+  stat: UnitStatName;
   amount: number;
 };
 
 export type StatSetter = {
   type: "stat_set";
-  stat: "attackDamage" | "armor" | "siegeDamageBonus" | "moveRange" | "attackRange" | "hp" | "maxHp";
+  stat: UnitStatName;
   value: number;
 };
 
@@ -82,41 +87,7 @@ export function nextEffectTimestamp(state: GameState): number {
 
 // --- Selectors ---
 
-function doesEffectApplyToEntity(
-  state: Readonly<GameState>,
-  effect: ContinuousEffect,
-  entityId: EntityId
-): boolean {
-  const target = effect.target;
-
-  switch (target.type) {
-    case "specific_entity":
-      return target.entityId === entityId;
-
-    case "adjacent_allies": {
-      const sourceEntity = state.entities[target.sourceEntityId];
-      const targetEntity = state.entities[entityId];
-      if (!sourceEntity || !targetEntity) return false;
-      if (sourceEntity.id === entityId) return false;
-      if (targetEntity.kind !== "unit") return false;
-      if (sourceEntity.ownerId !== targetEntity.ownerId) return false;
-      if (target.roleFilter && targetEntity.role !== target.roleFilter) return false;
-      return hexDistance(sourceEntity.coord, targetEntity.coord) === 1;
-    }
-
-    case "all_friendly_units": {
-      const entity = state.entities[entityId];
-      if (!entity || entity.kind !== "unit") return false;
-      return entity.ownerId === target.ownerId;
-    }
-
-    case "all_enemy_units": {
-      const entity = state.entities[entityId];
-      if (!entity || entity.kind !== "unit") return false;
-      return entity.ownerId !== target.ownerId;
-    }
-  }
-}
+export { doesEffectApplyToEntity } from "./effectPipeline";
 
 export function getActiveEffectsForEntity(
   state: Readonly<GameState>,
@@ -132,42 +103,48 @@ export function getEffectiveKeywordsForUnit(
   unit: UnitEntity,
   options?: {
     excludeEffectIdPrefix?: string;
+    resolver?: EffectResolver;
   }
 ): string[] {
-  const baseKeywords = unit.keywords ?? [];
-  const grantedKeywords = getActiveEffectsForEntity(state, unit.id)
-    .filter((effect) => !options?.excludeEffectIdPrefix || !effect.id.startsWith(options.excludeEffectIdPrefix))
-    .flatMap((effect) => effect.payload.type === "keyword_grant" ? [effect.payload.keyword] : []);
+  if (options?.resolver) {
+    return [...options.resolver.getKeywords(unit, { excludeEffectIdPrefix: options.excludeEffectIdPrefix })];
+  }
 
-  return [...new Set([...baseKeywords, ...grantedKeywords])];
+  return [
+    ...buildResolvedUnitSnapshot(state, unit, {
+      excludeEffectIdPrefix: options?.excludeEffectIdPrefix,
+    }).keywords,
+  ];
 }
 
 export function getEffectiveStatValue(
   state: Readonly<GameState>,
   unit: UnitEntity,
-  stat: "attackDamage" | "armor" | "siegeDamageBonus" | "moveRange" | "attackRange" | "hp" | "maxHp"
+  stat: UnitStatName,
+  options?: {
+    resolver?: EffectResolver;
+  }
 ): number {
-  const base = unit[stat];
+  if (options?.resolver) {
+    return options.resolver.getStats(unit)[stat];
+  }
 
-  const effects = getActiveEffectsForEntity(state, unit.id)
-    .filter(
-      (e) => (e.payload.type === "stat_modifier" || e.payload.type === "stat_set") && e.payload.stat === stat
-    )
-    .sort((a, b) => a.layer - b.layer || a.timestamp - b.timestamp);
+  return buildResolvedUnitSnapshot(state, unit).stats[stat];
+}
 
-  let value = effects.reduce((value, effect) => {
-    if (effect.payload.type === "stat_modifier") {
-      return value + effect.payload.amount;
-    }
-    if (effect.payload.type === "stat_set") {
-      return effect.payload.value;
-    }
-    return value;
-  }, base);
+export function getEffectiveStatValueFromSnapshot(
+  snapshot: ContinuousEffectSnapshot,
+  unit: Readonly<UnitEntity>,
+  stat: UnitStatName
+): number {
+  return snapshot.stats.get(unit.id)?.[stat] ?? unit[stat];
+}
 
-  value += getRegisteredUnitStatAdjustments(state, unit, stat);
-
-  return value;
+export function getEffectiveKeywordsForUnitFromSnapshot(
+  snapshot: ContinuousEffectSnapshot,
+  unit: Readonly<UnitEntity>
+): string[] {
+  return [...(snapshot.keywords.get(unit.id) ?? unit.keywords ?? [])];
 }
 
 // --- Expiry & cleanup ---

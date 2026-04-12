@@ -177,6 +177,8 @@ describe("rebuildDerivedState", () => {
     const derived = rebuildDerivedState(state, 42);
     expect(derived.sourceVersion).toBe(42);
     expect(derived.spatialIndex.size).toBeGreaterThan(0);
+    expect(derived.effectiveStats.size).toBeGreaterThan(0);
+    expect(derived.effectiveKeywords.size).toBeGreaterThan(0);
   });
 });
 
@@ -186,5 +188,7 @@ describe("createEmptyDerivedState", () => {
     expect(derived.sourceVersion).toBe(-1);
     expect(derived.spatialIndex.size).toBe(0);
     expect(derived.moveRangeOverlay).toEqual([]);
+    expect(derived.effectiveStats.size).toBe(0);
+    expect(derived.effectiveKeywords.size).toBe(0);
   });
 });

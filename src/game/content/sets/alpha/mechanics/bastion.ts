@@ -1,11 +1,10 @@
 import { hexDistance } from "../../../../model/hex";
 import { registerUnitStatHook } from "../../../../registries/unitStatHooks";
-import { unitHasActiveKeyword } from "../../../../systems/keywords";
 import { BASTION_KEYWORD } from "./keywordIds";
 
 export function installBastionMechanic(): void {
-  registerUnitStatHook("bastion_adjacent_armor", (state, unit, stat) => {
-    if (stat !== "armor" || !unitHasActiveKeyword(state, unit, BASTION_KEYWORD)) {
+  registerUnitStatHook("bastion_adjacent_armor", (state, unit, stat, context) => {
+    if (stat !== "armor" || !context.keywords.includes(BASTION_KEYWORD)) {
       return 0;
     }
 

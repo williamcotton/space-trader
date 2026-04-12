@@ -10,6 +10,7 @@ import {
 } from "../rules/directInteraction";
 import { hasEntityAtCoord } from "../model/queries";
 import { getEffectiveUnitAttackRange } from "../systems/unitStats";
+import { createEffectResolver, type EffectResolver } from "../systems/effectPipeline";
 import { hasAnyPlayableCard } from "./playableCards";
 
 function hasAvailableMove(state: GameState, unit: UnitEntity): boolean {
@@ -36,7 +37,7 @@ function hasAvailableMove(state: GameState, unit: UnitEntity): boolean {
   return false;
 }
 
-function hasAvailableAttack(state: GameState, unit: UnitEntity): boolean {
+function hasAvailableAttack(state: GameState, unit: UnitEntity, resolver: EffectResolver): boolean {
   if (!canUnitDeclareAttack(state, unit) || unit.attacksRemaining <= 0) {
     return false;
   }
@@ -44,7 +45,7 @@ function hasAvailableAttack(state: GameState, unit: UnitEntity): boolean {
   return Object.values(state.entities).some((entity) =>
     entity.ownerId !== unit.ownerId &&
     canAttackEntityDirectly(state, unit.ownerId, entity) &&
-    hexDistance(unit.coord, entity.coord) <= getEffectiveUnitAttackRange(state, unit)
+    hexDistance(unit.coord, entity.coord) <= getEffectiveUnitAttackRange(state, unit, { resolver })
   );
 }
 
@@ -58,12 +59,14 @@ function hasAvailableHarvest(state: GameState, unit: UnitEntity): boolean {
 }
 
 function hasAnyTacticalAction(state: GameState, playerId: PlayerId): boolean {
+  const resolver = createEffectResolver(state);
+
   for (const entity of Object.values(state.entities)) {
     if (entity.kind !== "unit" || entity.ownerId !== playerId) {
       continue;
     }
 
-    if (hasAvailableAttack(state, entity) || hasAvailableHarvest(state, entity) || hasAvailableMove(state, entity)) {
+    if (hasAvailableAttack(state, entity, resolver) || hasAvailableHarvest(state, entity) || hasAvailableMove(state, entity)) {
       return true;
     }
   }

@@ -4,6 +4,7 @@ import { getEnemyBases, getEnemyEntities, getPlayerBase, getPlayerUnits } from "
 import type { PlayerId } from "../../model/ids";
 import { getConfiguredDepositAmount, type GameState, type UnitEntity } from "../../model/state";
 import { canAttackEntityDirectly, canUnitAttack } from "../../rules/directInteraction";
+import { createEffectResolver, type EffectResolver } from "../../systems/effectPipeline";
 import { getResourceNodeAtCoord, isBaseAdjacentDropoffTile } from "../../systems/harvesting";
 import { getEffectiveUnitAttackRange, getEffectiveUnitMoveRange } from "../../systems/unitStats";
 import { getLivePlayerIds, isPlayerEliminated } from "../../turn/playerOrder";
@@ -20,9 +21,9 @@ function getClosestDropoffDistance(state: Readonly<GameState>, playerId: PlayerI
   return Math.max(0, hexDistance(base.coord, unit.coord) - 1);
 }
 
-function getUnitMaterialScore(state: Readonly<GameState>, unit: UnitEntity): number {
-  const effectiveMoveRange = getEffectiveUnitMoveRange(state as GameState, unit);
-  const effectiveAttackRange = getEffectiveUnitAttackRange(state as GameState, unit);
+function getUnitMaterialScore(state: Readonly<GameState>, unit: UnitEntity, resolver: EffectResolver): number {
+  const effectiveMoveRange = getEffectiveUnitMoveRange(state as GameState, unit, { resolver });
+  const effectiveAttackRange = getEffectiveUnitAttackRange(state as GameState, unit, { resolver });
   const roleBase =
     unit.role === "combat"
       ? 110
@@ -42,8 +43,13 @@ function getUnitMaterialScore(state: Readonly<GameState>, unit: UnitEntity): num
   );
 }
 
-function scoreUnitPosition(state: Readonly<GameState>, playerId: PlayerId, unit: UnitEntity): number {
-  const attackRange = getEffectiveUnitAttackRange(state as GameState, unit);
+function scoreUnitPosition(
+  state: Readonly<GameState>,
+  playerId: PlayerId,
+  unit: UnitEntity,
+  resolver: EffectResolver
+): number {
+  const attackRange = getEffectiveUnitAttackRange(state as GameState, unit, { resolver });
   let score = 0;
 
   if (!unit.hasSummoningSickness) {
@@ -127,7 +133,7 @@ function scoreUnitPosition(state: Readonly<GameState>, playerId: PlayerId, unit:
   return score;
 }
 
-function scorePlayerState(state: Readonly<GameState>, playerId: PlayerId): number {
+function scorePlayerState(state: Readonly<GameState>, playerId: PlayerId, resolver: EffectResolver): number {
   const currencyResourceId = getRegisteredCurrencyResourceId();
   const player = state.players[playerId];
   if (!player || isPlayerEliminated(state as GameState, playerId)) {
@@ -156,8 +162,8 @@ function scorePlayerState(state: Readonly<GameState>, playerId: PlayerId): numbe
 
   for (const unit of getPlayerUnits(state as GameState, playerId)) {
     const hpRatio = unit.maxHp > 0 ? unit.hp / unit.maxHp : 0;
-    score += getUnitMaterialScore(state, unit) * (0.35 + hpRatio * 0.65);
-    score += scoreUnitPosition(state, playerId, unit);
+    score += getUnitMaterialScore(state, unit, resolver) * (0.35 + hpRatio * 0.65);
+    score += scoreUnitPosition(state, playerId, unit, resolver);
   }
 
   return score;
@@ -172,10 +178,11 @@ export function evaluateState(state: Readonly<GameState>, botPlayerId: PlayerId)
     return -WIN_SCORE;
   }
 
-  const ownScore = scorePlayerState(state, botPlayerId);
+  const resolver = createEffectResolver(state);
+  const ownScore = scorePlayerState(state, botPlayerId, resolver);
   const enemyScores = getLivePlayerIds(state as GameState)
     .filter((playerId) => playerId !== botPlayerId)
-    .map((playerId) => scorePlayerState(state, playerId))
+    .map((playerId) => scorePlayerState(state, playerId, resolver))
     .filter((score) => Number.isFinite(score));
   const bestEnemyScore = enemyScores.length > 0 ? Math.max(...enemyScores) : 0;
   const averageEnemyScore = enemyScores.length > 0 ? enemyScores.reduce((sum, score) => sum + score, 0) / enemyScores.length : 0;

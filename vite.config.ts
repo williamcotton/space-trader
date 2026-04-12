@@ -1,8 +1,14 @@
-import { defineConfig } from "vitest/config";
+import type { UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import electron from "vite-plugin-electron/simple";
 
-export default defineConfig({
+type VitestConfig = {
+  test: {
+    setupFiles: string[];
+  };
+};
+
+const config = {
   plugins: [
     react(),
     electron({
@@ -18,4 +24,6 @@ export default defineConfig({
   test: {
     setupFiles: ["./src/test/setupContent.ts"],
   },
-});
+} satisfies UserConfig & VitestConfig;
+
+export default config;

@@ -2,6 +2,7 @@ import type { EntityId } from "./model/ids";
 import type { EntityState, GameState, HexCoord } from "./model/state";
 import { getSelectedUnit } from "./model/queries";
 import { getMapAxialBounds, hexDistance, hexKey, isWithinMapBounds } from "./model/hex";
+import { buildContinuousEffectSnapshot, type EffectiveUnitStats } from "./systems/effectPipeline";
 
 export type MoveRangeCell = { coord: HexCoord; occupied: boolean };
 export type SpatialIndex = Map<string, EntityId[]>;
@@ -10,6 +11,8 @@ export type DerivedState = {
   sourceVersion: number;
   spatialIndex: SpatialIndex;
   moveRangeOverlay: MoveRangeCell[];
+  effectiveStats: Map<EntityId, EffectiveUnitStats>;
+  effectiveKeywords: Map<EntityId, string[]>;
 };
 
 export function createEmptyDerivedState(): DerivedState {
@@ -17,6 +20,8 @@ export function createEmptyDerivedState(): DerivedState {
     sourceVersion: -1,
     spatialIndex: new Map(),
     moveRangeOverlay: [],
+    effectiveStats: new Map(),
+    effectiveKeywords: new Map(),
   };
 }
 
@@ -83,9 +88,12 @@ export function buildMoveRangeOverlay(state: GameState, spatialIndex: SpatialInd
 export function rebuildDerivedState(state: GameState, version: number): DerivedState {
   const spatialIndex = buildSpatialIndex(state.entities);
   const moveRangeOverlay = buildMoveRangeOverlay(state, spatialIndex);
+  const continuousEffectSnapshot = buildContinuousEffectSnapshot(state);
   return {
     sourceVersion: version,
     spatialIndex,
     moveRangeOverlay,
+    effectiveStats: continuousEffectSnapshot.stats,
+    effectiveKeywords: continuousEffectSnapshot.keywords,
   };
 }

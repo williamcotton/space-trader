@@ -1,6 +1,7 @@
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, UnitEntity } from "../model/state";
 import { getEffectiveKeywordsForUnit } from "./continuousEffects";
+import type { EffectResolver } from "./effectPipeline";
 import {
   getDirectAttackBlockReasonFromRegistry,
   getDirectTargetingBlockReasonFromRegistry,
@@ -17,6 +18,7 @@ export function unitHasActiveKeyword(
   keyword: string,
   options?: {
     excludeEffectIdPrefix?: string;
+    resolver?: EffectResolver;
   }
 ): boolean {
   return getEffectiveKeywordsForUnit(state, unit as UnitEntity, options).includes(keyword);

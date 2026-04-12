@@ -13,6 +13,7 @@ import {
 import type { PlayerId } from "../../model/ids";
 import type { BaseEntity, EntityState, GameState, HexCoord, MapResourceNode, UnitEntity } from "../../model/state";
 import { canAttackEntityDirectly, canUnitDeclareAttack, canUnitMove } from "../../rules/directInteraction";
+import { createEffectResolver, type EffectResolver } from "../../systems/effectPipeline";
 import { canUnitHarvestNode, getResourceNodeAtCoord } from "../../systems/harvesting";
 import { resolveCombatAttack } from "../../systems/combat";
 import { getEffectiveUnitAttackRange } from "../../systems/unitStats";
@@ -222,13 +223,19 @@ function chooseObjectiveCoord(
   return getClosestCoord(unit.coord, ctx.enemyBases.map((base) => base.coord));
 }
 
-function scoreAttackPlan(state: Readonly<GameState>, unit: UnitEntity, targetId: string, ctx: TacticalPlanContext): number {
+function scoreAttackPlan(
+  state: Readonly<GameState>,
+  unit: UnitEntity,
+  targetId: string,
+  ctx: TacticalPlanContext,
+  resolver: EffectResolver
+): number {
   const target = state.entities[targetId];
   if (!target) {
     return Number.NEGATIVE_INFINITY;
   }
 
-  const preview = resolveCombatAttack(state as GameState, unit, target);
+  const preview = resolveCombatAttack(state as GameState, unit, target, { resolver });
   const killScore = preview.targetDestroyed ? (target.kind === "base" ? 10_000 : 420) : 0;
   const baseScore = target.kind === "base" ? 120 : 0;
   const roleScore =
@@ -337,13 +344,14 @@ function buildAttackPlans(
   playerId: PlayerId,
   unit: UnitEntity,
   prefix: GameCommand[],
-  ctx: TacticalPlanContext
+  ctx: TacticalPlanContext,
+  resolver: EffectResolver
 ): SearchActionPlan[] {
   if (unit.attacksRemaining <= 0 || !canUnitDeclareAttack(state, unit)) {
     return [];
   }
 
-  const attackRange = getEffectiveUnitAttackRange(state as GameState, unit);
+  const attackRange = getEffectiveUnitAttackRange(state as GameState, unit, { resolver });
 
   return getEnemyEntities(state as GameState, playerId)
     .filter((target) => canAttackEntityDirectly(state, playerId, target))
@@ -359,7 +367,7 @@ function buildAttackPlans(
             targetId: target.id,
           },
         ],
-        scoreAttackPlan(state, unit, target.id, ctx),
+        scoreAttackPlan(state, unit, target.id, ctx, resolver),
         `attack:${unit.id}:${target.id}`
       )
     )
@@ -412,14 +420,15 @@ function buildMovePlans(
   playerId: PlayerId,
   unit: UnitEntity,
   prefix: GameCommand[],
-  ctx: TacticalPlanContext
+  ctx: TacticalPlanContext,
+  resolver: EffectResolver
 ): SearchActionPlan[] {
   if (!canUnitMove(unit) || unit.movesRemaining <= 0) {
     return [];
   }
 
   const objective = chooseObjectiveCoord(state, playerId, unit, ctx);
-  const attackRange = getEffectiveUnitAttackRange(state as GameState, unit);
+  const attackRange = getEffectiveUnitAttackRange(state as GameState, unit, { resolver });
   const { qMin, qMax, rMin, rMax } = getMapAxialBounds(state.map);
   const candidates: Array<{ coord: HexCoord; moveDistance: number; score: number }> = [];
 
@@ -473,6 +482,7 @@ function buildMovePlans(
 function generateTacticalPlans(state: Readonly<GameState>, playerId: PlayerId): SearchActionPlan[] {
   const plans: SearchActionPlan[] = [];
   const ctx = createTacticalPlanContext(state, playerId);
+  const resolver = createEffectResolver(state);
 
   for (const unit of getPlayerUnits(state as GameState, playerId)) {
     const prefix =
@@ -486,9 +496,9 @@ function generateTacticalPlans(state: Readonly<GameState>, playerId: PlayerId): 
             },
           ];
 
-    plans.push(...buildAttackPlans(state, playerId, unit, prefix, ctx));
+    plans.push(...buildAttackPlans(state, playerId, unit, prefix, ctx, resolver));
     plans.push(...buildHarvestPlans(state, playerId, unit, prefix, ctx));
-    plans.push(...buildMovePlans(state, playerId, unit, prefix, ctx));
+    plans.push(...buildMovePlans(state, playerId, unit, prefix, ctx, resolver));
   }
 
   return plans

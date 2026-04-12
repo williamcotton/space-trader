@@ -2,6 +2,7 @@ import { hexDistance } from "../model/hex";
 import type { EntityState, GameState, UnitEntity } from "../model/state";
 import { getEffectiveUnitArmor, getEffectiveUnitAttackDamage, getEffectiveUnitSiegeDamageBonus } from "./unitStats";
 import { getPlayerBase } from "../model/queries";
+import { createEffectResolver, type EffectResolver } from "./effectPipeline";
 
 export type CombatBreakdown = {
   attackerId: string;
@@ -19,6 +20,10 @@ export type CombatResolution = CombatBreakdown & {
   targetHpBefore: number;
   targetHpAfter: number;
   targetDestroyed: boolean;
+};
+
+type CombatResolutionOptions = {
+  resolver?: EffectResolver;
 };
 
 function getTemporaryAttackBuffs(_state: GameState, _attacker: UnitEntity, _target: EntityState): number {
@@ -45,12 +50,18 @@ function getSupplyPenalty(distanceFromFriendlyBase: number): number {
   return Math.max(0, Math.ceil((distanceFromFriendlyBase - 6) / 3));
 }
 
-export function resolveCombatAttack(state: GameState, attacker: UnitEntity, target: EntityState): CombatResolution {
+export function resolveCombatAttack(
+  state: GameState,
+  attacker: UnitEntity,
+  target: EntityState,
+  options?: CombatResolutionOptions
+): CombatResolution {
+  const resolver = options?.resolver ?? createEffectResolver(state);
   const attackerBase = getPlayerBase(state, attacker.ownerId);
   const distanceFromFriendlyBase = attackerBase ? hexDistance(attacker.coord, attackerBase.coord) : 0;
-  const effectiveAttackDamage = getEffectiveUnitAttackDamage(state, attacker);
-  const effectiveSiegeDamageBonus = getEffectiveUnitSiegeDamageBonus(state, attacker);
-  const effectiveTargetArmor = target.kind === "unit" ? getEffectiveUnitArmor(state, target) : 0;
+  const effectiveAttackDamage = getEffectiveUnitAttackDamage(state, attacker, { resolver });
+  const effectiveSiegeDamageBonus = getEffectiveUnitSiegeDamageBonus(state, attacker, { resolver });
+  const effectiveTargetArmor = target.kind === "unit" ? getEffectiveUnitArmor(state, target, { resolver }) : 0;
 
   const baseAttack =
     effectiveAttackDamage +
