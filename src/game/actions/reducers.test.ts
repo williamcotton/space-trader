@@ -231,6 +231,18 @@ describe("dispatchCommand", () => {
     expect(after.movesRemaining).toBe(beforeMoves - 1);
   });
 
+  it("allows selecting an opponent unit for inspection", () => {
+    const state = setupState();
+    const result = dispatchCommand(state, {
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: "unit_player_2_scout",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(state.selectedEntityId).toBe("unit_player_2_scout");
+  });
+
   it("is deterministic for the same command stream", () => {
     const commandStream: GameCommand[] = [
       { type: "SELECT_ENTITY", playerId: "player_1", entityId: "unit_player_1_scout" },

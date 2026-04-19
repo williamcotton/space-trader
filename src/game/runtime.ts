@@ -254,7 +254,7 @@ function getBoardClickCommandForPlayer(
   const selectedUnit = getSelectedUnitForPlayer(state, playerId);
 
   const clickedEntity = findEntityAtHex(state, clickedHex);
-  if (clickedEntity?.kind === "unit" && clickedEntity.ownerId === playerId) {
+  if (clickedEntity?.kind === "unit") {
     if (state.selectedEntityId === clickedEntity.id && options?.toggleSelectedUnitOff !== false) {
       return {
         type: "CLEAR_SELECTION",

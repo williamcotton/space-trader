@@ -128,7 +128,6 @@ function validateSelectEntity(state: GameState, command: Extract<GameCommand, { 
 
   const entity = getEntity(state, command.entityId);
   if (!entity) return { ok: false, reason: "Entity does not exist." };
-  if (entity.ownerId !== command.playerId) return { ok: false, reason: "Cannot select an entity owned by the opponent." };
   if (entity.kind !== "unit") return { ok: false, reason: "Only units are selectable in Phase 2." };
 
   return { ok: true };

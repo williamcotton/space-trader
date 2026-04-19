@@ -50,6 +50,21 @@ describe("getBoardClickCommand", () => {
     });
   });
 
+  it("selects an enemy unit when clicked", () => {
+    const state = setupState();
+
+    expect(
+      getBoardClickCommand(state, {
+        q: state.entities.unit_player_2_scout.coord.q,
+        r: state.entities.unit_player_2_scout.coord.r,
+      })
+    ).toEqual({
+      type: "SELECT_ENTITY",
+      playerId: "player_1",
+      entityId: "unit_player_2_scout",
+    });
+  });
+
   it("issues a move command when a selected unit clicks an empty hex during tactical", () => {
     const state = setupState();
     state.phase = "tactical";
