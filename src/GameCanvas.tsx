@@ -1,6 +1,16 @@
 import { useEffect, useRef } from "react";
 import { getGameRuntime } from "./game/runtime";
 
+function setRuntimeReady(ready: boolean): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.__spaceTraderRuntimeReady = ready;
+  if (ready) {
+    window.dispatchEvent(new CustomEvent("space-trader:runtime-ready"));
+  }
+}
+
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const runtimeRef = useRef(getGameRuntime());
@@ -50,6 +60,8 @@ export function GameCanvas() {
     if (!canvas) {
       return;
     }
+
+    setRuntimeReady(false);
 
     const context = canvas.getContext("2d");
     if (!context) {
@@ -114,6 +126,7 @@ export function GameCanvas() {
     };
 
     renderNow();
+    setRuntimeReady(true);
     const unsubscribeState = runtime.subscribe(renderNow);
     const unsubscribeTransient = runtime.subscribeTransient(renderNow);
 
@@ -132,6 +145,7 @@ export function GameCanvas() {
       unsubscribeTransient();
       unsubscribeState();
       stopLoop();
+      setRuntimeReady(false);
     };
   }, []);
 

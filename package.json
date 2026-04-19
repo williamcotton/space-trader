@@ -6,6 +6,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
+    "dev:direct-match": "VITE_BOOT_FLOW=direct_match vite",
     "build": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p server/tsconfig.json && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p server/tsconfig.json --noEmit",

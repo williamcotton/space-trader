@@ -3,10 +3,12 @@
  *
  * Prerequisites:
  *   1. Start the dev server: npm run dev
+ *      or use the explicit direct-match helper: npm run dev:direct-match
  *   2. Run: npx tsx scripts/capture-introduction-screenshots.ts
  *
  * The game runtime is exposed on `window.__gameRuntime` in dev mode
- * (see src/game/runtime.ts).
+ * and marks gameplay readiness on `window.__spaceTraderRuntimeReady`
+ * (see src/game/runtime.ts and src/GameCanvas.tsx).
  */
 
 import { chromium, type Page } from "playwright";
@@ -253,6 +255,14 @@ async function screenshot(page: Page, name: string): Promise<void> {
   const path = join(OUTPUT_DIR, `${name}.png`);
   await page.screenshot({ path, fullPage: false });
   console.log(`  captured ${name}.png`);
+}
+
+async function waitForGameReady(page: Page): Promise<void> {
+  await page.waitForSelector("canvas", { timeout: 10_000 });
+  await page.waitForFunction(
+    () => (window as any).__gameRuntime != null && (window as any).__spaceTraderRuntimeReady === true,
+    { timeout: 10_000 }
+  );
 }
 
 /** Get bounding box center of a DOM element by selector (returns null if not found) */
@@ -1018,11 +1028,7 @@ async function main(): Promise<void> {
   console.log(`Navigating to ${DEV_SERVER_URL}...`);
   await page.goto(DEV_SERVER_URL, { waitUntil: "networkidle" });
 
-  await page.waitForSelector("canvas", { timeout: 10_000 });
-  await page.waitForFunction(
-    () => (window as any).__gameRuntime != null,
-    { timeout: 10_000 }
-  );
+  await waitForGameReady(page);
 
   await page.waitForTimeout(1_000);
 

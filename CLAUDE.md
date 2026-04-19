@@ -14,17 +14,35 @@
 - `electron/main.ts`
 - `electron/preload.ts`
 
-### React Entrypoints
+### App Shell
 
 - `src/main.tsx`
 - `src/App.tsx`
+  - thin app controller
+  - currently resolves to `MatchScreen` during Phase 0
 - `src/App.css`
+- `src/app/types.ts`
+  - app-level screen, boot-flow, and result-summary types
+- `src/app/boot.ts`
+  - boot-flow parsing and initial-screen resolution
+- `src/app/profileStore.ts`
+  - local profile/preferences seam for future menu UX
+- `src/app/resultSummary.ts`
+  - future results-screen seam
+
+### Match Screen
+
+- `src/screens/MatchScreen.tsx`
+  - extracted gameplay shell
 - `src/GameCanvas.tsx`
+  - canvas mount point
+  - RAF loop owner
+  - explicit runtime-ready signal for automation
 
 ### Core Runtime
 
 - `src/game/runtime.ts`
-  - persistent runtime singleton
+  - lazy runtime accessor via `getGameRuntime()`
   - authoritative mutable game state
   - animation queue
   - pending targeting flow
@@ -32,6 +50,7 @@
   - worker-backed bot decisions
   - debug helpers
   - active content-selection + runtime-profile context
+  - HMR-backed runtime persistence after first creation
 - `src/game/systems.ts`
   - `updateGame`
   - `renderGame`
@@ -264,6 +283,7 @@
 - `game-design.md`
 - `architecture.md`
 - `instructions.md`
+- `launch-screen-plan.md`
 - `networked-multiplayer-feature.md`
 - `four-player-refactor.md`
 - `three-player-feature.md`
@@ -276,6 +296,7 @@
 ## Commands
 
 - `npm run dev`
+- `npm run dev:direct-match`
 - `npm run build`
 - `npm run preview`
 - `npm run typecheck`
@@ -289,12 +310,32 @@
 To regenerate the annotated tutorial screenshots in `docs/introduction/`:
 
 1. Start the dev server in one terminal: `npm run dev`
+   - Phase 0 still boots straight into gameplay by default
+   - explicit helper also exists: `npm run dev:direct-match`
 2. In another terminal: `npx tsx scripts/capture-introduction-screenshots.ts`
 
-The script launches a Playwright Chromium browser, injects specific game states for each tutorial step, draws SVG arrow annotations pointing to key UI elements, and saves screenshots to `docs/introduction/`. The game runtime is exposed on `window.__gameRuntime` in dev mode. If the UI layout, hex grid rendering, or HUD components change, re-run the script and verify the 12 output images.
+The script launches a Playwright Chromium browser, injects specific game states for each tutorial step, draws SVG arrow annotations pointing to key UI elements, and saves screenshots to `docs/introduction/`.
+
+Automation contract:
+
+- the game runtime is exposed on `window.__gameRuntime` in dev mode
+- gameplay readiness is exposed on `window.__spaceTraderRuntimeReady`
+- screenshot automation should wait for the explicit ready marker, not only for `__gameRuntime` existence
+
+If the UI layout, hex grid rendering, or HUD components change, re-run the script and verify the 12 output images.
 
 ## Current Architecture Decisions
 
+- App-level boot and screen state now live above gameplay in:
+  - `src/App.tsx`
+  - `src/app/boot.ts`
+  - `src/app/types.ts`
+- `src/screens/MatchScreen.tsx` owns the current gameplay shell.
+- Phase 0 intentionally preserves the old player-visible behavior:
+  - app still lands directly in a match
+  - current multiplayer controls still live in-match
+  - menu/setup/results screens are planned but not shipped yet
+- Future boot-policy changes should flow through `src/app/boot.ts`, not scattered env checks in gameplay components.
 - Canonical gameplay state lives in `src/game/runtime.ts`, not React state.
 - Gameplay mutations flow through:
   - commands
@@ -332,6 +373,10 @@ The script launches a Playwright Chromium browser, injects specific game states 
   - `loadConfiguredContentSets(...)`
   - `createConfiguredRuntime(...)`
   - `GameRuntime.resetWithContent(...)`
+- Runtime creation is lazy:
+  - importing `src/game/runtime.ts` no longer creates a live match
+  - the first `getGameRuntime()` call instantiates the runtime
+  - this avoids hidden-match boot when non-gameplay app code imports runtime-adjacent modules
 - Runtime defaults come from registered runtime profiles, not kernel constants.
 - Networked multiplayer is server-authoritative command replay, not client-authoritative state sync.
 - Online matchmaking is format-aware:
@@ -379,13 +424,18 @@ The script launches a Playwright Chromium browser, injects specific game states 
 ## `getGameRuntime` Contract
 
 - `getGameRuntime()` returns the same runtime instance for the life of the renderer session.
+- `getGameRuntime()` is the lazy runtime boundary; do not depend on import-time side effects.
 - React should subscribe to runtime snapshots, not copy gameplay state into component state.
 - `GameCanvas` owns the RAF loop and calls runtime step/render plumbing.
+- `GameCanvas` also owns the explicit gameplay-ready marker:
+  - `window.__spaceTraderRuntimeReady = false` before mount work begins
+  - `window.__spaceTraderRuntimeReady = true` once gameplay is mounted and rendering
 - New authoritative gameplay state belongs in `state.ts` plus `migrations.ts`.
 
 ## HMR Workflow
 
-- Runtime instance persists through HMR.
+- Runtime instance persists through HMR once it exists.
+- HMR should not force runtime creation before gameplay mounts.
 - Simulation/render logic can be hot-swapped without wiping the match.
 - State schema changes should always be accompanied by migration updates.
 - Registry-backed content can be reset and reloaded deterministically.

@@ -1663,18 +1663,31 @@ type RuntimeHotData = {
 };
 
 const hotData = (import.meta.hot?.data ?? {}) as RuntimeHotData;
-const runtime = hotData.runtime ?? new GameRuntime();
-Object.setPrototypeOf(runtime, GameRuntime.prototype);
-runtime.rehydrateHotState();
-migrateRuntimeState(runtime.state);
+let runtime: GameRuntime | undefined = hotData.runtime;
 
-runtime.replaceSystems(updateGame, renderGame);
+function prepareRuntime(instance: GameRuntime): GameRuntime {
+  Object.setPrototypeOf(instance, GameRuntime.prototype);
+  instance.rehydrateHotState();
+  migrateRuntimeState(instance.state);
+  instance.replaceSystems(updateGame, renderGame);
 
-if (import.meta.env.DEV && typeof window !== "undefined") {
-  (window as any).__gameRuntime = runtime;
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    window.__gameRuntime = instance;
+  }
+
+  return instance;
+}
+
+function createRuntime(): GameRuntime {
+  return prepareRuntime(new GameRuntime());
+}
+
+if (runtime) {
+  runtime = prepareRuntime(runtime);
 }
 
 export function getGameRuntime(): GameRuntime {
+  runtime ??= createRuntime();
   return runtime;
 }
 
@@ -1684,7 +1697,7 @@ if (import.meta.hot) {
     if (!next) {
       return;
     }
-    runtime.replaceSystems(next.updateGame, next.renderGame);
+    runtime?.replaceSystems(next.updateGame, next.renderGame);
   });
 
   import.meta.hot.accept("./ai/minimaxBot", (module) => {
@@ -1692,8 +1705,8 @@ if (import.meta.hot) {
     if (!next) {
       return;
     }
-    runtime.replaceBotDecisionSystem(next.decideMinimaxBotCommand);
-    runtime.enableBotDecisionWorker();
+    runtime?.replaceBotDecisionSystem(next.decideMinimaxBotCommand);
+    runtime?.enableBotDecisionWorker();
   });
 
   import.meta.hot.dispose((data: RuntimeHotData) => {

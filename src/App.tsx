@@ -1,30 +1,18 @@
+import { useState } from "react";
 import "./App.css";
-import { GameCanvas } from "./GameCanvas";
-import { CommandStackPanel } from "./ui/CommandStackPanel";
-import { GameHudPanels } from "./ui/GameHudPanels";
-import { GameTopBar } from "./ui/GameTopBar";
-import { HandTray } from "./ui/HandTray";
-import { MultiplayerControls } from "./ui/MultiplayerControls";
+import { getAppBootConfig } from "./app/boot";
+import type { AppScreen } from "./app/types";
+import { MatchScreen } from "./screens/MatchScreen";
 
 function App() {
-  return (
-    <main className="app-shell">
-      <MultiplayerControls />
-      <GameTopBar />
-      <section className="game-workspace">
-        <div className="game-main-column">
-          <div className="game-board-shell">
-            <GameCanvas />
-          </div>
-          <HandTray />
-        </div>
-        <aside className="game-sidebar">
-          <GameHudPanels />
-          <CommandStackPanel />
-        </aside>
-      </section>
-    </main>
-  );
+  const [screen] = useState<AppScreen>(() => getAppBootConfig({ launchScreensEnabled: false }).initialScreen);
+
+  switch (screen.kind) {
+    case "match":
+      return <MatchScreen />;
+    default:
+      return <MatchScreen />;
+  }
 }
 
 export default App;
