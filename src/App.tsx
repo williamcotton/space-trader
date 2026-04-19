@@ -39,6 +39,7 @@ type ActiveMatchContext =
 
 const APP_BOOT_CONFIG = getAppBootConfig({ launchScreensEnabled: true });
 const DEFAULT_LOCAL_FACTION = "alloy_clan" as Faction;
+const SHOW_DIRECT_MATCH_DEVELOPER_CONTROLS = import.meta.env.DEV && APP_BOOT_CONFIG.resolvedFlow === "direct_match";
 
 function isLocalDeveloperServer(url: string): boolean {
   try {
@@ -454,6 +455,7 @@ function App() {
           <MatchScreen
             menuOpen={matchMenuOpen}
             isNetworkMatch={activeMatch?.kind === "network" || multiplayerSnapshot.status === "in_match"}
+            showDeveloperControls={SHOW_DIRECT_MATCH_DEVELOPER_CONTROLS}
             onOpenMenu={() => setMatchMenuOpen(true)}
             onCloseMenu={() => setMatchMenuOpen(false)}
             onReturnToMenu={handleReturnToMenuFromMatch}

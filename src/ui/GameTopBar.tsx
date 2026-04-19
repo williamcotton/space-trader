@@ -32,6 +32,7 @@ type TopBarSnapshot = {
 
 type GameTopBarProps = {
   onOpenMenu?: () => void;
+  showDeveloperControls?: boolean;
 };
 
 function readSnapshot(): TopBarSnapshot {
@@ -60,14 +61,14 @@ function readSnapshot(): TopBarSnapshot {
   };
 }
 
-export function GameTopBar({ onOpenMenu }: GameTopBarProps) {
+export function GameTopBar({ onOpenMenu, showDeveloperControls = false }: GameTopBarProps) {
   const runtime = getGameRuntime();
   const snapshot = useGameSnapshot(readSnapshot);
   const factionIds = getRegisteredFactionIds();
   const runtimeProfiles = getRegisteredRuntimeProfiles();
   const resourceOrder = getOrderedRegisteredResourceModules().map((resource) => resource.id);
   const hasManyPlayers = snapshot.players.length > 2;
-  const showDeveloperControls = import.meta.env.DEV && !snapshot.networked;
+  const allowDeveloperControls = showDeveloperControls && !snapshot.networked;
 
   return (
     <header className={["game-top-bar", hasManyPlayers ? "many-players" : ""].filter(Boolean).join(" ")} aria-label="Match controls and status">
@@ -75,7 +76,7 @@ export function GameTopBar({ onOpenMenu }: GameTopBarProps) {
         <div className="game-top-bar-match">
           <span className="eyebrow">{snapshot.mapName}</span>
           <strong>Turn {snapshot.turn}</strong>
-          {showDeveloperControls ? (
+          {allowDeveloperControls ? (
             <label className="game-top-bar-profile-select-wrap">
               <span className="eyebrow">Mode</span>
               <select
@@ -125,7 +126,7 @@ export function GameTopBar({ onOpenMenu }: GameTopBarProps) {
             >
               <div className="top-bar-player-identity">
                 <strong>{getPlayerLabel(player.id)}</strong>
-                {showDeveloperControls ? (
+                {allowDeveloperControls ? (
                   <select
                     className="top-bar-faction-select"
                     value={player.faction}
@@ -156,7 +157,7 @@ export function GameTopBar({ onOpenMenu }: GameTopBarProps) {
                 ))}
               </div>
               <div className="top-bar-player-meta">
-                {showDeveloperControls ? (
+                {allowDeveloperControls ? (
                   <div className="top-bar-player-actions">
                     <button
                       type="button"
@@ -198,7 +199,7 @@ export function GameTopBar({ onOpenMenu }: GameTopBarProps) {
                   H{player.hand} D{player.deck}
                 </span>
               </div>
-              {showDeveloperControls ? (
+              {allowDeveloperControls ? (
                 <div className="top-bar-priority-stops">
                   <span className="top-bar-priority-stops-label">Yield</span>
                   {PRIORITY_STOP_ORDER.map((stopKey) => (

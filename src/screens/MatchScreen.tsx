@@ -9,6 +9,7 @@ import { InMatchMenu } from "./InMatchMenu";
 type MatchScreenProps = {
   menuOpen: boolean;
   isNetworkMatch: boolean;
+  showDeveloperControls: boolean;
   onOpenMenu: () => void;
   onCloseMenu: () => void;
   onReturnToMenu: () => void;
@@ -19,6 +20,7 @@ type MatchScreenProps = {
 export function MatchScreen({
   menuOpen,
   isNetworkMatch,
+  showDeveloperControls,
   onOpenMenu,
   onCloseMenu,
   onReturnToMenu,
@@ -55,7 +57,7 @@ export function MatchScreen({
 
   return (
     <main className="match-shell">
-      <GameTopBar onOpenMenu={onOpenMenu} />
+      <GameTopBar onOpenMenu={onOpenMenu} showDeveloperControls={showDeveloperControls} />
       <section className="game-workspace">
         <div className="game-main-column">
           <div className="game-board-shell">
