@@ -139,7 +139,6 @@ body {
 
 .menu-cta,
 .menu-small-button,
-.match-menu-button,
 .menu-inline-button {
   border: 1px solid rgba(93, 132, 209, 0.46);
   background: rgba(17, 27, 61, 0.84);
@@ -148,8 +147,7 @@ body {
   cursor: pointer;
 }
 
-.menu-cta,
-.match-menu-button {
+.menu-cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -404,17 +402,6 @@ body {
   width: 100%;
   border-radius: 12px;
   border: 1px solid rgba(74, 108, 180, 0.28);
-}
-
-.match-menu-button {
-  position: fixed;
-  top: 22px;
-  right: 24px;
-  z-index: 40;
-  min-height: 42px;
-  padding: 0 14px;
-  border-radius: 12px;
-  background: rgba(8, 13, 32, 0.78);
 }
 
 .match-menu-backdrop {
@@ -837,6 +824,25 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.game-top-bar-menu-button {
+  margin-left: auto;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(93, 132, 209, 0.46);
+  background: rgba(12, 20, 48, 0.84);
+  color: #eff6ff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.game-top-bar-menu-button:hover {
+  background: rgba(20, 30, 69, 0.9);
 }
 
 .game-top-bar-inline-status {
@@ -1994,11 +2000,6 @@ body {
 @media (max-width: 720px) {
   .match-shell {
     padding: 8px;
-  }
-
-  .match-menu-button {
-    top: 14px;
-    right: 14px;
   }
 
   .multiplayer-bar-controls {

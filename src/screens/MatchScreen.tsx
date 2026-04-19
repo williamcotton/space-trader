@@ -55,10 +55,7 @@ export function MatchScreen({
 
   return (
     <main className="match-shell">
-      <button type="button" className="match-menu-button" onClick={onOpenMenu}>
-        Menu
-      </button>
-      <GameTopBar />
+      <GameTopBar onOpenMenu={onOpenMenu} />
       <section className="game-workspace">
         <div className="game-main-column">
           <div className="game-board-shell">

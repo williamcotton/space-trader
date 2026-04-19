@@ -30,6 +30,10 @@ type TopBarSnapshot = {
   players: PlayerTopBarSnapshot[];
 };
 
+type GameTopBarProps = {
+  onOpenMenu?: () => void;
+};
+
 function readSnapshot(): TopBarSnapshot {
   const runtime = getGameRuntime();
   const state = runtime.state;
@@ -56,7 +60,7 @@ function readSnapshot(): TopBarSnapshot {
   };
 }
 
-export function GameTopBar() {
+export function GameTopBar({ onOpenMenu }: GameTopBarProps) {
   const runtime = getGameRuntime();
   const snapshot = useGameSnapshot(readSnapshot);
   const factionIds = getRegisteredFactionIds();
@@ -92,6 +96,11 @@ export function GameTopBar() {
           ) : null}
           {snapshot.networked && snapshot.networkLocalPlayerId ? (
             <span className="game-top-bar-priority-chip">Online · {getPlayerLabel(snapshot.networkLocalPlayerId)}</span>
+          ) : null}
+          {onOpenMenu ? (
+            <button type="button" className="game-top-bar-menu-button" onClick={onOpenMenu}>
+              Menu
+            </button>
           ) : null}
         </div>
 
