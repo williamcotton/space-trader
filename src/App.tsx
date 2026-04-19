@@ -78,6 +78,10 @@ function buildInitialMatchContext(profile: AppProfile): ActiveMatchContext | nul
   };
 }
 
+function shouldWaitForMatchAnimations(result: MatchResultSummary): boolean {
+  return result.outcome === "win" || result.outcome === "loss" || result.outcome === "draw";
+}
+
 function App() {
   const multiplayerClient = getMultiplayerClient();
   const multiplayerSnapshot = useMultiplayerSnapshot();
@@ -92,6 +96,7 @@ function App() {
     return initialMatch?.kind === "local" ? initialMatch.config : null;
   });
   const [matchMenuOpen, setMatchMenuOpen] = useState(false);
+  const [pendingResult, setPendingResult] = useState<MatchResultSummary | null>(null);
 
   const lastFactionLabel = profile.lastLocalFaction ? formatFactionName(profile.lastLocalFaction) : null;
   const canPlayOnline = import.meta.env.DEV || !isLocalDeveloperServer(multiplayerSnapshot.serverUrl || DEFAULT_MULTIPLAYER_SERVER_URL);
@@ -120,6 +125,7 @@ function App() {
   const enterResults = useCallback((result: MatchResultSummary) => {
     destroyGameRuntime();
     setMatchMenuOpen(false);
+    setPendingResult(null);
     setActiveMatch(null);
     startTransition(() => {
       setScreen({ kind: "results", result });
@@ -129,12 +135,18 @@ function App() {
   const goHome = useCallback(() => {
     destroyGameRuntime();
     setMatchMenuOpen(false);
+    setPendingResult(null);
     setActiveMatch(null);
     multiplayerClient.clearLastCompletion();
     startTransition(() => {
       setScreen({ kind: "home" });
     });
   }, [multiplayerClient]);
+
+  const queueResults = useCallback((result: MatchResultSummary) => {
+    setMatchMenuOpen(false);
+    setPendingResult((current) => current ?? result);
+  }, []);
 
   const startLocalMatch = useCallback(
     (config: LocalMatchConfig) => {
@@ -288,17 +300,17 @@ function App() {
       modeLabel: networkMatch ? buildNetworkModeLabel(networkMatch) : "Play Online",
     });
     multiplayerClient.clearLastCompletion();
-    enterResults(result);
+    queueResults(result);
   }, [
     activeMatch,
-    enterResults,
     multiplayerClient,
     multiplayerSnapshot.lastCompletion,
     multiplayerSnapshot.localPlayerId,
+    queueResults,
   ]);
 
   useEffect(() => {
-    if (screen.kind !== "match" || activeMatch?.kind !== "local") {
+    if (screen.kind !== "match" || activeMatch?.kind !== "local" || pendingResult) {
       return;
     }
 
@@ -313,13 +325,42 @@ function App() {
         modeLabel: activeMatch.config.modeLabel,
       });
       if (result) {
-        enterResults(result);
+        queueResults(result);
       }
     };
 
     handleRuntimeChange();
     return runtime.subscribe(handleRuntimeChange);
-  }, [activeMatch, enterResults, screen.kind]);
+  }, [activeMatch, pendingResult, queueResults, screen.kind]);
+
+  useEffect(() => {
+    if (!pendingResult) {
+      return;
+    }
+
+    const runtime = peekGameRuntime();
+    if (!shouldWaitForMatchAnimations(pendingResult) || !runtime?.hasActiveAnimations()) {
+      enterResults(pendingResult);
+      return;
+    }
+
+    let frame = 0;
+    const waitForAnimations = (): void => {
+      const nextRuntime = peekGameRuntime();
+      if (!nextRuntime || !nextRuntime.hasActiveAnimations()) {
+        enterResults(pendingResult);
+        return;
+      }
+      frame = window.requestAnimationFrame(waitForAnimations);
+    };
+
+    frame = window.requestAnimationFrame(waitForAnimations);
+    return () => {
+      if (frame !== 0) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, [enterResults, pendingResult]);
 
   const screenNode = useMemo(() => {
     switch (screen.kind) {
