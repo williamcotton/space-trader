@@ -7,6 +7,7 @@ export type AppProfile = {
 };
 
 export const APP_PROFILE_STORAGE_KEY = "space_trader_profile";
+export const DEFAULT_CALLSIGN = "Captain";
 
 const DEFAULT_PROFILE: AppProfile = {
   callsign: null,
@@ -89,4 +90,8 @@ export function setLastLocalFaction(faction: Faction | null): AppProfile {
   return updateProfile({
     lastLocalFaction: normalizeOptionalFaction(faction),
   });
+}
+
+export function getEffectiveCallsign(profile: AppProfile): string {
+  return profile.callsign ?? DEFAULT_CALLSIGN;
 }

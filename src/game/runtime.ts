@@ -1624,6 +1624,17 @@ export class GameRuntime {
     this.scheduleAutomationFromCurrentState();
   }
 
+  dispose(): void {
+    this.clearAutomationTimer();
+    this.resetBotDecisionWorker();
+    this.listeners.clear();
+    this.transientListeners.clear();
+    this.networkSession = null;
+    this.pendingCardTargeting = null;
+    this.pendingAttackTargeting = null;
+    this.hoveredHex = null;
+  }
+
   step(context: CanvasRenderingContext2D, deltaSeconds: number): void {
     this.animations = stepAnimations(this.animations, deltaSeconds);
 
@@ -1665,15 +1676,27 @@ type RuntimeHotData = {
 const hotData = (import.meta.hot?.data ?? {}) as RuntimeHotData;
 let runtime: GameRuntime | undefined = hotData.runtime;
 
+function bindRuntimeToWindow(instance: GameRuntime | undefined): void {
+  if (!import.meta.env.DEV || typeof window === "undefined") {
+    return;
+  }
+
+  if (instance) {
+    window.__gameRuntime = instance;
+    return;
+  }
+
+  delete window.__gameRuntime;
+  window.__spaceTraderRuntimeReady = false;
+}
+
 function prepareRuntime(instance: GameRuntime): GameRuntime {
   Object.setPrototypeOf(instance, GameRuntime.prototype);
   instance.rehydrateHotState();
   migrateRuntimeState(instance.state);
   instance.replaceSystems(updateGame, renderGame);
-
-  if (import.meta.env.DEV && typeof window !== "undefined") {
-    window.__gameRuntime = instance;
-  }
+  hotData.runtime = instance;
+  bindRuntimeToWindow(instance);
 
   return instance;
 }
@@ -1689,6 +1712,23 @@ if (runtime) {
 export function getGameRuntime(): GameRuntime {
   runtime ??= createRuntime();
   return runtime;
+}
+
+export function peekGameRuntime(): GameRuntime | null {
+  return runtime ?? null;
+}
+
+export function destroyGameRuntime(): void {
+  if (!runtime) {
+    bindRuntimeToWindow(undefined);
+    hotData.runtime = undefined;
+    return;
+  }
+
+  runtime.dispose();
+  runtime = undefined;
+  hotData.runtime = undefined;
+  bindRuntimeToWindow(undefined);
 }
 
 if (import.meta.hot) {

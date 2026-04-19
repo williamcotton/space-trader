@@ -63,6 +63,7 @@ export function GameTopBar() {
   const runtimeProfiles = getRegisteredRuntimeProfiles();
   const resourceOrder = getOrderedRegisteredResourceModules().map((resource) => resource.id);
   const hasManyPlayers = snapshot.players.length > 2;
+  const showDeveloperControls = import.meta.env.DEV && !snapshot.networked;
 
   return (
     <header className={["game-top-bar", hasManyPlayers ? "many-players" : ""].filter(Boolean).join(" ")} aria-label="Match controls and status">
@@ -70,7 +71,7 @@ export function GameTopBar() {
         <div className="game-top-bar-match">
           <span className="eyebrow">{snapshot.mapName}</span>
           <strong>Turn {snapshot.turn}</strong>
-          {!snapshot.networked ? (
+          {showDeveloperControls ? (
             <label className="game-top-bar-profile-select-wrap">
               <span className="eyebrow">Mode</span>
               <select
@@ -115,23 +116,27 @@ export function GameTopBar() {
             >
               <div className="top-bar-player-identity">
                 <strong>{getPlayerLabel(player.id)}</strong>
-                <select
-                  className="top-bar-faction-select"
-                  value={player.faction}
-                  disabled={snapshot.networked}
-                  onChange={(e) => {
-                    const faction = e.target.value as Faction;
-                    runtime.resetWithFactions(
-                      Object.fromEntries(
-                        snapshot.players.map((entry) => [entry.id, entry.id === player.id ? faction : entry.faction])
-                      ) as Partial<Record<PlayerId, Faction>>
-                    );
-                  }}
-                >
-                  {factionIds.map((f) => (
-                    <option key={f} value={f}>{formatFactionName(f)}</option>
-                  ))}
-                </select>
+                {showDeveloperControls ? (
+                  <select
+                    className="top-bar-faction-select"
+                    value={player.faction}
+                    disabled={snapshot.networked}
+                    onChange={(e) => {
+                      const faction = e.target.value as Faction;
+                      runtime.resetWithFactions(
+                        Object.fromEntries(
+                          snapshot.players.map((entry) => [entry.id, entry.id === player.id ? faction : entry.faction])
+                        ) as Partial<Record<PlayerId, Faction>>
+                      );
+                    }}
+                  >
+                    {factionIds.map((f) => (
+                      <option key={f} value={f}>{formatFactionName(f)}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span>{formatFactionName(player.faction)}</span>
+                )}
               </div>
               <div className="top-bar-player-resources">
                 {resourceOrder.map((resource) => (
@@ -142,7 +147,7 @@ export function GameTopBar() {
                 ))}
               </div>
               <div className="top-bar-player-meta">
-                {!snapshot.networked ? (
+                {showDeveloperControls ? (
                   <div className="top-bar-player-actions">
                     <button
                       type="button"
@@ -184,7 +189,7 @@ export function GameTopBar() {
                   H{player.hand} D{player.deck}
                 </span>
               </div>
-              {!snapshot.networked ? (
+              {showDeveloperControls ? (
                 <div className="top-bar-priority-stops">
                   <span className="top-bar-priority-stops-label">Yield</span>
                   {PRIORITY_STOP_ORDER.map((stopKey) => (

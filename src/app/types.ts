@@ -10,6 +10,7 @@ export type MatchResultSummary = {
   outcome: MatchResultOutcome;
   headline: string;
   detail: string | null;
+  modeLabel: string | null;
   winnerId: PlayerId | null;
   localPlayerId: PlayerId | null;
   matchId: string | null;

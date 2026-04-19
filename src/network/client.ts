@@ -1,7 +1,7 @@
 import type { GameCommand } from "../game/actions/commands";
 import type { Faction } from "../game/model/enums";
 import type { PlayerId } from "../game/model/ids";
-import { getGameRuntime } from "../game/runtime";
+import { getGameRuntime, peekGameRuntime } from "../game/runtime";
 import {
   DEFAULT_MULTIPLAYER_SERVER_URL,
   DEFAULT_ONLINE_MATCH_FORMAT,
@@ -48,6 +48,14 @@ export type MultiplayerSnapshot = {
   matchId: string | null;
   localPlayerId: PlayerId | null;
   error: string | null;
+  lastCompletion: MultiplayerMatchCompletion | null;
+};
+
+export type MultiplayerMatchCompletion = {
+  reason: "victory" | "disconnect" | "abandon";
+  winnerId: PlayerId | null;
+  matchId: string | null;
+  detail: string | null;
 };
 
 const WINDOW_TOKEN_SCOPE_PREFIX = "space_trader_window_";
@@ -146,6 +154,7 @@ class MultiplayerClient {
     matchId: null,
     localPlayerId: null,
     error: null,
+    lastCompletion: null,
   };
   private eventSource: EventSource | null = null;
   private eventSourceConnected = false;
@@ -166,6 +175,17 @@ class MultiplayerClient {
 
   getSnapshot(): MultiplayerSnapshot {
     return this.snapshot;
+  }
+
+  clearLastCompletion(): void {
+    if (!this.snapshot.lastCompletion) {
+      return;
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      lastCompletion: null,
+    };
+    this.notify();
   }
 
   private getCommandSignature(command: GameCommand): string {
@@ -237,6 +257,7 @@ class MultiplayerClient {
       ...this.snapshot,
       status: this.snapshot.status === "offline" ? "connecting" : this.snapshot.status,
       error: null,
+      lastCompletion: null,
     };
     this.notify();
 
@@ -306,6 +327,7 @@ class MultiplayerClient {
       queuedFaction: faction,
       queuedFormat: format,
       error: null,
+      lastCompletion: null,
     };
     this.notify();
   }
@@ -333,6 +355,14 @@ class MultiplayerClient {
   async quitMatch(): Promise<void> {
     const token = this.snapshot.token;
     const matchId = this.activeMatchStart?.matchId;
+    const completion = matchId
+      ? {
+          reason: "abandon" as const,
+          winnerId: null,
+          matchId,
+          detail: "You left the online match.",
+        }
+      : null;
     if (token && matchId) {
       try {
         await this.postJson<QuitMatchRequest, QuitMatchResponse>("/api/match/quit", {
@@ -354,8 +384,8 @@ class MultiplayerClient {
     this.resetCommandQueue();
     this.pendingLocalCommandSignatures = [];
     writeStoredToken(null);
-    const runtime = getGameRuntime();
-    runtime.leaveNetworkMatch("Left multiplayer match.");
+    const runtime = peekGameRuntime();
+    runtime?.leaveNetworkMatch("Left multiplayer match.");
     this.snapshot = {
       ...this.snapshot,
       status: "offline",
@@ -367,11 +397,20 @@ class MultiplayerClient {
       matchId: null,
       localPlayerId: null,
       error: null,
+      lastCompletion: completion,
     };
     this.notify();
   }
 
   disconnect(): void {
+    const completion = this.activeMatchStart
+      ? {
+          reason: "disconnect" as const,
+          winnerId: null,
+          matchId: this.activeMatchStart.matchId,
+          detail: "Disconnected from the multiplayer session.",
+        }
+      : null;
     if (this.eventSource) {
       this.eventSource.close();
       this.eventSource = null;
@@ -382,9 +421,8 @@ class MultiplayerClient {
     this.resetCommandQueue();
     this.pendingLocalCommandSignatures = [];
     writeStoredToken(null);
-    const runtime = getGameRuntime();
-    runtime.leaveNetworkMatch("Disconnected from multiplayer session.");
-    runtime.resetWithContent();
+    const runtime = peekGameRuntime();
+    runtime?.leaveNetworkMatch("Disconnected from multiplayer session.");
     this.snapshot = {
       ...this.snapshot,
       status: "offline",
@@ -396,6 +434,7 @@ class MultiplayerClient {
       matchId: null,
       localPlayerId: null,
       error: null,
+      lastCompletion: completion,
     };
     this.notify();
   }
@@ -535,11 +574,11 @@ class MultiplayerClient {
         this.handleCommandSubmissionError(event.reason, event.rejectedCommand);
         return;
       case "player_disconnected":
-        getGameRuntime().recordNetworkRejection(`${event.playerId} disconnected.`);
+        peekGameRuntime()?.recordNetworkRejection(`${event.playerId} disconnected.`);
         return;
       case "match_ended": {
-        const runtime = getGameRuntime();
-        runtime.leaveNetworkMatch(
+        const runtime = peekGameRuntime();
+        runtime?.leaveNetworkMatch(
           event.reason === "victory"
             ? `Match ended. Winner: ${event.winnerId ?? "none"}.`
             : `Match ended: ${event.reason}.`
@@ -553,6 +592,15 @@ class MultiplayerClient {
           status: "connected",
           matchId: null,
           localPlayerId: null,
+          lastCompletion: {
+            reason: event.reason,
+            winnerId: event.winnerId,
+            matchId: event.matchId,
+            detail:
+              event.reason === "victory"
+                ? `Match ended. Winner: ${event.winnerId ?? "none"}.`
+                : `Match ended: ${event.reason}.`,
+          },
         };
         this.notify();
         return;
@@ -590,6 +638,7 @@ class MultiplayerClient {
       matchId: payload.matchId,
       localPlayerId: payload.localPlayerId,
       error: null,
+      lastCompletion: null,
     };
     this.notify();
   }
