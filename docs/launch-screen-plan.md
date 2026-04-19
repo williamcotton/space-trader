@@ -684,6 +684,7 @@ Recommended direction:
 
 - preserve a guaranteed direct-to-match boot path for automation
 - keep `window.__gameRuntime` available in dev-oriented direct-match flows
+- add an explicit runtime-readiness signal for automation so scripts do not depend only on incidental timing
 - prefer an explicit automation entry path over relying on whatever the current default happens to be
 
 Practical options:
@@ -696,6 +697,9 @@ Practical options:
 Recommendation:
 
 - short term: require an explicit boot flag for direct-match dev behavior
+- short term: define a small explicit automation-ready contract, for example:
+  - set `window.__spaceTraderRuntimeReady = true` when direct-match gameplay is fully mounted
+  - optionally also dispatch a `space-trader:runtime-ready` browser event for manual/dev debugging
 - medium term: give screenshot automation and local iteration a stable helper entrypoint built on that same explicit env-driven mode
 
 ## Implementation Findings
@@ -732,6 +736,7 @@ Recommended implementation direction:
 - keep the singleton model, but create it on first use rather than at import time
 - move singleton creation behind `getGameRuntime()` or a small `ensureGameRuntime()` helper
 - only assign `window.__gameRuntime` once the runtime actually exists
+- expose an explicit automation-ready marker once runtime-backed gameplay is actually ready
 - preserve HMR behavior by storing `null | GameRuntime` in hot data instead of always constructing immediately
 
 ### 3. The Multiplayer Client Currently Pulls In the Runtime Module
@@ -984,6 +989,20 @@ Recommended implementation:
 
 This keeps dev convenience without weakening the shipped flow.
 
+### 9. Add an Explicit Automation Readiness Signal
+
+Recommended implementation:
+
+- do not rely only on `window.__gameRuntime != null` as the signal that direct-match boot is ready
+- expose a small explicit readiness marker for scripts, for example:
+  - `window.__spaceTraderRuntimeReady = true`
+- optionally also dispatch a browser event like `space-trader:runtime-ready` for manual/dev debugging
+
+Reason:
+
+- this reduces brittleness when runtime creation becomes lazy and gameplay mounting is no longer an import-time side effect
+- screenshot automation can wait on a stable contract instead of polling incidental internal state
+
 ## Recommended Delivery Strategy
 
 The safest rollout is a two-step approach:
@@ -1026,12 +1045,14 @@ What must remain possible:
 - run [`scripts/capture-introduction-screenshots.ts`](/Users/williamcotton/Projects/space-trader/scripts/capture-introduction-screenshots.ts)
 - have Playwright land directly in a live match state without manual menu interaction
 - have the script continue to access `window.__gameRuntime` and manipulate deterministic match state for tutorial scenes
+- have the script wait on an explicit runtime-ready signal rather than depending only on timing
 
 What we should avoid:
 
 - making the script depend on clicking menu controls
 - making the script depend on fragile timing around lazy runtime creation
 - removing the runtime global in the only environment where this script runs
+- treating `window.__gameRuntime` existence by itself as the only definition of “ready”
 
 Recommended implementation stance:
 
@@ -1039,6 +1060,7 @@ Recommended implementation stance:
 - development and automation must retain a supported direct-entry path
 - `npm run dev` should use the same home/menu flow a normal player sees unless `VITE_BOOT_FLOW=direct_match` is explicitly set
 - screenshot automation should use that explicit env-driven path rather than implicit import side effects
+- screenshot automation should prefer an explicit runtime-ready marker once direct-match gameplay is mounted
 
 ## Recommended Screen Map
 
@@ -1329,6 +1351,7 @@ Planned changes:
 - replace eager top-level singleton construction with nullable hot data
 - move construction behind `getGameRuntime()` or an `ensureGameRuntime()` helper
 - ensure runtime creation still uses current default content/match behavior once invoked
+- expose `window.__spaceTraderRuntimeReady` or equivalent once the runtime-backed gameplay screen is actually ready for automation
 - keep existing runtime public APIs stable so gameplay components do not need to be rewritten in the same step
 
 Acceptance check:
@@ -1491,10 +1514,12 @@ Planned changes:
 Responsibility in this phase:
 
 - add typing for `VITE_BOOT_FLOW`
+- add typing for any explicit automation-ready window marker we expose
 
 Planned changes:
 
 - extend `ImportMetaEnv` / `ImportMeta` typings for the boot flag
+- extend `Window` typings if we add `__spaceTraderRuntimeReady`
 
 #### [`package.json`](/Users/williamcotton/Projects/space-trader/package.json)
 
@@ -1518,10 +1543,12 @@ Planned changes:
 
 - likely none initially if current direct-match behavior is preserved through Phase 0
 - if needed, prepare for explicit `direct_match` boot later without changing current output
+- update waits so the script can use the explicit runtime-ready signal once it exists instead of relying only on `window.__gameRuntime`
 
 Acceptance check:
 
 - screenshot generation still works after the runtime/app-shell refactor
+- script waits are no more brittle than before
 
 #### Phase 0 Execution Checklist
 
@@ -1597,6 +1624,7 @@ Verification:
 - gameplay still functions
 - HMR still works
 - importing multiplayer/session code no longer creates a hidden local match by itself
+- if the automation-ready signal is added in this slice, it only flips true when gameplay is actually ready
 
 ##### Slice 0.4: Introduce App Controller Skeleton, Still Route Straight to Match
 
@@ -1661,6 +1689,7 @@ Verification:
 
 - normal dev boot still works
 - explicit direct-match helper or env boot works if added in this slice
+- any explicit runtime-ready marker remains scoped to direct-match gameplay, not generic app boot
 
 ##### Slice 0.7: Verify Screenshot and Multiplayer Stability
 
@@ -1680,6 +1709,7 @@ Expected visible behavior:
 Verification:
 
 - screenshot capture still runs
+- screenshot capture can wait on the explicit runtime-ready signal if it has been added by this point
 - current multiplayer flow from the in-match bar still works
 
 ##### Phase 0 Exit Criteria
@@ -1944,6 +1974,7 @@ Planned changes:
 
 - update script expectations/instructions
 - ensure it runs against explicitly flagged direct-match boot
+- prefer waiting on the explicit runtime-ready signal rather than only polling `window.__gameRuntime`
 - preserve current screenshot outputs
 
 #### [`electron/preload.ts`](/Users/williamcotton/Projects/space-trader/electron/preload.ts)
