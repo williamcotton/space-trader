@@ -211,8 +211,9 @@ describe("GameRuntime", () => {
     expect(runtime.state.map.id).toBe("frontier_crossroads");
     expect(runtime.state.playerOrder).toEqual(["player_1", "player_2", "player_3", "player_4"]);
     expect(runtime.state.players.player_4.faction).toBe("alloy_clan");
-    expect(runtime.isBotAutoplayEnabled("player_3")).toBe(false);
-    expect(runtime.isBotAutoplayEnabled("player_4")).toBe(false);
+    expect(runtime.isBotAutoplayEnabled("player_2")).toBe(true);
+    expect(runtime.isBotAutoplayEnabled("player_3")).toBe(true);
+    expect(runtime.isBotAutoplayEnabled("player_4")).toBe(true);
   });
 
   it("can create a local three-player runtime from the three-player FFA runtime profile", () => {
@@ -227,7 +228,8 @@ describe("GameRuntime", () => {
     expect(runtime.state.playerOrder).toEqual(["player_1", "player_2", "player_3"]);
     expect(runtime.state.players.player_3.faction).toBe("biomass_swarm");
     expect(runtime.state.players.player_4).toBeUndefined();
-    expect(runtime.isBotAutoplayEnabled("player_3")).toBe(false);
+    expect(runtime.isBotAutoplayEnabled("player_2")).toBe(true);
+    expect(runtime.isBotAutoplayEnabled("player_3")).toBe(true);
   });
 
   it("creates deterministic deck order when a seed is supplied", () => {

@@ -216,9 +216,7 @@ function buildFactionMap(state: Pick<GameState, "playerOrder" | "players">): Rec
 }
 
 function createDefaultBotAutoplayEnabled(playerIds: PlayerId[]): Record<PlayerId, boolean> {
-  return Object.fromEntries(
-    playerIds.map((playerId, index) => [playerId, playerIds.length === 2 ? index === 1 : false])
-  ) as Record<PlayerId, boolean>;
+  return Object.fromEntries(playerIds.map((playerId, index) => [playerId, index !== 0])) as Record<PlayerId, boolean>;
 }
 
 function createDisabledBotAutoplayEnabled(playerIds: PlayerId[]): Record<PlayerId, boolean> {

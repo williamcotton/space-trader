@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { getAppBootConfig } from "./app/boot";
+import { DEFAULT_LOCAL_SKIRMISH_PRESET_ID, getLocalSkirmishPreset, type LocalSkirmishPresetId } from "./app/localSkirmish";
 import { createLocalExitResultSummary, createNetworkMatchResultSummary, deriveLocalMatchResultSummary } from "./app/resultSummary";
 import { DEFAULT_CALLSIGN, getEffectiveCallsign, readProfile, writeProfile, type AppProfile } from "./app/profileStore";
 import type { AppScreen, MatchResultSummary } from "./app/types";
@@ -22,6 +23,7 @@ import { SinglePlayerSetupScreen } from "./screens/SinglePlayerSetupScreen";
 
 type LocalMatchConfig = {
   faction: Faction;
+  runtimeProfileId: LocalSkirmishPresetId;
   modeLabel: string;
 };
 
@@ -55,6 +57,18 @@ function getPreferredLocalFaction(profile: AppProfile): Faction {
   return profile.lastLocalFaction ?? registeredFactions[0] ?? DEFAULT_LOCAL_FACTION;
 }
 
+function createLocalMatchConfig(
+  faction: Faction,
+  runtimeProfileId: LocalSkirmishPresetId,
+  options?: { modeLabel?: string }
+): LocalMatchConfig {
+  return {
+    faction,
+    runtimeProfileId,
+    modeLabel: options?.modeLabel ?? getLocalSkirmishPreset(runtimeProfileId).modeLabel,
+  };
+}
+
 function updateStoredProfile(nextProfile: AppProfile, setProfile: (profile: AppProfile) => void, setCallsignDraft: (callsign: string) => void): AppProfile {
   const stored = writeProfile(nextProfile);
   setProfile(stored);
@@ -72,10 +86,7 @@ function buildInitialMatchContext(profile: AppProfile): ActiveMatchContext | nul
   }
   return {
     kind: "local",
-    config: {
-      faction: getPreferredLocalFaction(profile),
-      modeLabel: "Play vs AI",
-    },
+    config: createLocalMatchConfig(getPreferredLocalFaction(profile), DEFAULT_LOCAL_SKIRMISH_PRESET_ID),
   };
 }
 
@@ -91,6 +102,8 @@ function App() {
   const [isEditingCallsign, setIsEditingCallsign] = useState(false);
   const [screen, setScreen] = useState<AppScreen>(() => APP_BOOT_CONFIG.initialScreen);
   const [selectedLocalFaction, setSelectedLocalFaction] = useState<Faction>(() => getPreferredLocalFaction(readProfile()));
+  const [selectedLocalSkirmishPresetId, setSelectedLocalSkirmishPresetId] =
+    useState<LocalSkirmishPresetId>(DEFAULT_LOCAL_SKIRMISH_PRESET_ID);
   const [activeMatch, setActiveMatch] = useState<ActiveMatchContext | null>(() => buildInitialMatchContext(readProfile()));
   const [lastReplayableLocalConfig, setLastReplayableLocalConfig] = useState<LocalMatchConfig | null>(() => {
     const initialMatch = buildInitialMatchContext(readProfile());
@@ -166,7 +179,7 @@ function App() {
       destroyGameRuntime();
       const runtime = getGameRuntime();
       runtime.resetWithContent({
-        runtimeProfileId: "alpha_default",
+        runtimeProfileId: config.runtimeProfileId,
         factions: {
           player_1: config.faction,
         },
@@ -407,17 +420,16 @@ function App() {
         return (
           <SinglePlayerSetupScreen
             selectedFaction={selectedLocalFaction}
+            selectedSkirmishPresetId={selectedLocalSkirmishPresetId}
             onSelectFaction={setSelectedLocalFaction}
+            onSelectSkirmishPreset={setSelectedLocalSkirmishPresetId}
             onBack={() => {
               startTransition(() => {
                 setScreen({ kind: "home" });
               });
             }}
             onStart={() => {
-              startLocalMatch({
-                faction: selectedLocalFaction,
-                modeLabel: "Play vs AI",
-              });
+              startLocalMatch(createLocalMatchConfig(selectedLocalFaction, selectedLocalSkirmishPresetId));
             }}
           />
         );
@@ -443,10 +455,11 @@ function App() {
               });
             }}
             onStartPracticeMatch={() => {
-              startLocalMatch({
-                faction: selectedLocalFaction,
-                modeLabel: "Practice Match",
-              });
+              startLocalMatch(
+                createLocalMatchConfig(selectedLocalFaction, DEFAULT_LOCAL_SKIRMISH_PRESET_ID, {
+                  modeLabel: "Practice Match",
+                })
+              );
             }}
           />
         );
@@ -501,6 +514,7 @@ function App() {
     profile,
     screen,
     selectedLocalFaction,
+    selectedLocalSkirmishPresetId,
     showOnlineExperimental,
     startLocalMatch,
     lastReplayableLocalConfig,
