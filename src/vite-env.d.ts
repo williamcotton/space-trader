@@ -4,6 +4,7 @@ import type { GameRuntime } from "./game/runtime";
 
 interface ImportMetaEnv {
   readonly VITE_BOOT_FLOW?: "home" | "direct_match";
+  readonly VITE_ENABLE_DEVELOPER_CONTROLS?: "true" | "false";
 }
 
 interface ImportMeta {

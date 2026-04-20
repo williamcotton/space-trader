@@ -2,8 +2,8 @@
  * Captures annotated screenshots for the Space Trader introduction tutorial.
  *
  * Prerequisites:
- *   1. Start the dev server with direct-match boot:
- *      npm run dev:direct-match
+ *   1. Start the dev server in screenshot mode:
+ *      npm run dev:screenshots
  *   2. Run: npx tsx scripts/capture-introduction-screenshots.ts
  *
  * The game runtime is exposed on `window.__gameRuntime` in dev mode
