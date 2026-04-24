@@ -1,4 +1,4 @@
-import type { GameFrame } from "./types";
+import type { GameFrame, RuntimeFrame } from "./types";
 import type { GameState } from "./model/state";
 import { getHexMetrics } from "./render/layout";
 import { drawMoveRangeOverlay, drawResourceNodeControlOverlays, drawStaticBoardLayer } from "./render/grid";
@@ -12,7 +12,7 @@ import {
 } from "./render/overlays";
 import { drawAnimations } from "./render/animationDrawing";
 
-export function updateGame(state: GameState, frame: GameFrame): void {
+export function updateGame(state: GameState, frame: RuntimeFrame): void {
   void state;
   void frame;
 }

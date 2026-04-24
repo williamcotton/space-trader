@@ -39,7 +39,7 @@ import {
 } from "./turn/priorityStops";
 import { createEmptyDerivedState, rebuildDerivedState, type DerivedState } from "./derived";
 import type { GameState, HexCoord } from "./model/state";
-import type { CanvasAnimation, GameFrame, GameViewport, RenderSystem, UpdateSystem } from "./types";
+import type { CanvasAnimation, GameRenderer, GameViewport, RenderSystem, RuntimeFrame, UpdateSystem } from "./types";
 import { removeEffectsForEntity } from "./systems/continuousEffects";
 import { getLegalPlayCardTargetOptions, getPlayCardTargetPrompt, getRequiredPlayCardTargetMode } from "./rules/cardPlayOptions";
 import { getDebugStackResponse } from "./registries/debugStackResponses";
@@ -831,12 +831,24 @@ export class GameRuntime {
     this.setHoveredHex(next);
   }
 
+  setHoveredHexFromBoardCoord(coord: HexCoord | null): void {
+    const next = coord && isWithinMapBounds(coord, this.state.map) ? coord : null;
+    this.setHoveredHex(next);
+  }
+
   clearHoveredHex(): void {
     this.setHoveredHex(null);
   }
 
   selectUnitFromScreenPoint(pixelX: number, pixelY: number): void {
     const hoveredHex = this.getHexAtScreenPoint(pixelX, pixelY);
+    this.selectBoardHex(hoveredHex);
+  }
+
+  selectBoardHex(hoveredHex: HexCoord | null): void {
+    if (hoveredHex && !isWithinMapBounds(hoveredHex, this.state.map)) {
+      hoveredHex = null;
+    }
     this.setHoveredHex(hoveredHex);
     if (this.pendingCardTargeting) {
       if (!hoveredHex) {
@@ -1633,15 +1645,14 @@ export class GameRuntime {
     this.hoveredHex = null;
   }
 
-  step(context: CanvasRenderingContext2D, deltaSeconds: number): void {
+  step(target: CanvasRenderingContext2D | GameRenderer, deltaSeconds: number): void {
     this.animations = stepAnimations(this.animations, deltaSeconds);
 
     if (this.stateVersion > this.derivedState.sourceVersion) {
       this.derivedState = rebuildDerivedState(this.state, this.stateVersion);
     }
 
-    const frame: GameFrame = {
-      context,
+    const frame: RuntimeFrame = {
       viewport: this.viewport,
       deltaSeconds,
       transients: {
@@ -1658,7 +1669,15 @@ export class GameRuntime {
     };
 
     this.updateSystem(this.state, frame);
-    this.renderSystem(this.state, frame);
+    if ("render" in target) {
+      target.render(this.state, frame);
+      return;
+    }
+
+    this.renderSystem(this.state, {
+      ...frame,
+      context: target,
+    });
   }
 }
 

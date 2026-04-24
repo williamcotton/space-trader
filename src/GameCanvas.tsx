@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import { getGameRuntime } from "./game/runtime";
+import type { GameRenderer } from "./game/types";
+import { createThreeGameRenderer } from "./game/render3d/renderer";
 
 function setRuntimeReady(ready: boolean): void {
   if (typeof window === "undefined") {
@@ -14,6 +16,8 @@ function setRuntimeReady(ready: boolean): void {
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const runtimeRef = useRef(getGameRuntime());
+  const rendererRef = useRef<GameRenderer | null>(null);
+  const useThreeRenderer = import.meta.env.VITE_RENDERER !== "canvas2d";
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -34,10 +38,15 @@ export function GameCanvas() {
         canvas.width = w;
         canvas.height = h;
         runtime.setViewport(w, h, dpr);
+        rendererRef.current?.setViewport(w, h, dpr);
         // Immediately redraw after resize clears the buffer to prevent blank flash
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          runtime.step(ctx, 0);
+        if (rendererRef.current) {
+          runtime.step(rendererRef.current, 0);
+        } else if (!useThreeRenderer) {
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            runtime.step(ctx, 0);
+          }
         }
       }
     };
@@ -53,7 +62,7 @@ export function GameCanvas() {
       window.removeEventListener("resize", resize);
       window.visualViewport?.removeEventListener("resize", resize);
     };
-  }, []);
+  }, [useThreeRenderer]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -63,13 +72,21 @@ export function GameCanvas() {
 
     setRuntimeReady(false);
 
-    const context = canvas.getContext("2d");
-    if (!context) {
+    let context: CanvasRenderingContext2D | null = null;
+    if (useThreeRenderer) {
+      rendererRef.current = createThreeGameRenderer(canvas);
+    } else {
+      context = canvas.getContext("2d");
+    }
+
+    const renderTarget = rendererRef.current ?? context;
+    if (!renderTarget) {
       return;
     }
 
     const runtime = runtimeRef.current;
     runtime.setViewport(canvas.width, canvas.height, window.devicePixelRatio || 1);
+    rendererRef.current?.setViewport(canvas.width, canvas.height, window.devicePixelRatio || 1);
 
     let frame = 0;
     let loopRunning = false;
@@ -93,7 +110,7 @@ export function GameCanvas() {
       const deltaSeconds = lastTime === 0 ? 0 : Math.min((time - lastTime) / 1000, 0.05);
       lastTime = time;
 
-      runtime.step(context, deltaSeconds);
+      runtime.step(renderTarget, deltaSeconds);
 
       if (runtime.hasActiveAnimations()) {
         frame = window.requestAnimationFrame(loop);
@@ -120,7 +137,7 @@ export function GameCanvas() {
       }
 
       if (!loopRunning) {
-        runtime.step(context, 0);
+        runtime.step(renderTarget, 0);
       }
       startLoop();
     };
@@ -145,9 +162,11 @@ export function GameCanvas() {
       unsubscribeTransient();
       unsubscribeState();
       stopLoop();
+      rendererRef.current?.dispose();
+      rendererRef.current = null;
       setRuntimeReady(false);
     };
-  }, []);
+  }, [useThreeRenderer]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -262,6 +281,11 @@ export function GameCanvas() {
     };
 
     const onMouseMove = (event: MouseEvent): void => {
+      const renderer = rendererRef.current;
+      if (renderer?.pickHex) {
+        runtime.setHoveredHexFromBoardCoord(renderer.pickHex(event.clientX, event.clientY));
+        return;
+      }
       const point = getCanvasPoint(event);
       runtime.setHoveredHexFromScreenPoint(point.x, point.y);
     };
@@ -271,6 +295,11 @@ export function GameCanvas() {
     };
 
     const onClick = (event: MouseEvent): void => {
+      const renderer = rendererRef.current;
+      if (renderer?.pickHex) {
+        runtime.selectBoardHex(renderer.pickHex(event.clientX, event.clientY));
+        return;
+      }
       const point = getCanvasPoint(event);
       runtime.selectUnitFromScreenPoint(point.x, point.y);
     };

@@ -150,13 +150,23 @@ export type GameViewport = {
   scale?: number;
 };
 
-export type GameFrame = {
-  context: CanvasRenderingContext2D;
+export type RuntimeFrame = {
   viewport: GameViewport;
   deltaSeconds: number;
   transients: FrameTransients;
   derived: DerivedState;
 };
 
-export type UpdateSystem = (state: GameState, frame: GameFrame) => void;
+export type GameFrame = RuntimeFrame & {
+  context: CanvasRenderingContext2D;
+};
+
+export type GameRenderer = {
+  setViewport(width: number, height: number, scale: number): void;
+  render(state: GameState, frame: RuntimeFrame): void;
+  pickHex?(clientX: number, clientY: number): HexCoord | null;
+  dispose(): void;
+};
+
+export type UpdateSystem = (state: GameState, frame: RuntimeFrame) => void;
 export type RenderSystem = (state: GameState, frame: GameFrame) => void;
