@@ -2,8 +2,10 @@
  * Captures annotated screenshots for the Space Trader introduction tutorial.
  *
  * Prerequisites:
- *   1. Start the dev server in screenshot mode:
+ *   1. Start the dev server in screenshot mode. The default renderer is the
+ *      Three.js board; use VITE_RENDERER=three explicitly if needed:
  *      npm run dev:screenshots
+ *      VITE_RENDERER=three npm run dev:screenshots
  *   2. Run: npx tsx scripts/capture-introduction-screenshots.ts
  *
  * The game runtime is exposed on `window.__gameRuntime` in dev mode
@@ -49,7 +51,9 @@ type Annotation = {
 
 /**
  * Batch-converts hex coordinates to CSS page pixel positions using the actual
- * game layout modules via dynamic import inside the browser context.
+ * Three.js board layout and camera math via dynamic import inside the browser
+ * context. The tutorial screenshots point arrows at the rendered 3D board, not
+ * the legacy 2D canvas projection.
  */
 async function hexToPagePixels(
   page: Page,
@@ -60,17 +64,30 @@ async function hexToPagePixels(
     const canvas = document.querySelector("canvas")!;
     const rect = canvas.getBoundingClientRect();
 
-    const { getHexMetrics } = await import("../src/game/render/layout.ts");
-    const { axialToPixel } = await import("../src/game/model/hex.ts");
+    const { getThreeCameraLayout, hexToWorldPoint } = await import("../src/game/render3d/layout3d.ts");
 
-    const metrics = getHexMetrics(runtime.viewport, runtime.state.map);
-    const cssScale = rect.width / canvas.width;
+    const layout = getThreeCameraLayout(runtime.state.map, runtime.viewport);
+    const cameraRightAxis = { x: 1, y: 0, z: 0 };
+    const cameraUpAxis = {
+      x: 0,
+      y: Math.SQRT1_2,
+      z: -Math.SQRT1_2,
+    };
 
     return coords.map((c: { q: number; r: number }) => {
-      const px = axialToPixel(c, metrics.origin, metrics.size);
+      const world = hexToWorldPoint(c, 0.25);
+      const relative = {
+        x: world.x - layout.position.x,
+        y: world.y - layout.position.y,
+        z: world.z - layout.position.z,
+      };
+      const cameraX = relative.x * cameraRightAxis.x + relative.y * cameraRightAxis.y + relative.z * cameraRightAxis.z;
+      const cameraY = relative.x * cameraUpAxis.x + relative.y * cameraUpAxis.y + relative.z * cameraUpAxis.z;
+      const ndcX = ((cameraX - layout.left) / (layout.right - layout.left)) * 2 - 1;
+      const ndcY = ((cameraY - layout.bottom) / (layout.top - layout.bottom)) * 2 - 1;
       return {
-        x: rect.left + px.x * cssScale,
-        y: rect.top + px.y * cssScale,
+        x: rect.left + ((ndcX + 1) / 2) * rect.width,
+        y: rect.top + ((1 - ndcY) / 2) * rect.height,
       };
     });
   }, coords);
