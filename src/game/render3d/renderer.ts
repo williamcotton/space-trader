@@ -7,9 +7,9 @@ import { getPlayerTheme, getResourceTheme, getUnitRoleTheme } from "../presentat
 import { getAttackableEntitiesForUnit } from "../rules/directInteraction";
 import { tryGetFactionPresentation, tryGetRegisteredResourceTheme } from "../registries/presentation";
 import type { CanvasAnimation, GameRenderer, RuntimeFrame } from "../types";
+import { THREE_HEX_RADIUS, getThreeCameraLayout, hexToWorldPoint } from "./layout3d";
 
-const HEX_RADIUS = 1;
-const SQRT3 = Math.sqrt(3);
+const HEX_RADIUS = THREE_HEX_RADIUS;
 
 type DisposableObject = THREE.Object3D & {
   geometry?: THREE.BufferGeometry;
@@ -17,11 +17,8 @@ type DisposableObject = THREE.Object3D & {
 };
 
 function hexToWorld(coord: HexCoord, y = 0): THREE.Vector3 {
-  return new THREE.Vector3(
-    HEX_RADIUS * SQRT3 * (coord.q + coord.r / 2),
-    y,
-    HEX_RADIUS * 1.5 * coord.r
-  );
+  const point = hexToWorldPoint(coord, y);
+  return new THREE.Vector3(point.x, point.y, point.z);
 }
 
 function createHexGeometry(radius: number): THREE.BufferGeometry {
@@ -124,19 +121,6 @@ function makeCanvasTextSprite(
   return sprite;
 }
 
-function makeGlowDisc(color: string, radius: number, opacity: number): THREE.Mesh {
-  const geometry = new THREE.CircleGeometry(radius, 48);
-  geometry.rotateX(-Math.PI / 2);
-  const material = new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
-  return new THREE.Mesh(geometry, material);
-}
-
 function entitySortValue(entity: EntityState): number {
   return entity.kind === "base" ? 0 : 1;
 }
@@ -166,8 +150,8 @@ export class ThreeGameRenderer implements GameRenderer {
   private viewportHeight = 1;
   private boardKey = "";
   private mapCenter = new THREE.Vector3();
-  private mapHalfWidth = 4;
   private mapHalfDepth = 3;
+  private currentState: GameState | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -201,6 +185,7 @@ export class ThreeGameRenderer implements GameRenderer {
   }
 
   render(state: GameState, frame: RuntimeFrame): void {
+    this.currentState = state;
     const nextBoardKey = this.buildBoardKey(state);
     if (nextBoardKey !== this.boardKey) {
       this.boardKey = nextBoardKey;
@@ -310,9 +295,6 @@ export class ThreeGameRenderer implements GameRenderer {
     for (const node of state.map.resourceNodes) {
       const theme = getResourceTheme(node.resourceType);
       const position = hexToWorld(node.coord, 0.12);
-      const glow = makeGlowDisc(theme.color, 0.82, 0.2);
-      glow.position.copy(hexToWorld(node.coord, 0.035));
-      this.boardGroup.add(glow);
 
       const nodeMesh = new THREE.Mesh(
         new THREE.CylinderGeometry(0.28, 0.34, 0.16, 32),
@@ -347,7 +329,6 @@ export class ThreeGameRenderer implements GameRenderer {
 
     this.mapCenter = bounds.getCenter(new THREE.Vector3());
     const size = bounds.getSize(new THREE.Vector3());
-    this.mapHalfWidth = Math.max(1, size.x / 2);
     this.mapHalfDepth = Math.max(1, size.z / 2);
   }
 
@@ -411,10 +392,6 @@ export class ThreeGameRenderer implements GameRenderer {
     const roleTheme = getUnitRoleTheme(entity.role);
     const root = new THREE.Group();
     root.position.copy(hexToWorld(entity.coord, 0.34));
-
-    const shadow = makeGlowDisc(theme.primary, 0.52, 0.18);
-    shadow.position.y = -0.31;
-    root.add(shadow);
 
     const material = new THREE.MeshStandardMaterial({
       color: theme.primary,
@@ -855,15 +832,20 @@ export class ThreeGameRenderer implements GameRenderer {
   }
 
   private fitCamera(): void {
-    const aspect = this.viewportWidth / Math.max(1, this.viewportHeight);
-    const verticalSize = Math.max(3.6, this.mapHalfDepth * 1.18 + 1.3, (this.mapHalfWidth * 1.1 + 1.4) / aspect);
-    const horizontalSize = verticalSize * aspect;
-    this.camera.left = -horizontalSize;
-    this.camera.right = horizontalSize;
-    this.camera.top = verticalSize;
-    this.camera.bottom = -verticalSize;
-    this.camera.position.set(this.mapCenter.x, 8.5, this.mapCenter.z + 8.5);
-    this.camera.lookAt(this.mapCenter.x, 0, this.mapCenter.z);
+    if (!this.currentState) {
+      return;
+    }
+    const layout = getThreeCameraLayout(this.currentState.map, {
+      width: this.viewportWidth,
+      height: this.viewportHeight,
+      scale: 1,
+    });
+    this.camera.left = layout.left;
+    this.camera.right = layout.right;
+    this.camera.top = layout.top;
+    this.camera.bottom = layout.bottom;
+    this.camera.position.set(layout.position.x, layout.position.y, layout.position.z);
+    this.camera.lookAt(layout.center.x, layout.center.y, layout.center.z);
     this.camera.updateProjectionMatrix();
   }
 }
