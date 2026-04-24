@@ -57,7 +57,7 @@ export function getThreeCameraLayout(map: MapState, viewport: GameViewport): Thr
   const halfWidth = Math.max(1, (maxX - minX) / 2);
   const halfDepth = Math.max(1, (maxZ - minZ) / 2);
   const aspect = viewport.width / Math.max(1, viewport.height);
-  const verticalSize = Math.max(3.6, halfDepth * 1.18 + 1.3, (halfWidth * 1.1 + 1.4) / aspect);
+  const verticalSize = Math.max(3.2, halfDepth * 1.06 + 0.95, (halfWidth * 1.02 + 1.05) / aspect);
   const horizontalSize = verticalSize * aspect;
 
   return {

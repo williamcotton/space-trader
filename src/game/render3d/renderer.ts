@@ -7,7 +7,7 @@ import { getPlayerTheme, getResourceTheme, getUnitRoleTheme } from "../presentat
 import { getAttackableEntitiesForUnit } from "../rules/directInteraction";
 import { tryGetFactionPresentation, tryGetRegisteredResourceTheme } from "../registries/presentation";
 import type { CanvasAnimation, GameRenderer, RuntimeFrame } from "../types";
-import { THREE_HEX_RADIUS, getThreeCameraLayout, hexToWorldPoint } from "./layout3d";
+import { THREE_HEX_RADIUS, getThreeCameraLayout, hexToWorldPoint, type ThreeCameraLayout } from "./layout3d";
 
 const HEX_RADIUS = THREE_HEX_RADIUS;
 
@@ -44,6 +44,15 @@ function createHexLineGeometry(radius: number): THREE.BufferGeometry {
   const points: THREE.Vector3[] = [];
   for (let side = 0; side <= 6; side += 1) {
     const angle = -Math.PI / 6 + (Math.PI * 2 * (side % 6)) / 6;
+    points.push(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius));
+  }
+  return new THREE.BufferGeometry().setFromPoints(points);
+}
+
+function createCircleLineGeometry(radius: number, segments = 48): THREE.BufferGeometry {
+  const points: THREE.Vector3[] = [];
+  for (let index = 0; index <= segments; index += 1) {
+    const angle = (Math.PI * 2 * index) / segments;
     points.push(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius));
   }
   return new THREE.BufferGeometry().setFromPoints(points);
@@ -121,6 +130,53 @@ function makeCanvasTextSprite(
   return sprite;
 }
 
+function makeBoardBackgroundTexture(): THREE.CanvasTexture {
+  const width = 1024;
+  const height = 640;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  const gradient = context.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#071121");
+  gradient.addColorStop(0.5, "#05091a");
+  gradient.addColorStop(1, "#040612");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+
+  const blueGlow = context.createRadialGradient(width * 0.32, height * 0.22, 0, width * 0.32, height * 0.22, width * 0.58);
+  blueGlow.addColorStop(0, "rgba(70, 123, 223, 0.18)");
+  blueGlow.addColorStop(1, "rgba(70, 123, 223, 0)");
+  context.fillStyle = blueGlow;
+  context.fillRect(0, 0, width, height);
+
+  const tealGlow = context.createRadialGradient(width * 0.76, height * 0.2, 0, width * 0.76, height * 0.2, width * 0.48);
+  tealGlow.addColorStop(0, "rgba(90, 214, 180, 0.14)");
+  tealGlow.addColorStop(1, "rgba(90, 214, 180, 0)");
+  context.fillStyle = tealGlow;
+  context.fillRect(0, 0, width, height);
+
+  context.fillStyle = "rgba(214, 232, 255, 0.52)";
+  for (let index = 0; index < 72; index += 1) {
+    const x = (index * 187) % width;
+    const y = ((index * 113) % height) * 0.92 + (index % 3) * 7;
+    const radius = 0.55 + (index % 4) * 0.32;
+    context.globalAlpha = 0.18 + ((index * 17) % 100) / 480;
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+  context.globalAlpha = 1;
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 function entitySortValue(entity: EntityState): number {
   return entity.kind === "base" ? 0 : 1;
 }
@@ -135,6 +191,17 @@ function resolveAccentColor(accent: string): string {
   return tryGetFactionPresentation(accent)?.theme.primary ?? tryGetRegisteredResourceTheme(accent)?.color ?? "#e6edff";
 }
 
+function makeOwnerRing(color: string, radius: number, opacity = 0.92): THREE.Line {
+  return new THREE.Line(
+    createCircleLineGeometry(radius),
+    new THREE.LineBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+    })
+  );
+}
+
 export class ThreeGameRenderer implements GameRenderer {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -146,12 +213,14 @@ export class ThreeGameRenderer implements GameRenderer {
   private readonly entityGroup = new THREE.Group();
   private readonly overlayGroup = new THREE.Group();
   private readonly animationGroup = new THREE.Group();
+  private readonly backgroundTexture = makeBoardBackgroundTexture();
   private viewportWidth = 1;
   private viewportHeight = 1;
   private boardKey = "";
   private mapCenter = new THREE.Vector3();
   private mapHalfDepth = 3;
   private currentState: GameState | null = null;
+  private cameraLayout: ThreeCameraLayout | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -161,9 +230,9 @@ export class ThreeGameRenderer implements GameRenderer {
       preserveDrawingBuffer: true,
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.setClearColor(0x050816, 1);
+    this.renderer.setClearColor(0x071121, 1);
 
-    this.scene.background = new THREE.Color(0x050816);
+    this.scene.background = this.backgroundTexture;
     this.scene.add(this.boardGroup, this.overlayGroup, this.entityGroup, this.animationGroup);
 
     const ambient = new THREE.AmbientLight(0xcad8ff, 1.4);
@@ -223,6 +292,7 @@ export class ThreeGameRenderer implements GameRenderer {
     clearGroup(this.overlayGroup);
     clearGroup(this.entityGroup);
     clearGroup(this.animationGroup);
+    this.backgroundTexture.dispose();
     this.renderer.dispose();
   }
 
@@ -261,20 +331,16 @@ export class ThreeGameRenderer implements GameRenderer {
   private rebuildBoard(state: GameState): void {
     clearGroup(this.boardGroup);
 
-    const hexGeometry = createHexGeometry(HEX_RADIUS * 0.94);
-    const lineGeometry = createHexLineGeometry(HEX_RADIUS * 0.95);
-    const tileMaterial = new THREE.MeshStandardMaterial({
-      color: 0x0b1738,
-      emissive: 0x07112b,
-      roughness: 0.72,
-      metalness: 0.12,
-      transparent: true,
-      opacity: 0.92,
+    const hexGeometry = createHexGeometry(HEX_RADIUS * 0.96);
+    const lineGeometry = createHexLineGeometry(HEX_RADIUS * 0.98);
+    const tileMaterial = new THREE.MeshBasicMaterial({
+      color: 0x09122e,
+      side: THREE.DoubleSide,
     });
     const lineMaterial = new THREE.LineBasicMaterial({
-      color: 0x42629c,
+      color: 0x5d7fbd,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.92,
     });
 
     const playableHexes = getPlayableHexes(state.map);
@@ -294,14 +360,14 @@ export class ThreeGameRenderer implements GameRenderer {
 
     for (const node of state.map.resourceNodes) {
       const theme = getResourceTheme(node.resourceType);
-      const position = hexToWorld(node.coord, 0.12);
+      const position = hexToWorld(node.coord, 0.15);
 
       const nodeMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.28, 0.34, 0.16, 32),
+        new THREE.CylinderGeometry(0.38, 0.46, 0.22, 32),
         new THREE.MeshStandardMaterial({
           color: theme.color,
           emissive: theme.color,
-          emissiveIntensity: 0.35,
+          emissiveIntensity: 0.48,
           roughness: 0.44,
           metalness: 0.22,
         })
@@ -311,19 +377,20 @@ export class ThreeGameRenderer implements GameRenderer {
 
       if (node.controlledBy) {
         const controlRing = new THREE.Line(
-          createHexLineGeometry(0.48),
+          createHexLineGeometry(0.58),
           new THREE.LineBasicMaterial({ color: getPlayerTheme(node.controlledBy).line })
         );
-        controlRing.position.copy(hexToWorld(node.coord, 0.22));
+        controlRing.position.copy(hexToWorld(node.coord, 0.3));
         this.boardGroup.add(controlRing);
       }
 
       const label = makeCanvasTextSprite(node.displayName, {
         color: "#dbe8ff",
-        fontSize: 28,
-        scale: 0.42,
+        background: "rgba(5, 9, 22, 0.72)",
+        fontSize: 34,
+        scale: 0.52,
       });
-      label.position.copy(hexToWorld(node.coord, 0.72));
+      label.position.copy(hexToWorld(node.coord, 0.88));
       this.boardGroup.add(label);
     }
 
@@ -353,12 +420,16 @@ export class ThreeGameRenderer implements GameRenderer {
     const root = new THREE.Group();
     root.position.copy(hexToWorld(entity.coord, 0.28));
 
+    const ownerRing = makeOwnerRing(theme.line, 0.88, 0.95);
+    ownerRing.position.y = -0.24;
+    root.add(ownerRing);
+
     const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.72, 0.86, 0.56, 6),
+      new THREE.CylinderGeometry(0.86, 1.02, 0.7, 6),
       new THREE.MeshStandardMaterial({
         color: theme.primary,
         emissive: theme.secondary,
-        emissiveIntensity: 0.28,
+        emissiveIntensity: 0.36,
         roughness: 0.38,
         metalness: 0.22,
       })
@@ -366,7 +437,7 @@ export class ThreeGameRenderer implements GameRenderer {
     root.add(body);
 
     const core = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.34, 0.38, 0.62, 6),
+      new THREE.CylinderGeometry(0.4, 0.45, 0.76, 6),
       new THREE.MeshStandardMaterial({ color: 0x071026, roughness: 0.65, metalness: 0.1 })
     );
     core.position.y = 0.05;
@@ -374,10 +445,11 @@ export class ThreeGameRenderer implements GameRenderer {
 
     const hp = makeCanvasTextSprite(String(entity.hp), {
       color: "#ffffff",
-      fontSize: 42,
-      scale: 0.5,
+      background: "rgba(5, 9, 22, 0.55)",
+      fontSize: 52,
+      scale: 0.64,
     });
-    hp.position.set(0, 0.78, 0);
+    hp.position.set(0, 1.0, 0);
     root.add(hp);
 
     this.entityGroup.add(root);
@@ -393,57 +465,53 @@ export class ThreeGameRenderer implements GameRenderer {
     const root = new THREE.Group();
     root.position.copy(hexToWorld(entity.coord, 0.34));
 
+    const ownerRing = makeOwnerRing(theme.line, 0.5, entity.ownerId === state.activePlayerId ? 0.98 : 0.78);
+    ownerRing.position.y = -0.25;
+    root.add(ownerRing);
+
     const material = new THREE.MeshStandardMaterial({
       color: theme.primary,
       emissive: theme.secondary,
-      emissiveIntensity: 0.22,
+      emissiveIntensity: 0.34,
       roughness: 0.42,
       metalness: 0.18,
     });
 
     let body: THREE.Mesh;
     if (entity.role === "combat") {
-      body = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), material);
-      body.scale.set(1, 0.58, 1);
+      body = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), material);
+      body.scale.set(1.05, 0.64, 1.05);
     } else if (entity.role === "resource") {
-      body = new THREE.Mesh(new THREE.SphereGeometry(0.36, 24, 16), material);
-      body.scale.set(1, 0.72, 1);
+      body = new THREE.Mesh(new THREE.SphereGeometry(0.46, 24, 16), material);
+      body.scale.set(1, 0.78, 1);
     } else {
-      body = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.38, 6), material);
+      body = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.48, 6), material);
       body.rotation.y = Math.PI / 6;
     }
     root.add(body);
 
     const role = makeCanvasTextSprite(entity.role[0].toUpperCase(), {
       color: roleTheme.accent,
-      fontSize: 38,
-      scale: 0.34,
+      background: "rgba(5, 9, 22, 0.5)",
+      fontSize: 44,
+      scale: 0.42,
     });
-    role.position.set(0, 0.46, 0);
+    role.position.set(0, 0.56, 0);
     root.add(role);
 
     const hp = makeCanvasTextSprite(`${entity.hp}/${entity.maxHp}`, {
       color: "#eff6ff",
-      background: "rgba(6, 11, 26, 0.82)",
-      fontSize: 26,
-      scale: 0.36,
+      background: "rgba(6, 11, 26, 0.9)",
+      fontSize: 32,
+      scale: 0.44,
     });
-    hp.position.set(0, 0.92, 0);
+    hp.position.set(0, 1.08, 0);
     root.add(hp);
-
-    if (state.selectedEntityId === entity.id) {
-      const ring = new THREE.Line(
-        createHexLineGeometry(0.58),
-        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 })
-      );
-      ring.position.y = -0.24;
-      root.add(ring);
-    }
 
     if (entity.hasSummoningSickness) {
       const ring = new THREE.Line(
         createHexLineGeometry(0.46),
-        new THREE.LineBasicMaterial({ color: 0xffc276, transparent: true, opacity: 0.78 })
+        new THREE.LineBasicMaterial({ color: 0xffc276, transparent: true, opacity: 0.9 })
       );
       ring.position.y = -0.18;
       root.add(ring);
@@ -454,10 +522,10 @@ export class ThreeGameRenderer implements GameRenderer {
       const badge = makeCanvasTextSprite(resourceTheme.shortLabel.toUpperCase().slice(0, 2), {
         color: resourceTheme.color,
         background: "rgba(8, 12, 28, 0.9)",
-        fontSize: 24,
-        scale: 0.28,
+        fontSize: 30,
+        scale: 0.34,
       });
-      badge.position.set(0.46, 0.62, 0);
+      badge.position.set(0.56, 0.74, 0);
       root.add(badge);
     }
 
@@ -468,21 +536,45 @@ export class ThreeGameRenderer implements GameRenderer {
     clearGroup(this.overlayGroup);
 
     for (const cell of frame.derived.moveRangeOverlay) {
+      const fillColor = cell.occupied ? 0xff6e6e : 0x6bf5bc;
+      const lineColor = cell.occupied ? 0xff9191 : 0x6bf5bc;
       const overlay = new THREE.Mesh(
         createHexGeometry(HEX_RADIUS * 0.83),
         new THREE.MeshBasicMaterial({
-          color: cell.occupied ? 0xff6e6e : 0x6bf5bc,
+          color: fillColor,
           transparent: true,
-          opacity: cell.occupied ? 0.16 : 0.14,
+          opacity: cell.occupied ? 0.18 : 0.16,
           depthWrite: false,
           side: THREE.DoubleSide,
         })
       );
       overlay.position.copy(hexToWorld(cell.coord, 0.075));
       this.overlayGroup.add(overlay);
+
+      const outline = new THREE.Line(
+        createHexLineGeometry(HEX_RADIUS * 0.84),
+        new THREE.LineBasicMaterial({
+          color: lineColor,
+          transparent: true,
+          opacity: cell.occupied ? 0.92 : 0.96,
+        })
+      );
+      outline.position.copy(hexToWorld(cell.coord, 0.13));
+      this.overlayGroup.add(outline);
     }
 
     const hoveredHex = frame.transients.hoveredHex;
+    const selected = state.selectedEntityId ? state.entities[state.selectedEntityId] : null;
+    if (selected) {
+      const theme = getPlayerTheme(selected.ownerId);
+      const selectedOutline = new THREE.Line(
+        createHexLineGeometry(HEX_RADIUS * 0.99),
+        new THREE.LineBasicMaterial({ color: theme.line, transparent: true, opacity: 0.98 })
+      );
+      selectedOutline.position.copy(hexToWorld(selected.coord, 0.155));
+      this.overlayGroup.add(selectedOutline);
+    }
+
     if (hoveredHex && isWithinMapBounds(hoveredHex, state.map)) {
       const hover = new THREE.Line(
         createHexLineGeometry(HEX_RADIUS * 0.9),
@@ -502,7 +594,7 @@ export class ThreeGameRenderer implements GameRenderer {
         fontSize: 26,
         scale: 0.52,
       });
-      stack.position.set(this.mapCenter.x, 3.1, this.mapCenter.z - this.mapHalfDepth * 1.25);
+      stack.position.copy(this.getStackWorldAnchor());
       this.overlayGroup.add(stack);
     }
   }
@@ -686,7 +778,13 @@ export class ThreeGameRenderer implements GameRenderer {
   }
 
   private getStackWorldAnchor(): THREE.Vector3 {
-    return new THREE.Vector3(this.mapCenter.x, 3.0, this.mapCenter.z - this.mapHalfDepth * 1.25);
+    const layout = this.cameraLayout;
+    if (!layout) {
+      return new THREE.Vector3(this.mapCenter.x, 3.0, this.mapCenter.z - this.mapHalfDepth);
+    }
+
+    const visibleHalfDepth = (layout.top - layout.bottom) / 2;
+    return new THREE.Vector3(this.mapCenter.x, 2.7, this.mapCenter.z - visibleHalfDepth * 0.62);
   }
 
   private addMoveAnimation(animation: Extract<CanvasAnimation, { kind: "move" }>, progress: number): void {
@@ -840,6 +938,7 @@ export class ThreeGameRenderer implements GameRenderer {
       height: this.viewportHeight,
       scale: 1,
     });
+    this.cameraLayout = layout;
     this.camera.left = layout.left;
     this.camera.right = layout.right;
     this.camera.top = layout.top;
