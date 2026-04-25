@@ -310,19 +310,25 @@ function makeUtilityUnitBody(color: string, accentColor: string): THREE.Group {
   const ringMaterial = makeThickLineMaterial(color, 0.95);
   const accentMaterial = makeThickLineMaterial(accentColor, 0.54);
 
-  const hexHeights = [-0.2, -0.02, 0.16, 0.34, 0.52];
-  for (const y of hexHeights) {
-    group.add(makeThickPolyline(makeHexPoints(0.46, y), 0.024, ringMaterial));
+  const hexes = [
+    { y: -0.2, radius: 0.46 },
+    { y: -0.02, radius: 0.4 },
+    { y: 0.16, radius: 0.34 },
+    { y: 0.34, radius: 0.28 },
+    { y: 0.52, radius: 0.23 },
+  ];
+  for (const hex of hexes) {
+    group.add(makeThickPolyline(makeHexPoints(hex.radius, hex.y), 0.024, ringMaterial));
   }
 
+  const bottom = hexes[0];
+  const top = hexes[hexes.length - 1];
   for (let side = 0; side < 6; side += 1) {
     const angle = -Math.PI / 6 + (Math.PI * 2 * side) / 6;
-    const x = Math.cos(angle) * 0.46;
-    const z = Math.sin(angle) * 0.46;
     group.add(
       makeThickSegment(
-        new THREE.Vector3(x, hexHeights[0], z),
-        new THREE.Vector3(x, hexHeights[hexHeights.length - 1], z),
+        new THREE.Vector3(Math.cos(angle) * bottom.radius, bottom.y, Math.sin(angle) * bottom.radius),
+        new THREE.Vector3(Math.cos(angle) * top.radius, top.y, Math.sin(angle) * top.radius),
         0.018,
         accentMaterial
       )
