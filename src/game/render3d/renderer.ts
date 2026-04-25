@@ -11,10 +11,20 @@ import { THREE_HEX_RADIUS, getThreeCameraLayout, hexToWorldPoint, type ThreeCame
 
 const HEX_RADIUS = THREE_HEX_RADIUS;
 const CAMERA_INTRO_DURATION_SECONDS = 1.65;
+const VICTORY_CAMERA_DURATION_SECONDS = 2.35;
 
 type DisposableObject = THREE.Object3D & {
   geometry?: THREE.BufferGeometry;
   material?: THREE.Material | THREE.Material[];
+};
+
+type CameraSnapshot = {
+  position: THREE.Vector3;
+  target: THREE.Vector3;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
 };
 
 function hexToWorld(coord: HexCoord, y = 0): THREE.Vector3 {
@@ -378,6 +388,10 @@ export class ThreeGameRenderer implements GameRenderer {
   private viewportHeight = 1;
   private boardKey = "";
   private cameraIntroKey = "";
+  private victoryCameraKey = "";
+  private victoryCameraElapsed = VICTORY_CAMERA_DURATION_SECONDS;
+  private victoryCameraStart: CameraSnapshot | null = null;
+  private cameraLookAtTarget = new THREE.Vector3();
   private mapCenter = new THREE.Vector3();
   private mapHalfDepth = 3;
   private currentState: GameState | null = null;
@@ -419,9 +433,15 @@ export class ThreeGameRenderer implements GameRenderer {
     this.currentState = state;
     const nextBoardKey = this.buildBoardKey(state);
     const nextCameraIntroKey = this.buildCameraIntroKey(state);
+    const nextVictoryCameraKey = state.winner ? `${state.matchId}:${state.winner}` : "";
     if (nextCameraIntroKey !== this.cameraIntroKey) {
       this.cameraIntroKey = nextCameraIntroKey;
       this.cameraIntroElapsed = 0;
+    }
+    if (nextVictoryCameraKey !== this.victoryCameraKey) {
+      this.victoryCameraKey = nextVictoryCameraKey;
+      this.victoryCameraElapsed = nextVictoryCameraKey ? 0 : VICTORY_CAMERA_DURATION_SECONDS;
+      this.victoryCameraStart = nextVictoryCameraKey ? this.captureCameraSnapshot() : null;
     }
     if (nextBoardKey !== this.boardKey) {
       this.boardKey = nextBoardKey;
@@ -432,7 +452,7 @@ export class ThreeGameRenderer implements GameRenderer {
     this.rebuildOverlays(state, frame);
     this.rebuildEntities(state);
     this.rebuildAnimations(frame);
-    this.updateCameraIntro(frame.deltaSeconds);
+    this.updateCameraEffects(state, frame.deltaSeconds);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -1086,6 +1106,73 @@ export class ThreeGameRenderer implements GameRenderer {
     this.applyCameraLayout(this.cameraLayout, easeOutCubic(this.cameraIntroElapsed / CAMERA_INTRO_DURATION_SECONDS));
   }
 
+  private updateCameraEffects(state: GameState, deltaSeconds: number): void {
+    if (!this.cameraLayout) {
+      return;
+    }
+    if (state.winner) {
+      this.victoryCameraElapsed = Math.min(VICTORY_CAMERA_DURATION_SECONDS, this.victoryCameraElapsed + deltaSeconds);
+      this.applyVictoryCameraLayout(state, this.cameraLayout, easeOutCubic(this.victoryCameraElapsed / VICTORY_CAMERA_DURATION_SECONDS));
+      return;
+    }
+    this.updateCameraIntro(deltaSeconds);
+  }
+
+  private getVictoryCameraFocus(state: GameState): THREE.Vector3 {
+    const winner = state.winner;
+    if (winner && state.players[winner]) {
+      const base = state.entities[state.players[winner].baseEntityId];
+      if (base) {
+        return hexToWorld(base.coord, 0.28);
+      }
+    }
+    return new THREE.Vector3(this.cameraLayout?.center.x ?? 0, 0, this.cameraLayout?.center.z ?? 0);
+  }
+
+  private captureCameraSnapshot(): CameraSnapshot {
+    return {
+      position: this.camera.position.clone(),
+      target: this.cameraLookAtTarget.clone(),
+      left: this.camera.left,
+      right: this.camera.right,
+      top: this.camera.top,
+      bottom: this.camera.bottom,
+    };
+  }
+
+  private setCameraLookAt(target: THREE.Vector3): void {
+    this.cameraLookAtTarget.copy(target);
+    this.camera.lookAt(target.x, target.y, target.z);
+  }
+
+  private applyVictoryCameraLayout(state: GameState, layout: ThreeCameraLayout, progress: number): void {
+    const start = this.victoryCameraStart ?? this.captureCameraSnapshot();
+    const focus = this.getVictoryCameraFocus(state);
+    const basePosition = new THREE.Vector3(layout.position.x, layout.position.y, layout.position.z);
+    const baseCenter = new THREE.Vector3(layout.center.x, layout.center.y, layout.center.z);
+    const cameraVector = basePosition.clone().sub(baseCenter);
+    const endPosition = focus.clone().add(cameraVector.multiplyScalar(0.72));
+    const sweep = Math.sin(progress * Math.PI) * 3.8;
+    const endScale = 0.56;
+    const target = new THREE.Vector3(
+      lerp(start.target.x, focus.x, progress),
+      lerp(start.target.y, focus.y, progress),
+      lerp(start.target.z, focus.z, progress)
+    );
+
+    this.camera.left = lerp(start.left, layout.left * endScale, progress);
+    this.camera.right = lerp(start.right, layout.right * endScale, progress);
+    this.camera.top = lerp(start.top, layout.top * endScale, progress);
+    this.camera.bottom = lerp(start.bottom, layout.bottom * endScale, progress);
+    this.camera.position.set(
+      lerp(start.position.x, endPosition.x, progress) + sweep,
+      lerp(start.position.y, endPosition.y + 1.2, progress),
+      lerp(start.position.z, endPosition.z, progress)
+    );
+    this.setCameraLookAt(target);
+    this.camera.updateProjectionMatrix();
+  }
+
   private applyCameraLayout(layout: ThreeCameraLayout, progress: number): void {
     const introScale = 1.42 - 0.42 * progress;
     const introOffset = 1 - progress;
@@ -1109,7 +1196,7 @@ export class ThreeGameRenderer implements GameRenderer {
       lerp(startY, layout.position.y, progress),
       lerp(startZ, layout.position.z, progress)
     );
-    this.camera.lookAt(targetX, targetY, targetZ);
+    this.setCameraLookAt(new THREE.Vector3(targetX, targetY, targetZ));
     this.camera.updateProjectionMatrix();
   }
 }
