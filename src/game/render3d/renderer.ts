@@ -10,6 +10,7 @@ import type { CanvasAnimation, GameRenderer, RuntimeFrame } from "../types";
 import { THREE_HEX_RADIUS, getThreeCameraLayout, hexToWorldPoint, type ThreeCameraLayout } from "./layout3d";
 
 const HEX_RADIUS = THREE_HEX_RADIUS;
+const CAMERA_INTRO_DURATION_SECONDS = 1.65;
 
 type DisposableObject = THREE.Object3D & {
   geometry?: THREE.BufferGeometry;
@@ -202,6 +203,15 @@ function resolveAccentColor(accent: string): string {
   return tryGetFactionPresentation(accent)?.theme.primary ?? tryGetRegisteredResourceTheme(accent)?.color ?? "#e6edff";
 }
 
+function easeOutCubic(value: number): number {
+  const clamped = Math.min(1, Math.max(0, value));
+  return 1 - Math.pow(1 - clamped, 3);
+}
+
+function lerp(start: number, end: number, progress: number): number {
+  return start + (end - start) * progress;
+}
+
 function makeResourceUnitBody(color: string, accentColor: string): THREE.Group {
   const group = new THREE.Group();
   const ringMaterial = new THREE.LineBasicMaterial({
@@ -322,10 +332,12 @@ export class ThreeGameRenderer implements GameRenderer {
   private viewportWidth = 1;
   private viewportHeight = 1;
   private boardKey = "";
+  private cameraIntroKey = "";
   private mapCenter = new THREE.Vector3();
   private mapHalfDepth = 3;
   private currentState: GameState | null = null;
   private cameraLayout: ThreeCameraLayout | null = null;
+  private cameraIntroElapsed = CAMERA_INTRO_DURATION_SECONDS;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -361,6 +373,11 @@ export class ThreeGameRenderer implements GameRenderer {
   render(state: GameState, frame: RuntimeFrame): void {
     this.currentState = state;
     const nextBoardKey = this.buildBoardKey(state);
+    const nextCameraIntroKey = this.buildCameraIntroKey(state);
+    if (nextCameraIntroKey !== this.cameraIntroKey) {
+      this.cameraIntroKey = nextCameraIntroKey;
+      this.cameraIntroElapsed = 0;
+    }
     if (nextBoardKey !== this.boardKey) {
       this.boardKey = nextBoardKey;
       this.rebuildBoard(state);
@@ -370,6 +387,7 @@ export class ThreeGameRenderer implements GameRenderer {
     this.rebuildOverlays(state, frame);
     this.rebuildEntities(state);
     this.rebuildAnimations(frame);
+    this.updateCameraIntro(frame.deltaSeconds);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -409,6 +427,16 @@ export class ThreeGameRenderer implements GameRenderer {
       state.map.playableHexes?.length ?? 0,
       ...state.map.resourceNodes.map((node) => `${node.coord.q},${node.coord.r},${node.resourceType},${node.controlledBy ?? "none"}`),
       ...state.playerOrder.map((playerId) => `${playerId}:${state.players[playerId]?.faction ?? "none"}`),
+    ].join("|");
+  }
+
+  private buildCameraIntroKey(state: GameState): string {
+    return [
+      state.map.id,
+      state.map.width,
+      state.map.height,
+      state.map.playableHexes?.length ?? 0,
+      ...state.playerOrder,
     ].join("|");
   }
 
@@ -1023,12 +1051,41 @@ export class ThreeGameRenderer implements GameRenderer {
       scale: 1,
     });
     this.cameraLayout = layout;
+    this.applyCameraLayout(layout, easeOutCubic(this.cameraIntroElapsed / CAMERA_INTRO_DURATION_SECONDS));
+  }
+
+  private updateCameraIntro(deltaSeconds: number): void {
+    if (!this.cameraLayout || this.cameraIntroElapsed >= CAMERA_INTRO_DURATION_SECONDS) {
+      return;
+    }
+    this.cameraIntroElapsed = Math.min(CAMERA_INTRO_DURATION_SECONDS, this.cameraIntroElapsed + deltaSeconds);
+    this.applyCameraLayout(this.cameraLayout, easeOutCubic(this.cameraIntroElapsed / CAMERA_INTRO_DURATION_SECONDS));
+  }
+
+  private applyCameraLayout(layout: ThreeCameraLayout, progress: number): void {
+    const introScale = 1.42 - 0.42 * progress;
+    const introOffset = 1 - progress;
+    const startX = layout.position.x - 7.5;
+    const startY = layout.position.y + 4.8;
+    const startZ = layout.position.z + 8.2;
+    const targetX = layout.center.x + 2.6 * introOffset;
+    const targetY = layout.center.y;
+    const targetZ = layout.center.z - 3.4 * introOffset;
+
     this.camera.left = layout.left;
     this.camera.right = layout.right;
     this.camera.top = layout.top;
     this.camera.bottom = layout.bottom;
-    this.camera.position.set(layout.position.x, layout.position.y, layout.position.z);
-    this.camera.lookAt(layout.center.x, layout.center.y, layout.center.z);
+    this.camera.left *= introScale;
+    this.camera.right *= introScale;
+    this.camera.top *= introScale;
+    this.camera.bottom *= introScale;
+    this.camera.position.set(
+      lerp(startX, layout.position.x, progress),
+      lerp(startY, layout.position.y, progress),
+      lerp(startZ, layout.position.z, progress)
+    );
+    this.camera.lookAt(targetX, targetY, targetZ);
     this.camera.updateProjectionMatrix();
   }
 }
