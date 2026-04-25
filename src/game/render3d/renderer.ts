@@ -50,15 +50,6 @@ function createHexLineGeometry(radius: number): THREE.BufferGeometry {
   return new THREE.BufferGeometry().setFromPoints(points);
 }
 
-function createCircleLineGeometry(radius: number, segments = 48): THREE.BufferGeometry {
-  const points: THREE.Vector3[] = [];
-  for (let index = 0; index <= segments; index += 1) {
-    const angle = (Math.PI * 2 * index) / segments;
-    points.push(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius));
-  }
-  return new THREE.BufferGeometry().setFromPoints(points);
-}
-
 function makeThickLineMaterial(color: string, opacity: number): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({
     color,
@@ -246,50 +237,35 @@ function lerp(start: number, end: number, progress: number): number {
 
 function makeResourceUnitBody(color: string, accentColor: string): THREE.Group {
   const group = new THREE.Group();
-  const ringMaterial = new THREE.LineBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.95,
-  });
-  const accentMaterial = new THREE.LineBasicMaterial({
-    color: accentColor,
-    transparent: true,
-    opacity: 0.54,
-  });
+  const ringMaterial = makeThickLineMaterial(color, 0.95);
+  const accentMaterial = makeThickLineMaterial(accentColor, 0.54);
 
   const ringHeights = [-0.22, -0.06, 0.1, 0.26, 0.42];
   for (const y of ringHeights) {
-    const ring = new THREE.Line(createCircleLineGeometry(0.42, 48), ringMaterial);
-    ring.position.y = y;
-    group.add(ring);
+    group.add(makeThickPolyline(makeCirclePoints(0.42, y), 0.024, ringMaterial));
   }
 
-  const strutVertices: number[] = [];
   for (let index = 0; index < 4; index += 1) {
     const angle = Math.PI / 4 + index * (Math.PI / 2);
     const x = Math.cos(angle) * 0.42;
     const z = Math.sin(angle) * 0.42;
-    strutVertices.push(x, ringHeights[0], z, x, ringHeights[ringHeights.length - 1], z);
+    group.add(
+      makeThickSegment(
+        new THREE.Vector3(x, ringHeights[0], z),
+        new THREE.Vector3(x, ringHeights[ringHeights.length - 1], z),
+        0.018,
+        accentMaterial
+      )
+    );
   }
-  const strutGeometry = new THREE.BufferGeometry();
-  strutGeometry.setAttribute("position", new THREE.Float32BufferAttribute(strutVertices, 3));
-  group.add(new THREE.LineSegments(strutGeometry, accentMaterial));
 
   return group;
 }
 
 function makeCombatUnitBody(color: string, accentColor: string): THREE.Group {
   const group = new THREE.Group();
-  const ringMaterial = new THREE.LineBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.96,
-  });
-  const accentMaterial = new THREE.LineBasicMaterial({
-    color: accentColor,
-    transparent: true,
-    opacity: 0.56,
-  });
+  const ringMaterial = makeThickLineMaterial(color, 0.96);
+  const accentMaterial = makeThickLineMaterial(accentColor, 0.56);
 
   const rings = [
     { y: -0.22, radius: 0.48 },
@@ -299,62 +275,89 @@ function makeCombatUnitBody(color: string, accentColor: string): THREE.Group {
     { y: 0.5, radius: 0.1 },
   ];
   for (const ringSpec of rings) {
-    const ring = new THREE.Line(createCircleLineGeometry(ringSpec.radius, 48), ringMaterial);
-    ring.position.y = ringSpec.y;
-    group.add(ring);
+    group.add(makeThickPolyline(makeCirclePoints(ringSpec.radius, ringSpec.y), 0.024, ringMaterial));
   }
 
-  const strutVertices: number[] = [];
   const base = rings[0];
   const top = rings[rings.length - 1];
   for (let index = 0; index < 4; index += 1) {
     const angle = Math.PI / 4 + index * (Math.PI / 2);
-    strutVertices.push(
-      Math.cos(angle) * base.radius,
-      base.y,
-      Math.sin(angle) * base.radius,
-      Math.cos(angle) * top.radius,
-      top.y,
-      Math.sin(angle) * top.radius
+    group.add(
+      makeThickSegment(
+        new THREE.Vector3(Math.cos(angle) * base.radius, base.y, Math.sin(angle) * base.radius),
+        new THREE.Vector3(Math.cos(angle) * top.radius, top.y, Math.sin(angle) * top.radius),
+        0.018,
+        accentMaterial
+      )
     );
   }
-  const strutGeometry = new THREE.BufferGeometry();
-  strutGeometry.setAttribute("position", new THREE.Float32BufferAttribute(strutVertices, 3));
-  group.add(new THREE.LineSegments(strutGeometry, accentMaterial));
 
   return group;
 }
 
 function makeUtilityUnitBody(color: string, accentColor: string): THREE.Group {
   const group = new THREE.Group();
-  const ringMaterial = new THREE.LineBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.95,
-  });
-  const accentMaterial = new THREE.LineBasicMaterial({
-    color: accentColor,
-    transparent: true,
-    opacity: 0.54,
-  });
+  const ringMaterial = makeThickLineMaterial(color, 0.95);
+  const accentMaterial = makeThickLineMaterial(accentColor, 0.54);
 
   const hexHeights = [-0.2, -0.02, 0.16, 0.34, 0.52];
   for (const y of hexHeights) {
-    const hex = new THREE.Line(createHexLineGeometry(0.46), ringMaterial);
-    hex.position.y = y;
-    group.add(hex);
+    group.add(makeThickPolyline(makeHexPoints(0.46, y), 0.024, ringMaterial));
   }
 
-  const strutVertices: number[] = [];
   for (let side = 0; side < 6; side += 1) {
     const angle = -Math.PI / 6 + (Math.PI * 2 * side) / 6;
     const x = Math.cos(angle) * 0.46;
     const z = Math.sin(angle) * 0.46;
-    strutVertices.push(x, hexHeights[0], z, x, hexHeights[hexHeights.length - 1], z);
+    group.add(
+      makeThickSegment(
+        new THREE.Vector3(x, hexHeights[0], z),
+        new THREE.Vector3(x, hexHeights[hexHeights.length - 1], z),
+        0.018,
+        accentMaterial
+      )
+    );
   }
-  const strutGeometry = new THREE.BufferGeometry();
-  strutGeometry.setAttribute("position", new THREE.Float32BufferAttribute(strutVertices, 3));
-  group.add(new THREE.LineSegments(strutGeometry, accentMaterial));
+
+  return group;
+}
+
+function makeBaseBody(color: string, accentColor: string): THREE.Group {
+  const group = new THREE.Group();
+  const primaryMaterial = makeThickLineMaterial(color, 0.94);
+  const accentMaterial = makeThickLineMaterial(accentColor, 0.58);
+
+  const bottomY = -0.35;
+  const topY = 0.35;
+  group.add(makeThickPolyline(makeHexPoints(1.02, bottomY), 0.034, primaryMaterial));
+  group.add(makeThickPolyline(makeHexPoints(0.86, topY), 0.034, primaryMaterial));
+
+  for (let side = 0; side < 6; side += 1) {
+    const angle = -Math.PI / 6 + (Math.PI * 2 * side) / 6;
+    group.add(
+      makeThickSegment(
+        new THREE.Vector3(Math.cos(angle) * 1.02, bottomY, Math.sin(angle) * 1.02),
+        new THREE.Vector3(Math.cos(angle) * 0.86, topY, Math.sin(angle) * 0.86),
+        0.024,
+        primaryMaterial
+      )
+    );
+  }
+
+  group.add(makeThickPolyline(makeHexPoints(0.45, bottomY + 0.05), 0.022, accentMaterial));
+  group.add(makeThickPolyline(makeHexPoints(0.4, topY + 0.05), 0.022, accentMaterial));
+
+  for (let side = 0; side < 6; side += 1) {
+    const angle = -Math.PI / 6 + (Math.PI * 2 * side) / 6;
+    group.add(
+      makeThickSegment(
+        new THREE.Vector3(Math.cos(angle) * 0.45, bottomY + 0.05, Math.sin(angle) * 0.45),
+        new THREE.Vector3(Math.cos(angle) * 0.4, topY + 0.05, Math.sin(angle) * 0.4),
+        0.016,
+        accentMaterial
+      )
+    );
+  }
 
   return group;
 }
@@ -599,28 +602,7 @@ export class ThreeGameRenderer implements GameRenderer {
     const root = new THREE.Group();
     root.position.copy(hexToWorld(entity.coord, 0.28));
 
-    const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.86, 1.02, 0.7, 6),
-      new THREE.MeshBasicMaterial({
-        color: theme.primary,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.94,
-      })
-    );
-    root.add(body);
-
-    const core = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.4, 0.45, 0.76, 6),
-      new THREE.MeshBasicMaterial({
-        color: theme.secondary,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.58,
-      })
-    );
-    core.position.y = 0.05;
-    root.add(core);
+    root.add(makeBaseBody(theme.primary, theme.secondary));
 
     const hp = makeCanvasTextSprite(String(entity.hp), {
       color: "#ffffff",
