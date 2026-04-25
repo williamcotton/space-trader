@@ -164,6 +164,7 @@ export type GameFrame = RuntimeFrame & {
 export type GameRenderer = {
   setViewport(width: number, height: number, scale: number): void;
   render(state: GameState, frame: RuntimeFrame): void;
+  hasActiveEffects?(): boolean;
   pickHex?(clientX: number, clientY: number): HexCoord | null;
   dispose(): void;
 };

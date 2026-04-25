@@ -25,6 +25,7 @@ const DEV_SERVER_URL = "http://localhost:5173";
 const OUTPUT_DIR = join(__dirname, "..", "docs", "introduction");
 const VIEWPORT = { width: 1600, height: 1200 };
 const RENDER_SETTLE_MS = 600;
+const CAMERA_SETTLE_TIMEOUT_MS = 5_000;
 
 // ---------------------------------------------------------------------------
 // Annotation types
@@ -256,7 +257,7 @@ async function resetGame(page: Page): Promise<void> {
     runtime.notifyListeners();
   });
 
-  await page.waitForTimeout(RENDER_SETTLE_MS);
+  await waitForRendererSettled(page);
 }
 
 async function settleRender(page: Page): Promise<void> {
@@ -265,6 +266,7 @@ async function settleRender(page: Page): Promise<void> {
     runtime.animations = [];
     runtime.notifyListeners();
   });
+  await waitForRendererSettled(page);
   await page.waitForTimeout(RENDER_SETTLE_MS);
 }
 
@@ -279,6 +281,13 @@ async function waitForGameReady(page: Page): Promise<void> {
   await page.waitForFunction(
     () => (window as any).__gameRuntime != null && (window as any).__spaceTraderRuntimeReady === true,
     { timeout: 10_000 }
+  );
+}
+
+async function waitForRendererSettled(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => (window as any).__spaceTraderRuntimeReady === true && (window as any).__spaceTraderRendererSettled === true,
+    { timeout: CAMERA_SETTLE_TIMEOUT_MS }
   );
 }
 
@@ -1047,7 +1056,7 @@ async function main(): Promise<void> {
 
   await waitForGameReady(page);
 
-  await page.waitForTimeout(1_000);
+  await waitForRendererSettled(page);
 
   console.log(`Capturing ${steps.length} tutorial screenshots...\n`);
 

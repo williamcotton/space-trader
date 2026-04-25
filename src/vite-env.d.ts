@@ -18,6 +18,7 @@ declare global {
     };
     __gameRuntime?: GameRuntime;
     __spaceTraderRuntimeReady?: boolean;
+    __spaceTraderRendererSettled?: boolean;
   }
 }
 

@@ -8,6 +8,7 @@ function setRuntimeReady(ready: boolean): void {
     return;
   }
   window.__spaceTraderRuntimeReady = ready;
+  window.__spaceTraderRendererSettled = false;
   if (ready) {
     window.dispatchEvent(new CustomEvent("space-trader:runtime-ready"));
   }
@@ -92,6 +93,12 @@ export function GameCanvas() {
     let loopRunning = false;
     let lastTime = 0;
 
+    const hasActiveRenderWork = (): boolean => runtime.hasActiveAnimations() || (rendererRef.current?.hasActiveEffects?.() ?? false);
+
+    const updateRendererSettledFlag = (): void => {
+      window.__spaceTraderRendererSettled = !hasActiveRenderWork();
+    };
+
     const stopLoop = (): void => {
       if (frame !== 0) {
         window.cancelAnimationFrame(frame);
@@ -99,6 +106,7 @@ export function GameCanvas() {
       frame = 0;
       loopRunning = false;
       lastTime = 0;
+      updateRendererSettledFlag();
     };
 
     const loop = (time: number): void => {
@@ -111,8 +119,9 @@ export function GameCanvas() {
       lastTime = time;
 
       runtime.step(renderTarget, deltaSeconds);
+      updateRendererSettledFlag();
 
-      if (runtime.hasActiveAnimations()) {
+      if (hasActiveRenderWork()) {
         frame = window.requestAnimationFrame(loop);
         return;
       }
@@ -122,7 +131,7 @@ export function GameCanvas() {
     };
 
     const startLoop = (): void => {
-      if (loopRunning || document.hidden || !runtime.hasActiveAnimations()) {
+      if (loopRunning || document.hidden || !hasActiveRenderWork()) {
         return;
       }
 
@@ -138,6 +147,7 @@ export function GameCanvas() {
 
       if (!loopRunning) {
         runtime.step(renderTarget, 0);
+        updateRendererSettledFlag();
       }
       startLoop();
     };

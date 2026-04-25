@@ -481,6 +481,13 @@ export class ThreeGameRenderer implements GameRenderer {
     return coord;
   }
 
+  hasActiveEffects(): boolean {
+    return (
+      this.cameraIntroElapsed < CAMERA_INTRO_DURATION_SECONDS ||
+      this.victoryCameraElapsed < VICTORY_CAMERA_DURATION_SECONDS
+    );
+  }
+
   dispose(): void {
     clearGroup(this.boardGroup);
     clearGroup(this.overlayGroup);
