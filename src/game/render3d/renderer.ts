@@ -59,15 +59,47 @@ function createCircleLineGeometry(radius: number, segments = 48): THREE.BufferGe
   return new THREE.BufferGeometry().setFromPoints(points);
 }
 
-function createDiamondLineGeometry(radius: number): THREE.BufferGeometry {
-  const points = [
-    new THREE.Vector3(0, 0, -radius),
-    new THREE.Vector3(radius, 0, 0),
-    new THREE.Vector3(0, 0, radius),
-    new THREE.Vector3(-radius, 0, 0),
-    new THREE.Vector3(0, 0, -radius),
-  ];
-  return new THREE.BufferGeometry().setFromPoints(points);
+function makeThickLineMaterial(color: string, opacity: number): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: opacity < 1,
+    opacity,
+  });
+}
+
+function makeThickSegment(start: THREE.Vector3, end: THREE.Vector3, radius: number, material: THREE.Material): THREE.Mesh {
+  const direction = new THREE.Vector3().subVectors(end, start);
+  const length = direction.length();
+  const segment = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, 8), material);
+  segment.position.copy(start).add(end).multiplyScalar(0.5);
+  segment.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+  return segment;
+}
+
+function makeThickPolyline(points: THREE.Vector3[], radius: number, material: THREE.Material): THREE.Group {
+  const group = new THREE.Group();
+  for (let index = 0; index < points.length - 1; index += 1) {
+    group.add(makeThickSegment(points[index], points[index + 1], radius, material));
+  }
+  return group;
+}
+
+function makeCirclePoints(radius: number, y: number, segments = 32): THREE.Vector3[] {
+  const points: THREE.Vector3[] = [];
+  for (let index = 0; index <= segments; index += 1) {
+    const angle = (Math.PI * 2 * index) / segments;
+    points.push(new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius));
+  }
+  return points;
+}
+
+function makeHexPoints(radius: number, y: number): THREE.Vector3[] {
+  const points: THREE.Vector3[] = [];
+  for (let side = 0; side <= 6; side += 1) {
+    const angle = -Math.PI / 6 + (Math.PI * 2 * (side % 6)) / 6;
+    points.push(new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius));
+  }
+  return points;
 }
 
 function disposeMaterial(material: THREE.Material): void {
@@ -259,22 +291,32 @@ function makeCombatUnitBody(color: string, accentColor: string): THREE.Group {
     opacity: 0.56,
   });
 
-  const diamondHeights = [-0.2, -0.02, 0.16, 0.34, 0.52];
-  for (const y of diamondHeights) {
-    const diamond = new THREE.Line(createDiamondLineGeometry(0.5), ringMaterial);
-    diamond.position.y = y;
-    group.add(diamond);
+  const rings = [
+    { y: -0.22, radius: 0.48 },
+    { y: -0.04, radius: 0.4 },
+    { y: 0.14, radius: 0.31 },
+    { y: 0.32, radius: 0.22 },
+    { y: 0.5, radius: 0.1 },
+  ];
+  for (const ringSpec of rings) {
+    const ring = new THREE.Line(createCircleLineGeometry(ringSpec.radius, 48), ringMaterial);
+    ring.position.y = ringSpec.y;
+    group.add(ring);
   }
 
   const strutVertices: number[] = [];
-  const corners = [
-    [0, -0.5],
-    [0.5, 0],
-    [0, 0.5],
-    [-0.5, 0],
-  ] as const;
-  for (const [x, z] of corners) {
-    strutVertices.push(x, diamondHeights[0], z, x, diamondHeights[diamondHeights.length - 1], z);
+  const base = rings[0];
+  const top = rings[rings.length - 1];
+  for (let index = 0; index < 4; index += 1) {
+    const angle = Math.PI / 4 + index * (Math.PI / 2);
+    strutVertices.push(
+      Math.cos(angle) * base.radius,
+      base.y,
+      Math.sin(angle) * base.radius,
+      Math.cos(angle) * top.radius,
+      top.y,
+      Math.sin(angle) * top.radius
+    );
   }
   const strutGeometry = new THREE.BufferGeometry();
   strutGeometry.setAttribute("position", new THREE.Float32BufferAttribute(strutVertices, 3));
