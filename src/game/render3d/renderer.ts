@@ -60,7 +60,7 @@ function createHexLineGeometry(radius: number): THREE.BufferGeometry {
   return new THREE.BufferGeometry().setFromPoints(points);
 }
 
-function makeThickLineMaterial(color: string, opacity: number): THREE.MeshBasicMaterial {
+function makeThickLineMaterial(color: string | number, opacity: number): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({
     color,
     transparent: opacity < 1,
@@ -1048,12 +1048,27 @@ export class ThreeGameRenderer implements GameRenderer {
         continue;
       }
       this.addRing(hexes[index], 0.5 + localProgress * 0.12, color, 0.72 - localProgress * 0.42, 0.23);
-      const from = hexToWorld(hexes[index], 1.5 - localProgress * 0.3);
-      const to = hexToWorld(hexes[index], 0.35);
-      this.addLine(from, to, color, 0.72 - localProgress * 0.44);
+      this.addHexPulseBeams(hexes[index], color, 0.72 - localProgress * 0.44, localProgress, index);
     }
     if (label) {
       this.addFloatingText(label, center, color, progress, 1.55);
+    }
+  }
+
+  private addHexPulseBeams(coord: HexCoord, color: string | number, opacity: number, progress: number, index: number): void {
+    const material = makeThickLineMaterial(color, Math.max(0, opacity));
+    const base = hexToWorld(coord, 0.34);
+    const beamCount = 3;
+    const rise = 1.0 + progress * 0.34;
+    const drift = 0.3 + progress * 0.16;
+
+    for (let beamIndex = 0; beamIndex < beamCount; beamIndex += 1) {
+      const angle = index * 0.83 + beamIndex * (Math.PI * 2 / beamCount);
+      const originOffset = new THREE.Vector3(Math.cos(angle) * 0.18, 0, Math.sin(angle) * 0.18);
+      const leanAngle = angle + 0.65;
+      const start = base.clone().add(originOffset);
+      const end = start.clone().add(new THREE.Vector3(Math.cos(leanAngle) * drift, rise, Math.sin(leanAngle) * drift));
+      this.animationGroup.add(makeThickSegment(start, end, 0.024, material));
     }
   }
 
