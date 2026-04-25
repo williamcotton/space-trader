@@ -3,7 +3,7 @@ import { getPlayableHexes, hexDistance, isWithinMapBounds, pixelToAxial } from "
 import type { PlayerId } from "../model/ids";
 import type { EntityState, GameState, HexCoord } from "../model/state";
 import { findEntityAtHex } from "../model/queries";
-import { getPlayerTheme, getResourceTheme, getUnitRoleTheme } from "../presentation";
+import { getPlayerTheme, getResourceTheme } from "../presentation";
 import { getAttackableEntitiesForUnit } from "../rules/directInteraction";
 import { tryGetFactionPresentation, tryGetRegisteredResourceTheme } from "../registries/presentation";
 import type { CanvasAnimation, GameRenderer, RuntimeFrame } from "../types";
@@ -360,38 +360,42 @@ export class ThreeGameRenderer implements GameRenderer {
 
     for (const node of state.map.resourceNodes) {
       const theme = getResourceTheme(node.resourceType);
-      const position = hexToWorld(node.coord, 0.15);
+      const root = new THREE.Group();
+      root.position.copy(hexToWorld(node.coord, 0.08));
 
-      const nodeMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.38, 0.46, 0.22, 32),
+      const pad = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.54, 0.6, 0.08, 6),
         new THREE.MeshStandardMaterial({
-          color: theme.color,
+          color: 0x071026,
           emissive: theme.color,
-          emissiveIntensity: 0.48,
-          roughness: 0.44,
-          metalness: 0.22,
+          emissiveIntensity: 0.14,
+          roughness: 0.62,
+          metalness: 0.12,
         })
       );
-      nodeMesh.position.copy(position);
-      this.boardGroup.add(nodeMesh);
+      root.add(pad);
+
+      const accentRing = new THREE.Line(
+        createHexLineGeometry(0.57),
+        new THREE.LineBasicMaterial({
+          color: theme.color,
+          transparent: true,
+          opacity: 0.95,
+        })
+      );
+      accentRing.position.y = 0.13;
+      root.add(accentRing);
+
+      this.boardGroup.add(root);
 
       if (node.controlledBy) {
         const controlRing = new THREE.Line(
-          createHexLineGeometry(0.58),
+          createHexLineGeometry(0.68),
           new THREE.LineBasicMaterial({ color: getPlayerTheme(node.controlledBy).line })
         );
-        controlRing.position.copy(hexToWorld(node.coord, 0.3));
+        controlRing.position.copy(hexToWorld(node.coord, 0.25));
         this.boardGroup.add(controlRing);
       }
-
-      const label = makeCanvasTextSprite(node.displayName, {
-        color: "#dbe8ff",
-        background: "rgba(5, 9, 22, 0.72)",
-        fontSize: 34,
-        scale: 0.52,
-      });
-      label.position.copy(hexToWorld(node.coord, 0.88));
-      this.boardGroup.add(label);
     }
 
     this.mapCenter = bounds.getCenter(new THREE.Vector3());
@@ -461,7 +465,6 @@ export class ThreeGameRenderer implements GameRenderer {
     }
 
     const theme = getPlayerTheme(entity.ownerId);
-    const roleTheme = getUnitRoleTheme(entity.role);
     const root = new THREE.Group();
     root.position.copy(hexToWorld(entity.coord, 0.34));
 
@@ -489,15 +492,6 @@ export class ThreeGameRenderer implements GameRenderer {
       body.rotation.y = Math.PI / 6;
     }
     root.add(body);
-
-    const role = makeCanvasTextSprite(entity.role[0].toUpperCase(), {
-      color: roleTheme.accent,
-      background: "rgba(5, 9, 22, 0.5)",
-      fontSize: 44,
-      scale: 0.42,
-    });
-    role.position.set(0, 0.56, 0);
-    root.add(role);
 
     const hp = makeCanvasTextSprite(`${entity.hp}/${entity.maxHp}`, {
       color: "#eff6ff",
