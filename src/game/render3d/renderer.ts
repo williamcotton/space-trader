@@ -693,7 +693,6 @@ export class ThreeGameRenderer implements GameRenderer {
 
     for (const cell of frame.derived.moveRangeOverlay) {
       const fillColor = cell.occupied ? 0xff6e6e : 0x6bf5bc;
-      const lineColor = cell.occupied ? 0xff9191 : 0x6bf5bc;
       const overlay = new THREE.Mesh(
         createHexGeometry(HEX_RADIUS * 0.83),
         new THREE.MeshBasicMaterial({
@@ -706,17 +705,6 @@ export class ThreeGameRenderer implements GameRenderer {
       );
       overlay.position.copy(hexToWorld(cell.coord, 0.075));
       this.overlayGroup.add(overlay);
-
-      const outline = new THREE.Line(
-        createHexLineGeometry(HEX_RADIUS * 0.84),
-        new THREE.LineBasicMaterial({
-          color: lineColor,
-          transparent: true,
-          opacity: cell.occupied ? 0.92 : 0.96,
-        })
-      );
-      outline.position.copy(hexToWorld(cell.coord, 0.13));
-      this.overlayGroup.add(outline);
     }
 
     const hoveredHex = frame.transients.hoveredHex;
@@ -948,7 +936,16 @@ export class ThreeGameRenderer implements GameRenderer {
     const to = hexToWorld(animation.to, 0.58);
     const current = from.clone().lerp(to, progress);
     const theme = getPlayerTheme(animation.playerId);
-    this.addLine(from, current, theme.primary, 0.7 - progress * 0.45);
+    if (from.distanceToSquared(current) > 0.001) {
+      this.animationGroup.add(
+        makeThickSegment(
+          from,
+          current,
+          0.028,
+          makeThickLineMaterial(theme.primary, 0.7 - progress * 0.45)
+        )
+      );
+    }
 
     const spark = new THREE.Mesh(
       new THREE.SphereGeometry(0.14, 16, 10),
