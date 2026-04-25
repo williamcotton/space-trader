@@ -58,6 +58,17 @@ function createCircleLineGeometry(radius: number, segments = 48): THREE.BufferGe
   return new THREE.BufferGeometry().setFromPoints(points);
 }
 
+function createDiamondLineGeometry(radius: number): THREE.BufferGeometry {
+  const points = [
+    new THREE.Vector3(0, 0, -radius),
+    new THREE.Vector3(radius, 0, 0),
+    new THREE.Vector3(0, 0, radius),
+    new THREE.Vector3(-radius, 0, 0),
+    new THREE.Vector3(0, 0, -radius),
+  ];
+  return new THREE.BufferGeometry().setFromPoints(points);
+}
+
 function disposeMaterial(material: THREE.Material): void {
   const materialWithMap = material as THREE.Material & { map?: THREE.Texture };
   materialWithMap.map?.dispose();
@@ -191,15 +202,109 @@ function resolveAccentColor(accent: string): string {
   return tryGetFactionPresentation(accent)?.theme.primary ?? tryGetRegisteredResourceTheme(accent)?.color ?? "#e6edff";
 }
 
-function makeOwnerRing(color: string, radius: number, opacity = 0.92): THREE.Line {
-  return new THREE.Line(
-    createCircleLineGeometry(radius),
-    new THREE.LineBasicMaterial({
-      color,
-      transparent: true,
-      opacity,
-    })
-  );
+function makeResourceUnitBody(color: string, accentColor: string): THREE.Group {
+  const group = new THREE.Group();
+  const ringMaterial = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.95,
+  });
+  const accentMaterial = new THREE.LineBasicMaterial({
+    color: accentColor,
+    transparent: true,
+    opacity: 0.54,
+  });
+
+  const ringHeights = [-0.22, -0.06, 0.1, 0.26, 0.42];
+  for (const y of ringHeights) {
+    const ring = new THREE.Line(createCircleLineGeometry(0.42, 48), ringMaterial);
+    ring.position.y = y;
+    group.add(ring);
+  }
+
+  const strutVertices: number[] = [];
+  for (let index = 0; index < 4; index += 1) {
+    const angle = Math.PI / 4 + index * (Math.PI / 2);
+    const x = Math.cos(angle) * 0.42;
+    const z = Math.sin(angle) * 0.42;
+    strutVertices.push(x, ringHeights[0], z, x, ringHeights[ringHeights.length - 1], z);
+  }
+  const strutGeometry = new THREE.BufferGeometry();
+  strutGeometry.setAttribute("position", new THREE.Float32BufferAttribute(strutVertices, 3));
+  group.add(new THREE.LineSegments(strutGeometry, accentMaterial));
+
+  return group;
+}
+
+function makeCombatUnitBody(color: string, accentColor: string): THREE.Group {
+  const group = new THREE.Group();
+  const ringMaterial = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.96,
+  });
+  const accentMaterial = new THREE.LineBasicMaterial({
+    color: accentColor,
+    transparent: true,
+    opacity: 0.56,
+  });
+
+  const diamondHeights = [-0.2, -0.02, 0.16, 0.34, 0.52];
+  for (const y of diamondHeights) {
+    const diamond = new THREE.Line(createDiamondLineGeometry(0.5), ringMaterial);
+    diamond.position.y = y;
+    group.add(diamond);
+  }
+
+  const strutVertices: number[] = [];
+  const corners = [
+    [0, -0.5],
+    [0.5, 0],
+    [0, 0.5],
+    [-0.5, 0],
+  ] as const;
+  for (const [x, z] of corners) {
+    strutVertices.push(x, diamondHeights[0], z, x, diamondHeights[diamondHeights.length - 1], z);
+  }
+  const strutGeometry = new THREE.BufferGeometry();
+  strutGeometry.setAttribute("position", new THREE.Float32BufferAttribute(strutVertices, 3));
+  group.add(new THREE.LineSegments(strutGeometry, accentMaterial));
+
+  return group;
+}
+
+function makeUtilityUnitBody(color: string, accentColor: string): THREE.Group {
+  const group = new THREE.Group();
+  const ringMaterial = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.95,
+  });
+  const accentMaterial = new THREE.LineBasicMaterial({
+    color: accentColor,
+    transparent: true,
+    opacity: 0.54,
+  });
+
+  const hexHeights = [-0.2, -0.02, 0.16, 0.34, 0.52];
+  for (const y of hexHeights) {
+    const hex = new THREE.Line(createHexLineGeometry(0.46), ringMaterial);
+    hex.position.y = y;
+    group.add(hex);
+  }
+
+  const strutVertices: number[] = [];
+  for (let side = 0; side < 6; side += 1) {
+    const angle = -Math.PI / 6 + (Math.PI * 2 * side) / 6;
+    const x = Math.cos(angle) * 0.46;
+    const z = Math.sin(angle) * 0.46;
+    strutVertices.push(x, hexHeights[0], z, x, hexHeights[hexHeights.length - 1], z);
+  }
+  const strutGeometry = new THREE.BufferGeometry();
+  strutGeometry.setAttribute("position", new THREE.Float32BufferAttribute(strutVertices, 3));
+  group.add(new THREE.LineSegments(strutGeometry, accentMaterial));
+
+  return group;
 }
 
 export class ThreeGameRenderer implements GameRenderer {
@@ -411,7 +516,7 @@ export class ThreeGameRenderer implements GameRenderer {
       if (entity.kind === "base") {
         this.addBase(entity);
       } else {
-        this.addUnit(state, entity);
+        this.addUnit(entity);
       }
     }
   }
@@ -424,25 +529,25 @@ export class ThreeGameRenderer implements GameRenderer {
     const root = new THREE.Group();
     root.position.copy(hexToWorld(entity.coord, 0.28));
 
-    const ownerRing = makeOwnerRing(theme.line, 0.88, 0.95);
-    ownerRing.position.y = -0.24;
-    root.add(ownerRing);
-
     const body = new THREE.Mesh(
       new THREE.CylinderGeometry(0.86, 1.02, 0.7, 6),
-      new THREE.MeshStandardMaterial({
+      new THREE.MeshBasicMaterial({
         color: theme.primary,
-        emissive: theme.secondary,
-        emissiveIntensity: 0.36,
-        roughness: 0.38,
-        metalness: 0.22,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.94,
       })
     );
     root.add(body);
 
     const core = new THREE.Mesh(
       new THREE.CylinderGeometry(0.4, 0.45, 0.76, 6),
-      new THREE.MeshStandardMaterial({ color: 0x071026, roughness: 0.65, metalness: 0.1 })
+      new THREE.MeshBasicMaterial({
+        color: theme.secondary,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.58,
+      })
     );
     core.position.y = 0.05;
     root.add(core);
@@ -459,7 +564,7 @@ export class ThreeGameRenderer implements GameRenderer {
     this.entityGroup.add(root);
   }
 
-  private addUnit(state: GameState, entity: EntityState): void {
+  private addUnit(entity: EntityState): void {
     if (entity.kind !== "unit") {
       return;
     }
@@ -468,28 +573,13 @@ export class ThreeGameRenderer implements GameRenderer {
     const root = new THREE.Group();
     root.position.copy(hexToWorld(entity.coord, 0.34));
 
-    const ownerRing = makeOwnerRing(theme.line, 0.5, entity.ownerId === state.activePlayerId ? 0.98 : 0.78);
-    ownerRing.position.y = -0.25;
-    root.add(ownerRing);
-
-    const material = new THREE.MeshStandardMaterial({
-      color: theme.primary,
-      emissive: theme.secondary,
-      emissiveIntensity: 0.34,
-      roughness: 0.42,
-      metalness: 0.18,
-    });
-
-    let body: THREE.Mesh;
+    let body: THREE.Object3D;
     if (entity.role === "combat") {
-      body = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), material);
-      body.scale.set(1.05, 0.64, 1.05);
+      body = makeCombatUnitBody(theme.primary, theme.secondary);
     } else if (entity.role === "resource") {
-      body = new THREE.Mesh(new THREE.SphereGeometry(0.46, 24, 16), material);
-      body.scale.set(1, 0.78, 1);
+      body = makeResourceUnitBody(theme.primary, theme.secondary);
     } else {
-      body = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.48, 6), material);
-      body.rotation.y = Math.PI / 6;
+      body = makeUtilityUnitBody(theme.primary, theme.secondary);
     }
     root.add(body);
 
