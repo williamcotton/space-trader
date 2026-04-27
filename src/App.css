@@ -76,10 +76,13 @@ body {
 }
 
 .menu-hero {
-  padding: 36px 34px;
+  padding: 38px 40px;
   display: grid;
   align-content: center;
+  justify-items: center;
   gap: 18px;
+  overflow: hidden;
+  text-align: center;
   background:
     radial-gradient(circle at top right, rgba(131, 243, 202, 0.16), transparent 34%),
     radial-gradient(circle at left center, rgba(99, 213, 255, 0.16), transparent 40%),
@@ -100,6 +103,21 @@ body {
   font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
+}
+
+.menu-title-canvas {
+  display: block;
+  width: min(100%, 880px);
+  height: clamp(260px, 30vw, 400px);
+  margin: -4px auto 4px;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.menu-title-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .menu-hero h1,
@@ -135,6 +153,10 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.menu-primary-actions {
+  justify-content: center;
 }
 
 .menu-cta,
