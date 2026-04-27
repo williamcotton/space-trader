@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { requireMapDefinition } from "./content/maps/catalog";
-import { axialToPixel } from "./model/hex";
 import { createInitialGameState } from "./model/state";
 import { createConfiguredRuntime, GameRuntime, getBoardClickCommand } from "./runtime";
-import { getHexMetrics } from "./render/layout";
 import { TEST_EXPANSION_SET } from "../test/testExpansion";
 import { MULTIPLAYER_PROTOCOL_VERSION, type MatchStartPayload } from "../network/protocol";
+import type { GameRenderer } from "./types";
 
 function setupState() {
   return createInitialGameState({ map: requireMapDefinition("frontier_belt") });
@@ -161,12 +160,10 @@ describe("GameRuntime", () => {
     const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
     runtime.setViewport(1024, 768);
     const hoverTarget = runtime.state.entities.unit_player_1_scout.coord;
-    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
-    const point = axialToPixel(hoverTarget, metrics.origin, metrics.size);
     const stateVersionBefore = runtime.getStateVersion();
     const transientVersionBefore = runtime.getTransientVersion();
 
-    runtime.setHoveredHexFromScreenPoint(point.x, point.y);
+    runtime.setHoveredHexFromBoardCoord(hoverTarget);
 
     expect(runtime.getHoveredHex()).toEqual(hoverTarget);
     expect(runtime.getStateVersion()).toBe(stateVersionBefore);
@@ -175,11 +172,15 @@ describe("GameRuntime", () => {
 
   it("only requires continuous rendering while canvas animations are active", () => {
     const runtime = new GameRuntime(createInitialGameState({ map: requireMapDefinition("frontier_belt") }));
-    runtime.replaceSystems(() => undefined, () => undefined);
+    runtime.replaceUpdateSystem(() => undefined);
 
     expect(runtime.hasActiveAnimations()).toBe(true);
 
-    runtime.step({} as CanvasRenderingContext2D, 5);
+    runtime.step({
+      setViewport: () => undefined,
+      render: () => undefined,
+      dispose: () => undefined,
+    } satisfies GameRenderer, 5);
 
     expect(runtime.hasActiveAnimations()).toBe(false);
   });
@@ -323,10 +324,8 @@ describe("GameRuntime", () => {
     runtime.state.priorityPlayerId = "player_1";
     runtime.setViewport(1024, 768);
     const target = runtime.state.entities.unit_player_1_scout;
-    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
-    const point = axialToPixel(target.coord, metrics.origin, metrics.size);
 
-    runtime.selectUnitFromScreenPoint(point.x, point.y);
+    runtime.selectBoardHex(target.coord);
 
     expect(submitted).toEqual(["SELECT_ENTITY"]);
   });
@@ -348,10 +347,8 @@ describe("GameRuntime", () => {
     runtime.state.priorityPlayerId = "player_2";
     runtime.setViewport(1024, 768);
     const target = runtime.state.entities.unit_player_2_scout;
-    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
-    const point = axialToPixel(target.coord, metrics.origin, metrics.size);
 
-    runtime.selectUnitFromScreenPoint(point.x, point.y);
+    runtime.selectBoardHex(target.coord);
 
     expect(submitted).toEqual(["SELECT_ENTITY"]);
   });
@@ -370,10 +367,8 @@ describe("GameRuntime", () => {
     runtime.state.selectedEntityId = "unit_player_2_scout";
     runtime.setViewport(1024, 768);
     const target = runtime.state.entities.unit_player_2_scout;
-    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
-    const point = axialToPixel(target.coord, metrics.origin, metrics.size);
 
-    runtime.selectUnitFromScreenPoint(point.x, point.y);
+    runtime.selectBoardHex(target.coord);
 
     expect(submitted).toEqual(["SELECT_ENTITY"]);
   });
@@ -393,10 +388,8 @@ describe("GameRuntime", () => {
     node.controlledBy = "player_1";
     runtime.state.selectedEntityId = harvester.id;
     runtime.setViewport(1024, 768);
-    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
-    const point = axialToPixel(harvester.coord, metrics.origin, metrics.size);
 
-    runtime.selectUnitFromScreenPoint(point.x, point.y);
+    runtime.selectBoardHex(harvester.coord);
 
     expect(submitted).toEqual(["SELECT_ENTITY"]);
   });
@@ -437,14 +430,12 @@ describe("GameRuntime", () => {
     target.coord = { q: 0, r: 1 };
     runtime.state.selectedEntityId = attacker.id;
     runtime.setViewport(1024, 768);
-    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
-    const point = axialToPixel(target.coord, metrics.origin, metrics.size);
     const hpBefore = target.hp;
 
     expect(runtime.beginAttackTargetingForSelectedUnit()).toBe(true);
     expect(runtime.getPendingAttackTargeting()).not.toBeNull();
 
-    runtime.selectUnitFromScreenPoint(point.x, point.y);
+    runtime.selectBoardHex(target.coord);
 
     expect(runtime.getPendingAttackTargeting()).toBeNull();
     expect(runtime.state.entities.unit_player_2_harvester?.hp).toBeLessThan(hpBefore);
@@ -469,12 +460,10 @@ describe("GameRuntime", () => {
     target.coord = { q: 0, r: 1 };
     runtime.state.selectedEntityId = attacker.id;
     runtime.setViewport(1024, 768);
-    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
-    const emptyPoint = axialToPixel({ q: -2, r: 0 }, metrics.origin, metrics.size);
 
     expect(runtime.beginAttackTargetingForSelectedUnit()).toBe(true);
 
-    runtime.selectUnitFromScreenPoint(emptyPoint.x, emptyPoint.y);
+    runtime.selectBoardHex({ q: -2, r: 0 });
 
     expect(runtime.getPendingAttackTargeting()).toBeNull();
     expect(runtime.state.selectedEntityId).toBe(attacker.id);
@@ -554,13 +543,11 @@ describe("GameRuntime", () => {
     target.coord = { q: 0, r: 1 };
     runtime.state.selectedEntityId = attacker.id;
     runtime.setViewport(1024, 768);
-    const metrics = getHexMetrics({ width: 1024, height: 768 }, runtime.state.map);
-    const point = axialToPixel(target.coord, metrics.origin, metrics.size);
 
     expect(runtime.beginAttackTargetingForSelectedUnit()).toBe(true);
     expect(submitted).toEqual([]);
 
-    runtime.selectUnitFromScreenPoint(point.x, point.y);
+    runtime.selectBoardHex(target.coord);
 
     expect(submitted).toEqual(["ATTACK_UNIT"]);
   });

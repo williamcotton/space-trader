@@ -13,7 +13,7 @@ import {
   getRegisteredRuntimeProfile,
   getRegisteredResourceIds,
 } from "./content/registry";
-import { hexDistance, isWithinMapBounds, pixelToAxial } from "./model/hex";
+import { hexDistance, isWithinMapBounds } from "./model/hex";
 import { findEntityAtHex } from "./model/queries";
 import { createInitialGameState } from "./model/state";
 import type { Faction } from "./model/enums";
@@ -21,8 +21,7 @@ import type { PlayerId } from "./model/ids";
 import { migrateRuntimeState } from "./model/migrations";
 import { buildMatchIntroAnimation, buildVictoryAnimation, captureAnimationSnapshot, buildAnimationsFromEvents, stepAnimations } from "./render/animations";
 import { configurePlayerThemes, getEntityDisplayName } from "./presentation";
-import { getHexMetrics } from "./render/layout";
-import { renderGame, updateGame } from "./systems";
+import { updateGame } from "./systems";
 import { canAttackEntityDirectly } from "./rules/directInteraction";
 import { canUnitDeclareAttack } from "./rules/directInteraction";
 import { getAttackableEntitiesForUnit } from "./rules/directInteraction";
@@ -39,7 +38,7 @@ import {
 } from "./turn/priorityStops";
 import { createEmptyDerivedState, rebuildDerivedState, type DerivedState } from "./derived";
 import type { GameState, HexCoord } from "./model/state";
-import type { CanvasAnimation, GameRenderer, GameViewport, RenderSystem, RuntimeFrame, UpdateSystem } from "./types";
+import type { CanvasAnimation, GameRenderer, GameViewport, RuntimeFrame, UpdateSystem } from "./types";
 import { removeEffectsForEntity } from "./systems/continuousEffects";
 import { getLegalPlayCardTargetOptions, getPlayCardTargetPrompt, getRequiredPlayCardTargetMode } from "./rules/cardPlayOptions";
 import { getDebugStackResponse } from "./registries/debugStackResponses";
@@ -291,7 +290,6 @@ function getBoardClickCommandForPlayer(
 export class GameRuntime {
   private viewport: GameViewport = { ...INITIAL_VIEWPORT };
   private updateSystem: UpdateSystem = updateGame;
-  private renderSystem: RenderSystem = renderGame;
   private botDecisionSystem: BotDecisionSystem = decideMinimaxBotCommand;
   private botActionReadyAtMs = 0;
   private automationTimer: ReturnType<typeof setTimeout> | null = null;
@@ -817,20 +815,6 @@ export class GameRuntime {
     this.pendingCardTargeting = null;
   }
 
-  private getHexAtScreenPoint(pixelX: number, pixelY: number): { q: number; r: number } | null {
-    const metrics = getHexMetrics(this.viewport, this.state.map);
-    const hoveredHex = pixelToAxial({ x: pixelX, y: pixelY }, metrics.origin, metrics.size);
-    if (!isWithinMapBounds(hoveredHex, this.state.map)) {
-      return null;
-    }
-    return hoveredHex;
-  }
-
-  setHoveredHexFromScreenPoint(pixelX: number, pixelY: number): void {
-    const next = this.getHexAtScreenPoint(pixelX, pixelY);
-    this.setHoveredHex(next);
-  }
-
   setHoveredHexFromBoardCoord(coord: HexCoord | null): void {
     const next = coord && isWithinMapBounds(coord, this.state.map) ? coord : null;
     this.setHoveredHex(next);
@@ -838,11 +822,6 @@ export class GameRuntime {
 
   clearHoveredHex(): void {
     this.setHoveredHex(null);
-  }
-
-  selectUnitFromScreenPoint(pixelX: number, pixelY: number): void {
-    const hoveredHex = this.getHexAtScreenPoint(pixelX, pixelY);
-    this.selectBoardHex(hoveredHex);
   }
 
   selectBoardHex(hoveredHex: HexCoord | null): void {
@@ -1375,9 +1354,8 @@ export class GameRuntime {
     });
   }
 
-  replaceSystems(update: UpdateSystem, render: RenderSystem): void {
+  replaceUpdateSystem(update: UpdateSystem): void {
     this.updateSystem = update;
-    this.renderSystem = render;
   }
 
   replaceBotDecisionSystem(system: BotDecisionSystem): void {
@@ -1645,7 +1623,7 @@ export class GameRuntime {
     this.hoveredHex = null;
   }
 
-  step(target: CanvasRenderingContext2D | GameRenderer, deltaSeconds: number): void {
+  step(target: GameRenderer, deltaSeconds: number): void {
     this.animations = stepAnimations(this.animations, deltaSeconds);
 
     if (this.stateVersion > this.derivedState.sourceVersion) {
@@ -1669,15 +1647,7 @@ export class GameRuntime {
     };
 
     this.updateSystem(this.state, frame);
-    if ("render" in target) {
-      target.render(this.state, frame);
-      return;
-    }
-
-    this.renderSystem(this.state, {
-      ...frame,
-      context: target,
-    });
+    target.render(this.state, frame);
   }
 }
 
@@ -1711,7 +1681,7 @@ function prepareRuntime(instance: GameRuntime): GameRuntime {
   Object.setPrototypeOf(instance, GameRuntime.prototype);
   instance.rehydrateHotState();
   migrateRuntimeState(instance.state);
-  instance.replaceSystems(updateGame, renderGame);
+  instance.replaceUpdateSystem(updateGame);
   hotData.runtime = instance;
   bindRuntimeToWindow(instance);
 
@@ -1754,7 +1724,7 @@ if (import.meta.hot) {
     if (!next) {
       return;
     }
-    runtime?.replaceSystems(next.updateGame, next.renderGame);
+    runtime?.replaceUpdateSystem(next.updateGame);
   });
 
   import.meta.hot.accept("./ai/minimaxBot", (module) => {

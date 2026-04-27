@@ -157,10 +157,6 @@ export type RuntimeFrame = {
   derived: DerivedState;
 };
 
-export type GameFrame = RuntimeFrame & {
-  context: CanvasRenderingContext2D;
-};
-
 export type GameRenderer = {
   setViewport(width: number, height: number, scale: number): void;
   render(state: GameState, frame: RuntimeFrame): void;
@@ -170,4 +166,3 @@ export type GameRenderer = {
 };
 
 export type UpdateSystem = (state: GameState, frame: RuntimeFrame) => void;
-export type RenderSystem = (state: GameState, frame: GameFrame) => void;

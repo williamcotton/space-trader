@@ -18,7 +18,6 @@ export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const runtimeRef = useRef(getGameRuntime());
   const rendererRef = useRef<GameRenderer | null>(null);
-  const useThreeRenderer = import.meta.env.VITE_RENDERER !== "canvas2d";
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -43,11 +42,6 @@ export function GameCanvas() {
         // Immediately redraw after resize clears the buffer to prevent blank flash
         if (rendererRef.current) {
           runtime.step(rendererRef.current, 0);
-        } else if (!useThreeRenderer) {
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            runtime.step(ctx, 0);
-          }
         }
       }
     };
@@ -63,7 +57,7 @@ export function GameCanvas() {
       window.removeEventListener("resize", resize);
       window.visualViewport?.removeEventListener("resize", resize);
     };
-  }, [useThreeRenderer]);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -73,14 +67,9 @@ export function GameCanvas() {
 
     setRuntimeReady(false);
 
-    let context: CanvasRenderingContext2D | null = null;
-    if (useThreeRenderer) {
-      rendererRef.current = createThreeGameRenderer(canvas);
-    } else {
-      context = canvas.getContext("2d");
-    }
+    rendererRef.current = createThreeGameRenderer(canvas);
 
-    const renderTarget = rendererRef.current ?? context;
+    const renderTarget = rendererRef.current;
     if (!renderTarget) {
       return;
     }
@@ -176,7 +165,7 @@ export function GameCanvas() {
       rendererRef.current = null;
       setRuntimeReady(false);
     };
-  }, [useThreeRenderer]);
+  }, []);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -282,22 +271,11 @@ export function GameCanvas() {
 
     const runtime = runtimeRef.current;
 
-    const getCanvasPoint = (event: MouseEvent): { x: number; y: number } => {
-      const rect = canvas.getBoundingClientRect();
-      return {
-        x: ((event.clientX - rect.left) * canvas.width) / rect.width,
-        y: ((event.clientY - rect.top) * canvas.height) / rect.height,
-      };
-    };
-
     const onMouseMove = (event: MouseEvent): void => {
       const renderer = rendererRef.current;
       if (renderer?.pickHex) {
         runtime.setHoveredHexFromBoardCoord(renderer.pickHex(event.clientX, event.clientY));
-        return;
       }
-      const point = getCanvasPoint(event);
-      runtime.setHoveredHexFromScreenPoint(point.x, point.y);
     };
 
     const onMouseLeave = (): void => {
@@ -308,10 +286,7 @@ export function GameCanvas() {
       const renderer = rendererRef.current;
       if (renderer?.pickHex) {
         runtime.selectBoardHex(renderer.pickHex(event.clientX, event.clientY));
-        return;
       }
-      const point = getCanvasPoint(event);
-      runtime.selectUnitFromScreenPoint(point.x, point.y);
     };
 
     canvas.addEventListener("mousemove", onMouseMove);
