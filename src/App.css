@@ -56,8 +56,8 @@ body {
 }
 
 .menu-shell {
-  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.8fr);
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
 }
 
 .menu-hero,
