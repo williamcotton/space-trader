@@ -9,6 +9,8 @@ import { ResourceIcon } from "./ResourceIcon";
 import { getVisibleHandState } from "./handTrayModel";
 import { useGameSnapshot } from "./useGameSnapshot";
 
+const REVEAL_NON_LOCAL_HANDS = import.meta.env.DEV && import.meta.env.VITE_BOOT_FLOW === "direct_match";
+
 type HandCardSnapshot = {
   instanceId: string;
   cardId: string;
@@ -43,7 +45,9 @@ function readSnapshot(): HandSnapshot {
     activePlayerId: state.activePlayerId,
     priorityPlayerId: state.priorityPlayerId,
     networkLocalPlayerId: runtime.getNetworkLocalPlayerId(),
+    revealNonLocalHands: REVEAL_NON_LOCAL_HANDS,
   });
+  const canDiscardFromVisibleHand = discardPhase && visiblePlayerId === state.activePlayerId;
 
   const cards = [...state.zones[visiblePlayerId].hand].reverse().map((card) =>
     getCardDisplayInfo(state, visiblePlayerId, card.cardId, card.instanceId)
@@ -54,8 +58,8 @@ function readSnapshot(): HandSnapshot {
     showingPriorityHand,
     cards,
     deckCount: state.zones[visiblePlayerId].deck.length,
-    discardPhase,
-    requiredDiscards: Math.max(0, state.zones[visiblePlayerId].hand.length - MAX_HAND_SIZE),
+    discardPhase: canDiscardFromVisibleHand,
+    requiredDiscards: canDiscardFromVisibleHand ? Math.max(0, state.zones[visiblePlayerId].hand.length - MAX_HAND_SIZE) : 0,
     pendingTargetingCardInstanceId: discardPhase ? null : pendingTargeting?.cardInstanceId ?? null,
     pendingTargetingPrompt: discardPhase ? null : pendingTargeting?.prompt ?? null,
   };
