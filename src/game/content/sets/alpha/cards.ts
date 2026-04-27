@@ -38,7 +38,7 @@ import type {
   HexTargetPredicate,
   TargetPredicate,
 } from "../../cards/types";
-import { EMPLACED_KEYWORD, PREDATION_KEYWORD } from "./mechanics/keywordIds";
+import { EMPLACED_KEYWORD, PREDATION_KEYWORD, RELAY_KEYWORD, STEALTH_KEYWORD } from "./mechanics/keywordIds";
 
 function getStartOfControllersNextTurn(state: Readonly<GameState>, controllerId: PlayerId): number {
   return state.activePlayerId === controllerId ? state.turn + 2 : state.turn + 1;
@@ -250,6 +250,7 @@ function gainControlUnitTacticPlay(
 function modifyTargetUnitTacticPlay(
   options: ModifyTargetUnitOptions & {
     isValidTarget: TargetPredicate;
+    surgeBonus?: ModifyTargetUnitOptions;
     sourceDestinationOnResolve?: CardSourceDestination;
   }
 ): CardPlayProfile {
@@ -258,6 +259,7 @@ function modifyTargetUnitTacticPlay(
     isValidTarget: options.isValidTarget,
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
     effectConfig: createModifyTargetUnitEffectConfig(options),
+    modifierEffectConfigs: createModifierEffectConfigs("surge", options.surgeBonus ? createModifyTargetUnitEffectConfig(options.surgeBonus) : undefined),
   });
 }
 
@@ -342,6 +344,17 @@ function hasFriendlyUnitNearEntity(state: Readonly<GameState>, playerId: PlayerI
     entity.ownerId === playerId &&
     entity.id !== target.id &&
     hexDistance(entity.coord, target.coord) <= 1
+  );
+}
+
+function countUnitsControlledBy(state: Readonly<GameState>, playerId: PlayerId): number {
+  return Object.values(state.entities).filter((entity) => entity.kind === "unit" && entity.ownerId === playerId).length;
+}
+
+function controlsFewerUnitsThanOpponent(state: Readonly<GameState>, playerId: PlayerId): boolean {
+  const friendlyCount = countUnitsControlledBy(state, playerId);
+  return Object.keys(state.players).some((otherPlayerId) =>
+    otherPlayerId !== playerId && countUnitsControlledBy(state, otherPlayerId as PlayerId) > friendlyCount
   );
 }
 
@@ -489,6 +502,61 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
       ];
     },
   },
+  scrapline_charge: {
+    id: "scrapline_charge",
+    name: "Scrapline Charge",
+    faction: "alloy_clan",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 1, alloy: 1 },
+    text: "Target allied combat unit gets +2 ATK until end of turn.",
+    play: modifyTargetUnitTacticPlay({
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId === pid && target.role === "combat",
+      attackBonus: 2,
+    }),
+  },
+  rust_tag: {
+    id: "rust_tag",
+    name: "Rust Tag",
+    faction: "alloy_clan",
+    kind: "tactic",
+    speed: "instant",
+    cost: { alloy: 1 },
+    text: "Deal 1 damage to target enemy unit. If it was already damaged, gain 1 alloy.",
+    play: tacticPlay("damage_enemy_unit_1", {
+      targetMode: "entity",
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId !== pid,
+    }),
+    onResolve: (ctx) => {
+      if (!ctx.targetEntityId) return [{ type: "LOG", text: "Rust Tag: no target." }];
+      const target = ctx.state.entities[ctx.targetEntityId];
+      if (!target || target.kind !== "unit") {
+        return [{ type: "LOG", text: `Rust Tag: target ${ctx.targetEntityId} was no longer a unit.` }];
+      }
+      const wasAlreadyDamaged = target.hp < target.maxHp;
+      return [
+        { type: "DEAL_DAMAGE", targetEntityId: target.id, amount: 1, sourceLabel: "Rust Tag" },
+        ...(wasAlreadyDamaged
+          ? [{ type: "GAIN_RESOURCES" as const, playerId: ctx.controllerId, resources: { alloy: 1 } }]
+          : []),
+      ];
+    },
+  },
+  anchor_guns: {
+    id: "anchor_guns",
+    name: "Anchor Guns",
+    faction: "alloy_clan",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 1, alloy: 1 },
+    text: "Target allied resource unit gets +1 SG and gains Emplaced until end of turn. Its Move Range becomes 0 until end of turn.",
+    play: modifyTargetUnitTacticPlay({
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId === pid && target.role === "resource",
+      siegeBonus: 1,
+      grantedKeywords: [EMPLACED_KEYWORD],
+      setMoveRange: 0,
+    }),
+  },
   shrapnel_relay: {
     id: "shrapnel_relay",
     name: "Shrapnel Relay",
@@ -588,12 +656,12 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "tactic",
     speed: "instant",
     cost: { credits: 1, biomass: 1 },
-    text: "Friendly resource units gain Predation until end of turn. (Units with Predation can attack this turn even if they are resource units.)",
+    text: "Friendly resource units get +1 ATK and gain Predation until end of turn. (Units with Predation can attack this turn even if they are resource units.)",
     play: globalUnitBuffTacticPlay({
       relation: "ally",
       roleFilter: "resource",
       grantedKeywords: [PREDATION_KEYWORD],
-      attackBonus: 0,
+      attackBonus: 1,
       armorBonus: 0,
     }),
     animation: {
@@ -603,6 +671,45 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
         accent: "biomass",
       },
     },
+  },
+  spore_veil: {
+    id: "spore_veil",
+    name: "Spore Veil",
+    faction: "biomass_swarm",
+    kind: "tactic",
+    speed: "instant",
+    cost: { biomass: 1 },
+    text: "Target allied unit gets +1 ARM and gains stealth until end of turn.",
+    play: modifyTargetUnitTacticPlay({
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId === pid,
+      armorBonus: 1,
+      grantedKeywords: [STEALTH_KEYWORD],
+    }),
+  },
+  root_cache: {
+    id: "root_cache",
+    name: "Root Cache",
+    faction: "biomass_swarm",
+    kind: "tactic",
+    speed: "main",
+    cost: { credits: 1, biomass: 1 },
+    text: "Draw 1 card. If you control fewer units than an opponent, gain 1 biomass.",
+    play: drawAndGainResourcesTacticPlay({
+      drawCount: 1,
+      resources: {},
+    }),
+    onResolve: (ctx) => [
+      { type: "DRAW_CARDS", playerId: ctx.controllerId, count: 1 },
+      ...(controlsFewerUnitsThanOpponent(ctx.state, ctx.controllerId)
+        ? [{ type: "GAIN_RESOURCES" as const, playerId: ctx.controllerId, resources: { biomass: 1 } }]
+        : []),
+      {
+        type: "LOG",
+        text: controlsFewerUnitsThanOpponent(ctx.state, ctx.controllerId)
+          ? "Resolved Root Cache: drew 1 and gained 1 biomass."
+          : "Resolved Root Cache: drew 1.",
+      },
+    ],
   },
   emergency_thrust: {
     id: "emergency_thrust",
@@ -694,6 +801,19 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
         accent: "neutral",
       },
     },
+  },
+  emergency_tow: {
+    id: "emergency_tow",
+    name: "Emergency Tow",
+    faction: "neutral",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 2 },
+    text: "Target allied unit gets +2 move range until end of turn.",
+    play: modifyTargetUnitTacticPlay({
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId === pid,
+      moveRangeBonus: 2,
+    }),
   },
   arc_snap: {
     id: "arc_snap",
@@ -800,6 +920,37 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
         accent: "flux",
       },
     },
+  },
+  vector_lens: {
+    id: "vector_lens",
+    name: "Vector Lens",
+    faction: "flux_collective",
+    kind: "tactic",
+    speed: "instant",
+    cost: { credits: 1, flux: 1 },
+    text: "Target allied unit gets +1 attack range and gains Relay until end of turn.",
+    play: modifyTargetUnitTacticPlay({
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId === pid,
+      attackRangeBonus: 1,
+      grantedKeywords: [RELAY_KEYWORD],
+    }),
+  },
+  phase_shelter: {
+    id: "phase_shelter",
+    name: "Phase Shelter",
+    faction: "flux_collective",
+    kind: "tactic",
+    speed: "instant",
+    cost: { flux: 1 },
+    text: "Target allied unit gets +1 ARM until end of turn. Surge - it also gains stealth until end of turn.",
+    keywords: ["surge"],
+    play: modifyTargetUnitTacticPlay({
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId === pid,
+      armorBonus: 1,
+      surgeBonus: {
+        grantedKeywords: [STEALTH_KEYWORD],
+      },
+    }),
   },
   static_insight: {
     id: "static_insight",
@@ -1112,7 +1263,7 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
     name: "Scrap Dividend",
     faction: "alloy_clan",
     kind: "tactic",
-    speed: "main",
+    speed: "instant",
     cost: { alloy: 1 },
     text: "Gain 1 credit and 1 alloy for every salvage trigger you created this turn, up to 2 times.",
     play: resourcesBySalvageCountTacticPlay({
@@ -1167,7 +1318,7 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
       role: "combat",
       hp: 8,
       attackDamage: 2,
-      siegeDamageBonus: 2,
+      siegeDamageBonus: 3,
       armor: 1,
       moveRange: 1,
       attackRange: 1,
@@ -1322,6 +1473,33 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
       effectId: "damage_enemy_unit_1_uncounterable",
       labelSuffix: "Arc",
       autoTarget: "weakest_enemy_unit_in_range_2",
+    }],
+  },
+  forkline_adept_card: {
+    id: "forkline_adept_card",
+    name: "Forkline Adept",
+    faction: "flux_collective",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 1, flux: 1 },
+    text: "Relay (The first time this unit is cascaded each resolution, repeat that cascade from this hex.) Whenever this unit is cascaded, gain 1 flux.",
+    play: unitPlay(),
+    onResolve: deployUnit("forkline_adept_card"),
+    unit: {
+      role: "utility",
+      hp: 3,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 2,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      keywords: ["relay"],
+    },
+    triggers: [{
+      condition: { type: "on_cascaded" },
+      effectId: "gain_flux_1_uncounterable",
+      labelSuffix: "Fork",
     }],
   },
   surge_archivist_card: {
@@ -1516,6 +1694,33 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
       keywords: ["sprout"],
     },
   },
+  gnawing_collector_card: {
+    id: "gnawing_collector_card",
+    name: "Gnawing Collector",
+    faction: "biomass_swarm",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 1, biomass: 1 },
+    text: "Predation (This resource unit can attack.) When this unit damages an enemy base, gain 1 biomass.",
+    play: unitPlay(),
+    onResolve: deployUnit("gnawing_collector_card"),
+    unit: {
+      role: "resource",
+      hp: 4,
+      attackDamage: 1,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 4,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      keywords: ["predation"],
+    },
+    triggers: [{
+      condition: { type: "on_self_damaged_enemy_base" },
+      effectId: "gain_biomass_1_uncounterable",
+      labelSuffix: "Gnaw",
+    }],
+  },
   support_drone_card: {
     id: "support_drone_card",
     name: "Support Drone",
@@ -1621,6 +1826,27 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
       attackRange: 1,
       attackActionsPerTurn: 1,
       auras: [{ type: "adjacent_ally_buff", armorBonus: 1 }],
+    },
+  },
+  survey_rover_card: {
+    id: "survey_rover_card",
+    name: "Survey Rover",
+    faction: "neutral",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 1 },
+    text: "Deploy a fast utility scout near your base.",
+    play: unitPlay(),
+    onResolve: deployUnit("survey_rover_card"),
+    unit: {
+      role: "utility",
+      hp: 3,
+      attackDamage: 0,
+      siegeDamageBonus: 0,
+      armor: 0,
+      moveRange: 4,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
     },
   },
   pathfinder_buggy_card: {

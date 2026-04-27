@@ -70,7 +70,7 @@ describe("starter decks", () => {
     const biomassCards = getStarterDeckCardIds("biomass_swarm");
 
     expect(countCopies(alloyCards, "shrapnel_relay")).toBe(4);
-    expect(countCopies(fluxCards, "ion_shower")).toBe(4);
+    expect(countCopies(fluxCards, "ion_shower")).toBe(3);
     expect(countCopies(biomassCards, "spore_bloom")).toBe(4);
 
     for (const cards of [biomassCards]) {
@@ -83,17 +83,19 @@ describe("starter decks", () => {
     const fluxCards = getStarterDeckCardIds("flux_collective");
     const biomassCards = getStarterDeckCardIds("biomass_swarm");
 
-    expect(countCopies(alloyCards, "patchwork_barrier")).toBe(4);
+    expect(countCopies(alloyCards, "patchwork_barrier")).toBe(3);
+    expect(countCopies(alloyCards, "scrapline_charge")).toBe(3);
     expect(countCopies(alloyCards, "bulwark_refit")).toBe(2);
-    expect(countCopies(alloyCards, "scorched_protocol")).toBe(4);
+    expect(countCopies(alloyCards, "scorched_protocol")).toBe(3);
     expect(countCopies(alloyCards, "war_protocol")).toBe(2);
-    expect(countCopies(alloyCards, "iron_formation")).toBe(2);
+    expect(countCopies(alloyCards, "iron_formation")).toBe(1);
     expect(countCopies(alloyCards, "scrap_dividend")).toBe(2);
     expect(countCopies(alloyCards, "linebreak_marshal_card")).toBe(2);
     expect(countCopies(alloyCards, "scrap_quartermaster_card")).toBe(2);
     expect(countCopies(fluxCards, "emergency_war_chest")).toBe(2);
     expect(countCopies(fluxCards, "meteor_chain")).toBe(2);
     expect(countCopies(fluxCards, "ion_surge_archive")).toBe(4);
+    expect(countCopies(fluxCards, "vector_lens")).toBe(2);
     expect(countCopies(fluxCards, "signal_fork")).toBe(2);
     expect(countCopies(fluxCards, "static_insight")).toBe(2);
     expect(countCopies(fluxCards, "surge_matrix")).toBe(2);
@@ -106,10 +108,11 @@ describe("starter decks", () => {
     expect(countCopies(biomassCards, "bloom_archivist_card")).toBe(2);
     expect(countCopies(biomassCards, "compost_broker_card")).toBe(2);
     expect(countCopies(biomassCards, "feeding_frenzy")).toBe(2);
+    expect(countCopies(biomassCards, "spore_veil")).toBe(3);
     expect(countCopies(biomassCards, "overgrowth_wave")).toBe(4);
     expect(countCopies(biomassCards, "spore_harvest")).toBe(2);
     expect(countCopies(biomassCards, "canopy_dividend")).toBe(2);
-    expect(countCopies(biomassCards, "orbital_purge")).toBe(2);
+    expect(countCopies(biomassCards, "orbital_purge")).toBe(1);
   });
 
   it("uses an actual starter curve instead of uniform four-ofs", () => {
@@ -128,7 +131,7 @@ describe("starter decks", () => {
         return (cost.credits ?? 0) + primary >= 5;
       });
 
-      expect(expensiveCards.length).toBeGreaterThanOrEqual(6);
+      expect(expensiveCards.length).toBeGreaterThanOrEqual(5);
       expect(new Set(cards).size).toBeGreaterThan(15);
     }
   });

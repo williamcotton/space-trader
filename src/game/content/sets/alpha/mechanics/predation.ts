@@ -2,6 +2,7 @@ import { hexDistance } from "../../../../model/hex";
 import { getEnemyEntities } from "../../../../model/queries";
 import { registerUnitBuffScoreContributor } from "../../../../registries/aiMechanics";
 import { registerUnitAttackPermissionChecker } from "../../../../registries/directInteraction";
+import { registerTriggerConditionEvaluator } from "../../../../registries/triggerConditions";
 import { canAttackEntityDirectly, canUnitAttack } from "../../../../rules/directInteraction";
 import { resolveCombatAttack } from "../../../../systems/combat";
 import { getEffectiveUnitAttackRange } from "../../../../systems/unitStats";
@@ -21,6 +22,20 @@ export function installPredationMechanic(): void {
   registerUnitAttackPermissionChecker("predation_resource_attack", (state, unit) =>
     unit.role === "resource" && unitHasActiveKeyword(state, unit, PREDATION_KEYWORD)
   );
+
+  registerTriggerConditionEvaluator("on_self_damaged_enemy_base", (state, event, _condition, unit) => {
+    if (
+      event.type !== "UNIT_ATTACK_DECLARED" ||
+      event.attackerId !== unit.id ||
+      event.playerId !== unit.ownerId ||
+      event.damageDealt <= 0
+    ) {
+      return false;
+    }
+
+    const target = state.entities[event.targetId];
+    return target?.kind === "base" && target.ownerId !== unit.ownerId;
+  });
 
   registerUnitBuffScoreContributor("predation_attack_permission", ({ state, botPlayerId, affectedUnits, options }) => {
     if (!options.grantedKeywords?.includes(PREDATION_KEYWORD)) {

@@ -552,6 +552,52 @@ describe("triggerEngine", () => {
       expect(triggered[0].targetEntityId).toBe("unit_player_2_near");
     });
 
+    it("fires Gnawing Collector when it damages an enemy base", () => {
+      const state = createState();
+      state.entities.unit_player_1_gnawing = {
+        id: "unit_player_1_gnawing",
+        kind: "unit",
+        name: "Gnawing Collector",
+        ownerId: "player_1",
+        role: "resource",
+        hp: 4,
+        maxHp: 4,
+        attackDamage: 1,
+        siegeDamageBonus: 0,
+        armor: 0,
+        moveRange: 4,
+        attackRange: 1,
+        attackActionsPerTurn: 1,
+        coord: { q: 3, r: -2 },
+        keywords: ["predation"],
+        carries: null,
+        sourceCardId: "gnawing_collector_card",
+        hasSummoningSickness: false,
+        movesRemaining: 4,
+        attacksRemaining: 1,
+        temporaryAttackBonus: 0,
+        temporaryArmorBonus: 0,
+      };
+
+      const attackEvent: GameEvent = {
+        type: "UNIT_ATTACK_DECLARED",
+        playerId: "player_1",
+        attackerId: "unit_player_1_gnawing",
+        targetId: "base_player_2",
+        attacksRemaining: 0,
+        damageDealt: 1,
+        targetHpRemaining: 19,
+        targetDestroyed: false,
+      };
+
+      resetTriggerDepth();
+      incrementTriggerDepth();
+      const triggered = evaluateTriggersFromEvent(state, attackEvent);
+
+      expect(triggered).toHaveLength(1);
+      expect(triggered[0]?.effectId).toBe("gain_biomass_1_uncounterable");
+    });
+
     it("does not fire for non-tactic events", () => {
       const state = createState();
       state.entities["unit_player_1_relay"] = {

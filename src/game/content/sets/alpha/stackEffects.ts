@@ -49,6 +49,29 @@ function createCardOwnedCascadeUnitBuffInstructions(context: InstructionContext)
   return createCardOwnedConfiguredInstructions(context, "cascade_unit_buff", "missing cascade config on source card.");
 }
 
+function createGainResourceInstructions(resource: "flux" | "biomass") {
+  return (context: InstructionContext): GameInstruction[] => [
+    {
+      type: "GAIN_RESOURCES",
+      playerId: context.controllerId,
+      resources: { [resource]: 1 },
+    },
+    {
+      type: "LOG",
+      text: `Resolved ${context.item.label}: gained 1 ${resource}.`,
+    },
+  ];
+}
+
+function createDamageEntityInstructions(amount: number) {
+  return (context: InstructionContext): GameInstruction[] => {
+    if (!context.targetEntityId) {
+      return [{ type: "LOG", text: `Resolved ${context.item.label}: no target configured.` }];
+    }
+    return [{ type: "DEAL_DAMAGE", targetEntityId: context.targetEntityId, amount, sourceLabel: context.item.label }];
+  };
+}
+
 export const ALPHA_STACK_EFFECTS: Record<string, StackEffectDefinition> = {
   resources_by_bloom_count: {
     id: "resources_by_bloom_count",
@@ -100,6 +123,59 @@ export const ALPHA_STACK_EFFECTS: Record<string, StackEffectDefinition> = {
       waves: 0,
     },
     createInstructions: createCardOwnedCascadeUnitBuffInstructions,
+  },
+  damage_enemy_unit_1: {
+    id: "damage_enemy_unit_1",
+    label: "Deal 1 Unit Damage",
+    object: {
+      kind: "spell",
+      counterable: true,
+      defaultCounterDestination: "discard",
+    },
+    targeting: {
+      type: "entity",
+      entityKind: "unit",
+      relation: "enemy",
+    },
+    behavior: {
+      type: "damage_entity",
+      amount: 1,
+    },
+    createInstructions: createDamageEntityInstructions(1),
+  },
+  gain_flux_1_uncounterable: {
+    id: "gain_flux_1_uncounterable",
+    label: "Gain 1 Flux",
+    object: {
+      kind: "ability",
+      counterable: false,
+      defaultCounterDestination: "none",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "gain_resources",
+      resources: { flux: 1 },
+    },
+    createInstructions: createGainResourceInstructions("flux"),
+  },
+  gain_biomass_1_uncounterable: {
+    id: "gain_biomass_1_uncounterable",
+    label: "Gain 1 Biomass",
+    object: {
+      kind: "ability",
+      counterable: false,
+      defaultCounterDestination: "none",
+    },
+    targeting: {
+      type: "none",
+    },
+    behavior: {
+      type: "gain_resources",
+      resources: { biomass: 1 },
+    },
+    createInstructions: createGainResourceInstructions("biomass"),
   },
 };
 
