@@ -2021,6 +2021,7 @@ describe("dispatchCommand", () => {
     if (!target || target.kind !== "unit") {
       throw new Error("Expected enemy unit for Signal Hijack.");
     }
+    target.coord = { q: -2, r: -2 };
 
     const play = dispatchCommand(state, {
       type: "PLAY_CARD",
@@ -2045,6 +2046,48 @@ describe("dispatchCommand", () => {
       entityId: stolen.id,
     });
     expect(select.ok).toBe(true);
+  });
+
+  it("Signal Hijack only targets enemy units within 3 hexes of the caster base", () => {
+    const state = createInitialGameState({
+      map: requireMapDefinition("frontier_belt"),
+      factions: {
+        player_1: "flux_collective",
+        player_2: "biomass_swarm",
+      },
+    });
+    state.activePlayerId = "player_1";
+    state.priorityPlayerId = "player_1";
+    state.phase = "main";
+    state.stack = [];
+    state.players.player_1.resources.credits = 8;
+    state.players.player_1.resources.flux = 4;
+
+    const farCardInstanceId = addCardToHand(state, "player_1", "signal_hijack");
+    const farTarget = state.entities.unit_player_2_harvester;
+    if (!farTarget || farTarget.kind !== "unit") {
+      throw new Error("Expected far enemy unit for Signal Hijack.");
+    }
+    farTarget.coord = { q: 3, r: 2 };
+
+    const rejected = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId: farCardInstanceId,
+      targetEntityId: farTarget.id,
+    });
+    expectRejected(rejected);
+
+    const nearCardInstanceId = addCardToHand(state, "player_1", "signal_hijack");
+    farTarget.coord = { q: -1, r: -2 };
+
+    const accepted = dispatchCommand(state, {
+      type: "PLAY_CARD",
+      playerId: "player_1",
+      cardInstanceId: nearCardInstanceId,
+      targetEntityId: farTarget.id,
+    });
+    expect(accepted.ok).toBe(true);
   });
 
   it("Bulwark Refit permanently fortifies, arms, and immobilizes an allied resource unit", () => {

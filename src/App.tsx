@@ -1,7 +1,12 @@
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { getAppBootConfig } from "./app/boot";
-import { DEFAULT_LOCAL_SKIRMISH_PRESET_ID, getLocalSkirmishPreset, type LocalSkirmishPresetId } from "./app/localSkirmish";
+import {
+  DEFAULT_LOCAL_SKIRMISH_PRESET_ID,
+  createLocalSkirmishFactionAssignments,
+  getLocalSkirmishPreset,
+  type LocalSkirmishPresetId,
+} from "./app/localSkirmish";
 import { createLocalExitResultSummary, createNetworkMatchResultSummary, deriveLocalMatchResultSummary } from "./app/resultSummary";
 import { DEFAULT_CALLSIGN, getEffectiveCallsign, readProfile, writeProfile, type AppProfile } from "./app/profileStore";
 import type { AppScreen, MatchResultSummary } from "./app/types";
@@ -183,9 +188,7 @@ function App() {
       const runtime = getGameRuntime();
       runtime.resetWithContent({
         runtimeProfileId: config.runtimeProfileId,
-        factions: {
-          player_1: config.faction,
-        },
+        factions: createLocalSkirmishFactionAssignments(config.faction, config.runtimeProfileId, getRegisteredFactionIds()),
       });
       setLastReplayableLocalConfig(config);
       setActiveMatch({
