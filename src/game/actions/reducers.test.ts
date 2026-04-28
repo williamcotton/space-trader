@@ -3632,7 +3632,7 @@ describe("dispatchCommand", () => {
       state.zones.player_2.hand = [];
       state.zones.player_1.hand = [];
       state.players.player_2.resources.flux = 1;
-      state.players.player_1.resources.credits = 2;
+      state.players.player_1.resources.credits = 3;
 
       const tacticId = addCardToHand(state, "player_2", "static_insight");
       const counterId = addCardToHand(state, "player_1", "null_intercept");

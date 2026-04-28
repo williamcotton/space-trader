@@ -97,7 +97,7 @@ describe("decideMvpBotCommand", () => {
     state.priorityPlayerId = "player_2";
     state.phase = "main";
     state.stack = [];
-    state.players.player_2.resources.credits = 5;
+    state.players.player_2.resources.credits = 10;
     state.players.player_2.resources.flux = 3;
     state.players.player_2.resources.alloy = 3;
     state.players.player_2.resources.biomass = 3;
@@ -400,7 +400,7 @@ describe("decideMvpBotCommand", () => {
     });
   });
 
-  it("casts Emergency War Chest when low on hand and flush with credits", () => {
+  it("does not spend the taxed neutral Emergency War Chest by default", () => {
     const state = setupState();
     state.activePlayerId = "player_2";
     state.priorityPlayerId = "player_2";
@@ -412,13 +412,12 @@ describe("decideMvpBotCommand", () => {
     delete state.entities.unit_player_2_scout;
     delete state.entities.unit_player_2_harvester;
 
-    const cardInstanceId = addCardToHand(state, "player_2", "emergency_war_chest");
+    addCardToHand(state, "player_2", "emergency_war_chest");
 
     const command = decideMvpBotCommand(state, "player_2");
     expect(command).toEqual({
-      type: "PLAY_CARD",
+      type: "END_PHASE",
       playerId: "player_2",
-      cardInstanceId,
     });
   });
 
