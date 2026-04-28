@@ -160,8 +160,8 @@ function WireframeTitleCanvas() {
     resize();
 
     const render = (time: number) => {
-      logo.rotation.y = -0.34 + Math.sin(time * 0.00032) * 0.035;
-      logo.rotation.x = -0.24 + Math.cos(time * 0.00028) * 0.018;
+      logo.rotation.y = -0.34 + Math.sin(time * 0.00032) * 0.095;
+      logo.rotation.x = -0.24 + Math.cos(time * 0.00028) * 0.048;
       renderer.render(scene, camera);
 
       animationFrame = window.requestAnimationFrame(render);

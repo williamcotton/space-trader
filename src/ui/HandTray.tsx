@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import { getResourceTheme } from "../game/presentation";
 import { getPlayerLabel } from "../game/presentation";
 import { getGameRuntime } from "../game/runtime";
-import type { PlayerId } from "../game/model/ids";
+import { PLAYER_ONE, type PlayerId } from "../game/model/ids";
 import { MAX_HAND_SIZE } from "../game/model/state";
 import { getCardDisplayInfo, type CardTag, type CostEntry, type UnitStatEntry } from "../game/model/selectors";
 import { ResourceIcon } from "./ResourceIcon";
@@ -44,14 +44,21 @@ function readSnapshot(): HandSnapshot {
     phase: state.phase,
     activePlayerId: state.activePlayerId,
     priorityPlayerId: state.priorityPlayerId,
+    localPlayerId: PLAYER_ONE,
     networkLocalPlayerId: runtime.getNetworkLocalPlayerId(),
     revealNonLocalHands: REVEAL_NON_LOCAL_HANDS,
   });
   const canDiscardFromVisibleHand = discardPhase && visiblePlayerId === state.activePlayerId;
+  const localPlayerId = runtime.getNetworkLocalPlayerId() ?? PLAYER_ONE;
+  const canVisiblePlayerAct =
+    REVEAL_NON_LOCAL_HANDS ||
+    (visiblePlayerId === localPlayerId &&
+      (discardPhase ? state.activePlayerId === visiblePlayerId : state.priorityPlayerId === visiblePlayerId));
 
-  const cards = [...state.zones[visiblePlayerId].hand].reverse().map((card) =>
-    getCardDisplayInfo(state, visiblePlayerId, card.cardId, card.instanceId)
-  );
+  const cards = [...state.zones[visiblePlayerId].hand].reverse().map((card) => {
+    const displayInfo = getCardDisplayInfo(state, visiblePlayerId, card.cardId, card.instanceId);
+    return canVisiblePlayerAct ? displayInfo : { ...displayInfo, playable: false, counterTarget: undefined };
+  });
 
   return {
     visiblePlayerId,
@@ -93,55 +100,59 @@ export function HandTray() {
         {snapshot.cards.length === 0 ? (
           <p className="hand-tray-empty">No cards in hand.</p>
         ) : (
-          snapshot.cards.map((card) => (
-            <button
-              key={card.instanceId}
-              type="button"
-              className={[
-                "hand-card",
-                snapshot.discardPhase || card.playable ? "playable" : "blocked",
-                snapshot.pendingTargetingCardInstanceId === card.instanceId ? "targeting" : "",
-              ].join(" ")}
-              onClick={() => runtime.playCardFromHand(card.instanceId, card.counterTarget)}
-            >
-              <span className="hand-card-title">{card.title}</span>
-              <span className="hand-card-subtitle">{card.subtitle}</span>
-              <span className="hand-card-tags">
-                {card.tags.map((tag) => (
-                  <span
-                    key={tag.label}
-                    className={`hand-card-tag ${tag.tone}`}
-                    style={tag.accent ? ({ "--hand-card-tag-accent": tag.accent } as CSSProperties) : undefined}
-                  >
-                    {tag.label}
-                  </span>
-                ))}
-              </span>
-              <span className="hand-card-cost">
-                {card.costEntries.length === 0 ? (
-                  <span className="resource-cost-chip free">Free</span>
-                ) : (
-                  card.costEntries.map((entry) => (
-                    <span key={entry.resource} className="resource-cost-chip" title={getResourceTheme(entry.resource).label}>
-                      <ResourceIcon resource={entry.resource} />
-                      <strong>{entry.amount}</strong>
-                    </span>
-                  ))
-                )}
-              </span>
-              {card.unitStats.length > 0 ? (
-                <span className="hand-card-stats">
-                  {card.unitStats.map((stat) => (
-                    <span key={stat.label} className="hand-card-stat">
-                      <small>{stat.label}</small>
-                      <strong>{stat.value}</strong>
+          snapshot.cards.map((card) => {
+            const canUseCard = snapshot.discardPhase || card.playable;
+            return (
+              <button
+                key={card.instanceId}
+                type="button"
+                disabled={!canUseCard}
+                className={[
+                  "hand-card",
+                  canUseCard ? "playable" : "blocked",
+                  snapshot.pendingTargetingCardInstanceId === card.instanceId ? "targeting" : "",
+                ].join(" ")}
+                onClick={() => runtime.playCardFromHand(card.instanceId, card.counterTarget)}
+              >
+                <span className="hand-card-title">{card.title}</span>
+                <span className="hand-card-subtitle">{card.subtitle}</span>
+                <span className="hand-card-tags">
+                  {card.tags.map((tag) => (
+                    <span
+                      key={tag.label}
+                      className={`hand-card-tag ${tag.tone}`}
+                      style={tag.accent ? ({ "--hand-card-tag-accent": tag.accent } as CSSProperties) : undefined}
+                    >
+                      {tag.label}
                     </span>
                   ))}
                 </span>
-              ) : null}
-              <span className="hand-card-text">{card.text}</span>
-            </button>
-          ))
+                <span className="hand-card-cost">
+                  {card.costEntries.length === 0 ? (
+                    <span className="resource-cost-chip free">Free</span>
+                  ) : (
+                    card.costEntries.map((entry) => (
+                      <span key={entry.resource} className="resource-cost-chip" title={getResourceTheme(entry.resource).label}>
+                        <ResourceIcon resource={entry.resource} />
+                        <strong>{entry.amount}</strong>
+                      </span>
+                    ))
+                  )}
+                </span>
+                {card.unitStats.length > 0 ? (
+                  <span className="hand-card-stats">
+                    {card.unitStats.map((stat) => (
+                      <span key={stat.label} className="hand-card-stat">
+                        <small>{stat.label}</small>
+                        <strong>{stat.value}</strong>
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
+                <span className="hand-card-text">{card.text}</span>
+              </button>
+            );
+          })
         )}
       </div>
     </section>

@@ -1457,6 +1457,10 @@ body {
   opacity: 0.66;
 }
 
+.hand-card:disabled {
+  cursor: default;
+}
+
 .hand-card-title {
   font-size: 13px;
   color: #f3f7ff;

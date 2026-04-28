@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { getGameRuntime } from "../game/runtime";
 import type { GamePhase } from "../game/model/enums";
-import { DRAW_RESULT_ID, type PlayerId } from "../game/model/ids";
+import { DRAW_RESULT_ID, PLAYER_ONE, type PlayerId } from "../game/model/ids";
 import { getStackItemPreview, type StackPreviewItem } from "../game/model/selectors";
 import { getPlayerLabel } from "../game/presentation";
 import { useGameSnapshot } from "./useGameSnapshot";
@@ -15,6 +15,7 @@ const PHASE_LABELS: Record<GamePhase, string> = {
   end: "End",
   discard: "Disc",
 };
+const ALLOW_NON_LOCAL_CONTROLS = import.meta.env.DEV && import.meta.env.VITE_BOOT_FLOW === "direct_match";
 
 type HistoryEntry = {
   id: string;
@@ -81,17 +82,21 @@ export function CommandStackPanel() {
     : snapshot.lastRejectedReason
       ? `Reject: ${snapshot.lastRejectedReason}`
       : null;
+  const localPlayerId = snapshot.networkLocalPlayerId ?? PLAYER_ONE;
+  const canControlActivePlayer = ALLOW_NON_LOCAL_CONTROLS || snapshot.activePlayerId === localPlayerId;
+  const canControlPriorityPlayer =
+    ALLOW_NON_LOCAL_CONTROLS || Boolean(snapshot.priorityPlayerId && snapshot.priorityPlayerId === localPlayerId);
   const activePlayerControlsLocked =
     Boolean(snapshot.winner) ||
     snapshot.stackItems.length > 0 ||
     !snapshot.priorityPlayerId ||
     snapshot.priorityPlayerId !== snapshot.activePlayerId ||
-    Boolean(snapshot.networkLocalPlayerId && snapshot.networkLocalPlayerId !== snapshot.activePlayerId);
+    !canControlActivePlayer;
   const passPriorityLocked =
     Boolean(snapshot.winner) ||
     !snapshot.priorityPlayerId ||
     (snapshot.stackItems.length === 0 && snapshot.consecutivePasses === 0) ||
-    Boolean(snapshot.networkLocalPlayerId && snapshot.networkLocalPlayerId !== snapshot.priorityPlayerId);
+    !canControlPriorityPlayer;
 
   return (
     <aside className="command-stack-panel">
