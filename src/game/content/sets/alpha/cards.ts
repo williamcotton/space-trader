@@ -3,6 +3,7 @@ import type { EntityState } from "../../../model/state";
 import type { GameState, HexCoord } from "../../../model/state";
 import type { GameInstruction, InstructionContext } from "../../../actions/instructions";
 import { hexDistance, isWithinMapBounds } from "../../../model/hex";
+import { getPlayerBase } from "../../../model/queries";
 import { LAYER } from "../../../systems/continuousEffects";
 import { createModifierEffectConfigs, tacticPlay, unitPlay } from "../../cards/builders";
 import type {
@@ -235,15 +236,16 @@ function drawAndGainResourcesTacticPlay(
 }
 
 function gainControlUnitTacticPlay(
-  options: GainControlUnitOptions & {
+  options: {
+    isValidTarget?: TargetPredicate;
     sourceDestinationOnResolve?: CardSourceDestination;
   } = {}
 ): CardPlayProfile {
   return tacticPlay("gain_control_of_unit", {
     targetMode: "entity",
-    isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId !== pid,
+    isValidTarget: options.isValidTarget ?? ((_state, target, pid) => target.kind === "unit" && target.ownerId !== pid),
     sourceDestinationOnResolve: options.sourceDestinationOnResolve,
-    effectConfig: createGainControlUnitEffectConfig(options),
+    effectConfig: createGainControlUnitEffectConfig(),
   });
 }
 
@@ -332,6 +334,15 @@ function isFriendlyCascadeHexTarget(state: Readonly<GameState>, target: HexCoord
 
 function isEnemyBaseTarget(_state: Readonly<GameState>, target: EntityState, playerId: PlayerId): boolean {
   return target.kind === "base" && target.ownerId !== playerId;
+}
+
+function isEnemyUnitWithinFriendlyBaseRange(state: Readonly<GameState>, target: EntityState, playerId: PlayerId, range: number): boolean {
+  if (target.kind !== "unit" || target.ownerId === playerId) {
+    return false;
+  }
+
+  const base = getPlayerBase(state as GameState, playerId);
+  return !!base && hexDistance(base.coord, target.coord) <= range;
 }
 
 function hasFriendlyUnitNearEntity(state: Readonly<GameState>, playerId: PlayerId, target: EntityState): boolean {
@@ -1098,8 +1109,10 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
     kind: "tactic",
     speed: "main",
     cost: { credits: 4, flux: 2 },
-    text: "Gain control of target enemy unit.",
-    play: gainControlUnitTacticPlay(),
+    text: "Gain control of target enemy unit within 3 hexes of your base.",
+    play: gainControlUnitTacticPlay({
+      isValidTarget: (state, target, pid) => isEnemyUnitWithinFriendlyBaseRange(state, target, pid, 3),
+    }),
   },
   bulwark_refit: {
     id: "bulwark_refit",
