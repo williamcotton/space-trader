@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import type { GameRuntime } from "./game/runtime";
+import type { RuntimeDevControls } from "./game/runtime/devControls";
 
 interface ImportMetaEnv {
   readonly VITE_BOOT_FLOW?: "home" | "direct_match";
@@ -17,6 +18,7 @@ declare global {
       versions: Record<string, string>;
     };
     __gameRuntime?: GameRuntime;
+    __gameRuntimeDevControls?: RuntimeDevControls;
     __spaceTraderRuntimeReady?: boolean;
     __spaceTraderRendererSettled?: boolean;
   }

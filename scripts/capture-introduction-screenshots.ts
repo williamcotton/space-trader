@@ -65,7 +65,7 @@ async function hexToPagePixels(
 
     const { getThreeCameraLayout, hexToWorldPoint } = await import("../src/game/render3d/layout3d.ts");
 
-    const layout = getThreeCameraLayout(runtime.state.map, runtime.viewport);
+    const layout = getThreeCameraLayout(runtime.state.map, runtime.getViewport());
     const cameraRightAxis = { x: 1, y: 0, z: 0 };
     const cameraUpAxis = {
       x: 0,
@@ -228,7 +228,9 @@ async function resetGame(page: Page): Promise<void> {
   await clearAnnotations(page);
   await page.evaluate(() => {
     const runtime = (window as any).__gameRuntime;
+    const devControls = (window as any).__gameRuntimeDevControls;
     if (!runtime) throw new Error("__gameRuntime not found on window");
+    if (!devControls) throw new Error("__gameRuntimeDevControls not found on window");
 
     runtime.resetWithContent({
       builtInSetIds: ["alpha"],
@@ -239,20 +241,12 @@ async function resetGame(page: Page): Promise<void> {
       seed: 20260408,
     });
 
-    runtime.animations = [];
-    if (runtime.automationTimer) {
-      clearTimeout(runtime.automationTimer);
-      runtime.automationTimer = null;
-    }
-    runtime.automationTimerDueAtMs = 0;
-
-    for (const pid of runtime.state.playerOrder) {
-      runtime.botAutoplayEnabled[pid] = false;
-    }
-
-    runtime.pendingCardTargeting = null;
-    runtime.pendingAttackTargeting = null;
-    runtime.notifyListeners();
+    devControls.clearAnimations();
+    devControls.pauseAutomation();
+    runtime.disableBotAutoplay();
+    devControls.setPendingCardTargeting(null);
+    devControls.setPendingAttackTargeting(null);
+    devControls.forceNotify();
   });
 
   await waitForRendererSettled(page);
@@ -261,8 +255,9 @@ async function resetGame(page: Page): Promise<void> {
 async function settleRender(page: Page): Promise<void> {
   await page.evaluate(() => {
     const runtime = (window as any).__gameRuntime;
-    runtime.animations = [];
-    runtime.notifyListeners();
+    const devControls = (window as any).__gameRuntimeDevControls;
+    devControls.clearAnimations();
+    devControls.forceNotify();
   });
   await waitForRendererSettled(page);
   await page.waitForTimeout(RENDER_SETTLE_MS);
@@ -327,6 +322,7 @@ const steps: TutorialStep[] = [
       await resetGame(page);
       await page.evaluate(() => {
         const runtime = (window as any).__gameRuntime;
+        const devControls = (window as any).__gameRuntimeDevControls;
         const state = runtime.state;
         state.phase = "main";
         state.priorityPlayerId = "player_1";
@@ -391,6 +387,7 @@ const steps: TutorialStep[] = [
       await resetGame(page);
       await page.evaluate(() => {
         const runtime = (window as any).__gameRuntime;
+        const devControls = (window as any).__gameRuntimeDevControls;
         const state = runtime.state;
         state.phase = "main";
         state.priorityPlayerId = "player_1";
@@ -441,6 +438,7 @@ const steps: TutorialStep[] = [
       await resetGame(page);
       await page.evaluate(() => {
         const runtime = (window as any).__gameRuntime;
+        const devControls = (window as any).__gameRuntimeDevControls;
         const state = runtime.state;
         state.phase = "tactical";
         state.priorityPlayerId = null;
@@ -486,6 +484,7 @@ const steps: TutorialStep[] = [
       await resetGame(page);
       await page.evaluate(() => {
         const runtime = (window as any).__gameRuntime;
+        const devControls = (window as any).__gameRuntimeDevControls;
         const state = runtime.state;
         state.phase = "main";
         state.priorityPlayerId = "player_1";
@@ -494,13 +493,13 @@ const steps: TutorialStep[] = [
         const unitCard = hand.find((c: any) => c.cardId.endsWith("_card"));
 
         if (unitCard) {
-          runtime.pendingCardTargeting = {
+          devControls.setPendingCardTargeting({
             playerId: "player_1",
             cardInstanceId: unitCard.instanceId,
             cardName: unitCard.cardId.replace(/_card$/, "").replace(/_/g, " "),
             targetMode: "hex",
             prompt: "Choose a deployment tile adjacent to your base",
-          };
+          });
         }
       });
       await settleRender(page);
@@ -541,6 +540,7 @@ const steps: TutorialStep[] = [
       await resetGame(page);
       await page.evaluate(() => {
         const runtime = (window as any).__gameRuntime;
+        const devControls = (window as any).__gameRuntimeDevControls;
         const state = runtime.state;
         state.phase = "main";
         state.priorityPlayerId = "player_1";
@@ -653,6 +653,7 @@ const steps: TutorialStep[] = [
       await resetGame(page);
       await page.evaluate(() => {
         const runtime = (window as any).__gameRuntime;
+        const devControls = (window as any).__gameRuntimeDevControls;
         const state = runtime.state;
         state.turn = 3;
         state.phase = "tactical";
@@ -674,12 +675,12 @@ const steps: TutorialStep[] = [
 
         state.selectedEntityId = "unit_player_1_scout";
 
-        runtime.pendingAttackTargeting = {
+        devControls.setPendingAttackTargeting({
           playerId: "player_1",
           attackerId: "unit_player_1_scout",
           attackerName: "Frontline Scout",
           prompt: "Select an enemy to attack",
-        };
+        });
       });
       await settleRender(page);
     },
@@ -716,6 +717,7 @@ const steps: TutorialStep[] = [
       await resetGame(page);
       await page.evaluate(() => {
         const runtime = (window as any).__gameRuntime;
+        const devControls = (window as any).__gameRuntimeDevControls;
         const state = runtime.state;
         state.turn = 2;
         state.phase = "tactical";
@@ -970,6 +972,7 @@ const steps: TutorialStep[] = [
       await resetGame(page);
       await page.evaluate(() => {
         const runtime = (window as any).__gameRuntime;
+        const devControls = (window as any).__gameRuntimeDevControls;
         const state = runtime.state;
         state.turn = 8;
         state.phase = "tactical";
@@ -1000,12 +1003,12 @@ const steps: TutorialStep[] = [
 
         state.selectedEntityId = "unit_player_1_scout";
 
-        runtime.pendingAttackTargeting = {
+        devControls.setPendingAttackTargeting({
           playerId: "player_1",
           attackerId: "unit_player_1_scout",
           attackerName: "Frontline Scout",
           prompt: "Select an enemy to attack",
-        };
+        });
       });
       await settleRender(page);
     },
