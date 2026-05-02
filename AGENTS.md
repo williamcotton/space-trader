@@ -5,7 +5,7 @@
 - Electron
 - React + TypeScript
 - Vite
-- Canvas 2D + `requestAnimationFrame`
+- Three.js + WebGL canvas + `requestAnimationFrame`
 
 ## Project Layout
 
@@ -35,9 +35,9 @@
 - `src/screens/MatchScreen.tsx`
   - extracted gameplay shell
 - `src/GameCanvas.tsx`
-  - canvas mount point
+  - Three.js canvas mount point
   - RAF loop owner
-  - explicit runtime-ready signal for automation
+  - explicit runtime-ready and renderer-settled signals for automation
 
 ### Core Runtime
 
@@ -62,16 +62,15 @@
 - `src/game/runtime/automation.ts`
   - auto-flow, bot autoplay, priority stops, and bot worker lifecycle
 - `src/game/runtime/renderFrame.ts`
-  - render-frame assembly and update/render stepping
+  - render-frame assembly and renderer stepping
 - `src/game/runtime/devControls.ts`
   - developer/debug commands and screenshot automation controls
 - `src/game/runtime/hotRuntime.ts`
   - dev-window binding and HMR singleton helpers
 - `src/game/systems.ts`
   - `updateGame`
-  - `renderGame`
 - `src/game/types.ts`
-  - frame, viewport, and animation types
+  - frame, viewport, animation, and renderer contract types
 - `src/game/derived.ts`
   - cached derived state keyed off runtime version
 - `src/game/presentation.ts`
@@ -277,13 +276,15 @@
 
 ### Render
 
-- `src/game/render/layout.ts`
-- `src/game/render/primitives.ts`
-- `src/game/render/grid.ts`
-- `src/game/render/entities.ts`
-- `src/game/render/overlays.ts`
 - `src/game/render/animations.ts`
-- `src/game/render/animationDrawing.ts`
+  - renderer-agnostic animation synthesis and animation-capture helpers
+- `src/game/render3d/layout3d.ts`
+  - axial hex to Three.js world-space projection helpers
+  - orthographic camera layout used by renderer and screenshot automation
+- `src/game/render3d/renderer.ts`
+  - sole board renderer
+  - Three.js scene, camera, picking, board, entities, overlays, and 3D animation drawing
+  - renderer-owned camera intro/victory effects and renderer-settled automation state
 
 ### UI
 
@@ -338,7 +339,8 @@ Automation contract:
 - the game runtime is exposed on `window.__gameRuntime` in dev mode
 - screenshot/dev automation controls are exposed on `window.__gameRuntimeDevControls` in dev mode
 - gameplay readiness is exposed on `window.__spaceTraderRuntimeReady`
-- screenshot automation should wait for the explicit ready marker, not only for `__gameRuntime` existence
+- Three.js renderer settled state is exposed on `window.__spaceTraderRendererSettled`
+- screenshot automation should wait for the explicit ready and renderer-settled markers, not only for `__gameRuntime` existence
 
 If the UI layout, hex grid rendering, or HUD components change, re-run the script and verify the 12 output images.
 
@@ -444,17 +446,18 @@ If the UI layout, hex grid rendering, or HUD components change, re-run the scrip
 - `getGameRuntime()` returns the same runtime instance for the life of the renderer session.
 - `getGameRuntime()` is the lazy runtime boundary; do not depend on import-time side effects.
 - React should subscribe to runtime snapshots, not copy gameplay state into component state.
-- `GameCanvas` owns the RAF loop and calls runtime step/render plumbing.
+- `GameCanvas` owns the RAF loop and calls runtime step plumbing with the Three.js `GameRenderer`.
 - `GameCanvas` also owns the explicit gameplay-ready marker:
   - `window.__spaceTraderRuntimeReady = false` before mount work begins
   - `window.__spaceTraderRuntimeReady = true` once gameplay is mounted and rendering
+- `GameCanvas` keeps RAF active while runtime animations or renderer-owned camera effects are active.
 - New authoritative gameplay state belongs in `state.ts` plus `migrations.ts`.
 
 ## HMR Workflow
 
 - Runtime instance persists through HMR once it exists.
 - HMR should not force runtime creation before gameplay mounts.
-- Simulation/render logic can be hot-swapped without wiping the match.
+- Simulation update logic and Three renderer code can be hot-swapped without wiping the match.
 - State schema changes should always be accompanied by migration updates.
 - Registry-backed content can be reset and reloaded deterministically.
 - Server/client multiplayer bugs are often determinism bugs; check ids, seeds, and content parity before assuming transport failure.
