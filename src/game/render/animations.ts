@@ -446,7 +446,7 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
           kind: "deploy",
           playerId: event.playerId,
           ageSeconds: 0,
-          durationSeconds: 0.66,
+          durationSeconds: 0.92,
           coord: event.spawnCoord,
         });
         break;

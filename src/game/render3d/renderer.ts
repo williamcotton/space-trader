@@ -12,6 +12,9 @@ import { THREE_HEX_RADIUS, getThreeCameraLayout, hexToWorldPoint, type ThreeCame
 const HEX_RADIUS = THREE_HEX_RADIUS;
 const CAMERA_INTRO_DURATION_SECONDS = 1.65;
 const VICTORY_CAMERA_DURATION_SECONDS = 2.35;
+const UNIT_ENTRY_DROP = 0.78;
+const UNIT_ENTRY_LAYER_STAGGER = 0.095;
+const UNIT_ENTRY_LAYER_WINDOW = 0.56;
 
 type DisposableObject = THREE.Object3D & {
   geometry?: THREE.BufferGeometry;
@@ -25,6 +28,15 @@ type CameraSnapshot = {
   right: number;
   top: number;
   bottom: number;
+};
+
+type UnitEntryAnimation = {
+  progress: number;
+};
+
+type UnitLayerSpec = {
+  y: number;
+  radius: number;
 };
 
 function hexToWorld(coord: HexCoord, y = 0): THREE.Vector3 {
@@ -245,94 +257,158 @@ function lerp(start: number, end: number, progress: number): number {
   return start + (end - start) * progress;
 }
 
-function makeResourceUnitBody(color: string, accentColor: string): THREE.Group {
+function getUnitEntryLayerProgress(animation: UnitEntryAnimation | null, layerIndex: number): number {
+  if (!animation) {
+    return 1;
+  }
+
+  const start = layerIndex * UNIT_ENTRY_LAYER_STAGGER;
+  return easeOutCubic((animation.progress - start) / UNIT_ENTRY_LAYER_WINDOW);
+}
+
+function getUnitEntryLayerLift(layerProgress: number): number {
+  return -UNIT_ENTRY_DROP * (1 - layerProgress);
+}
+
+function makeUnitLayerMaterial(color: string | number, baseOpacity: number, layerProgress: number): THREE.MeshBasicMaterial {
+  const opacity = baseOpacity * lerp(0.05, 1, layerProgress);
+  return makeThickLineMaterial(color, opacity);
+}
+
+function makeResourceUnitBody(color: string, accentColor: string, entryAnimation: UnitEntryAnimation | null = null): THREE.Group {
   const group = new THREE.Group();
-  const ringMaterial = makeThickLineMaterial(color, 0.95);
-  const accentMaterial = makeThickLineMaterial(accentColor, 0.54);
 
   const ringHeights = [-0.22, -0.06, 0.1, 0.26, 0.42];
-  for (const y of ringHeights) {
-    group.add(makeThickPolyline(makeCirclePoints(0.42, y), 0.024, ringMaterial));
+  const layerProgress = ringHeights.map((_, index) => getUnitEntryLayerProgress(entryAnimation, index));
+  const layerLifts = layerProgress.map(getUnitEntryLayerLift);
+
+  for (let index = 0; index < ringHeights.length; index += 1) {
+    const layer = makeThickPolyline(
+      makeCirclePoints(0.42, ringHeights[index]),
+      0.024,
+      makeUnitLayerMaterial(color, 0.95, layerProgress[index])
+    );
+    layer.position.y = layerLifts[index];
+    group.add(layer);
   }
 
   for (let index = 0; index < 4; index += 1) {
     const angle = Math.PI / 4 + index * (Math.PI / 2);
     const x = Math.cos(angle) * 0.42;
     const z = Math.sin(angle) * 0.42;
-    group.add(
-      makeThickSegment(
-        new THREE.Vector3(x, ringHeights[0], z),
-        new THREE.Vector3(x, ringHeights[ringHeights.length - 1], z),
-        0.018,
-        accentMaterial
-      )
-    );
+    for (let layerIndex = 0; layerIndex < ringHeights.length - 1; layerIndex += 1) {
+      const connectorProgress = Math.min(layerProgress[layerIndex], layerProgress[layerIndex + 1]);
+      group.add(
+        makeThickSegment(
+          new THREE.Vector3(x, ringHeights[layerIndex] + layerLifts[layerIndex], z),
+          new THREE.Vector3(x, ringHeights[layerIndex + 1] + layerLifts[layerIndex + 1], z),
+          0.018,
+          makeUnitLayerMaterial(accentColor, 0.54, connectorProgress)
+        )
+      );
+    }
   }
 
   return group;
 }
 
-function makeCombatUnitBody(color: string, accentColor: string): THREE.Group {
+function makeCombatUnitBody(color: string, accentColor: string, entryAnimation: UnitEntryAnimation | null = null): THREE.Group {
   const group = new THREE.Group();
-  const ringMaterial = makeThickLineMaterial(color, 0.96);
-  const accentMaterial = makeThickLineMaterial(accentColor, 0.56);
-
-  const rings = [
+  const rings: UnitLayerSpec[] = [
     { y: -0.22, radius: 0.48 },
     { y: -0.04, radius: 0.4 },
     { y: 0.14, radius: 0.31 },
     { y: 0.32, radius: 0.22 },
     { y: 0.5, radius: 0.1 },
   ];
-  for (const ringSpec of rings) {
-    group.add(makeThickPolyline(makeCirclePoints(ringSpec.radius, ringSpec.y), 0.024, ringMaterial));
+  const layerProgress = rings.map((_, index) => getUnitEntryLayerProgress(entryAnimation, index));
+  const layerLifts = layerProgress.map(getUnitEntryLayerLift);
+
+  for (let index = 0; index < rings.length; index += 1) {
+    const ringSpec = rings[index];
+    const layer = makeThickPolyline(
+      makeCirclePoints(ringSpec.radius, ringSpec.y),
+      0.024,
+      makeUnitLayerMaterial(color, 0.96, layerProgress[index])
+    );
+    layer.position.y = layerLifts[index];
+    group.add(layer);
   }
 
-  const base = rings[0];
-  const top = rings[rings.length - 1];
   for (let index = 0; index < 4; index += 1) {
     const angle = Math.PI / 4 + index * (Math.PI / 2);
-    group.add(
-      makeThickSegment(
-        new THREE.Vector3(Math.cos(angle) * base.radius, base.y, Math.sin(angle) * base.radius),
-        new THREE.Vector3(Math.cos(angle) * top.radius, top.y, Math.sin(angle) * top.radius),
-        0.018,
-        accentMaterial
-      )
-    );
+    for (let layerIndex = 0; layerIndex < rings.length - 1; layerIndex += 1) {
+      const lower = rings[layerIndex];
+      const upper = rings[layerIndex + 1];
+      const connectorProgress = Math.min(layerProgress[layerIndex], layerProgress[layerIndex + 1]);
+      group.add(
+        makeThickSegment(
+          new THREE.Vector3(
+            Math.cos(angle) * lower.radius,
+            lower.y + layerLifts[layerIndex],
+            Math.sin(angle) * lower.radius
+          ),
+          new THREE.Vector3(
+            Math.cos(angle) * upper.radius,
+            upper.y + layerLifts[layerIndex + 1],
+            Math.sin(angle) * upper.radius
+          ),
+          0.018,
+          makeUnitLayerMaterial(accentColor, 0.56, connectorProgress)
+        )
+      );
+    }
   }
 
   return group;
 }
 
-function makeUtilityUnitBody(color: string, accentColor: string): THREE.Group {
+function makeUtilityUnitBody(color: string, accentColor: string, entryAnimation: UnitEntryAnimation | null = null): THREE.Group {
   const group = new THREE.Group();
-  const ringMaterial = makeThickLineMaterial(color, 0.95);
-  const accentMaterial = makeThickLineMaterial(accentColor, 0.54);
-
-  const hexes = [
+  const hexes: UnitLayerSpec[] = [
     { y: -0.2, radius: 0.46 },
     { y: -0.02, radius: 0.4 },
     { y: 0.16, radius: 0.34 },
     { y: 0.34, radius: 0.28 },
     { y: 0.52, radius: 0.23 },
   ];
-  for (const hex of hexes) {
-    group.add(makeThickPolyline(makeHexPoints(hex.radius, hex.y), 0.024, ringMaterial));
+  const layerProgress = hexes.map((_, index) => getUnitEntryLayerProgress(entryAnimation, index));
+  const layerLifts = layerProgress.map(getUnitEntryLayerLift);
+
+  for (let index = 0; index < hexes.length; index += 1) {
+    const hex = hexes[index];
+    const layer = makeThickPolyline(
+      makeHexPoints(hex.radius, hex.y),
+      0.024,
+      makeUnitLayerMaterial(color, 0.95, layerProgress[index])
+    );
+    layer.position.y = layerLifts[index];
+    group.add(layer);
   }
 
-  const bottom = hexes[0];
-  const top = hexes[hexes.length - 1];
   for (let side = 0; side < 6; side += 1) {
     const angle = -Math.PI / 6 + (Math.PI * 2 * side) / 6;
-    group.add(
-      makeThickSegment(
-        new THREE.Vector3(Math.cos(angle) * bottom.radius, bottom.y, Math.sin(angle) * bottom.radius),
-        new THREE.Vector3(Math.cos(angle) * top.radius, top.y, Math.sin(angle) * top.radius),
-        0.018,
-        accentMaterial
-      )
-    );
+    for (let layerIndex = 0; layerIndex < hexes.length - 1; layerIndex += 1) {
+      const lower = hexes[layerIndex];
+      const upper = hexes[layerIndex + 1];
+      const connectorProgress = Math.min(layerProgress[layerIndex], layerProgress[layerIndex + 1]);
+      group.add(
+        makeThickSegment(
+          new THREE.Vector3(
+            Math.cos(angle) * lower.radius,
+            lower.y + layerLifts[layerIndex],
+            Math.sin(angle) * lower.radius
+          ),
+          new THREE.Vector3(
+            Math.cos(angle) * upper.radius,
+            upper.y + layerLifts[layerIndex + 1],
+            Math.sin(angle) * upper.radius
+          ),
+          0.018,
+          makeUnitLayerMaterial(accentColor, 0.54, connectorProgress)
+        )
+      );
+    }
   }
 
   return group;
@@ -456,7 +532,7 @@ export class ThreeGameRenderer implements GameRenderer {
     }
 
     this.rebuildOverlays(state, frame);
-    this.rebuildEntities(state);
+    this.rebuildEntities(state, frame);
     this.rebuildAnimations(frame);
     this.updateCameraEffects(state, frame.deltaSeconds);
     this.renderer.render(this.scene, this.camera);
@@ -614,7 +690,7 @@ export class ThreeGameRenderer implements GameRenderer {
     this.mapHalfDepth = Math.max(1, size.z / 2);
   }
 
-  private rebuildEntities(state: GameState): void {
+  private rebuildEntities(state: GameState, frame: RuntimeFrame): void {
     clearGroup(this.entityGroup);
 
     const entities = Object.values(state.entities).sort((a, b) => entitySortValue(a) - entitySortValue(b));
@@ -622,7 +698,7 @@ export class ThreeGameRenderer implements GameRenderer {
       if (entity.kind === "base") {
         this.addBase(entity);
       } else {
-        this.addUnit(entity);
+        this.addUnit(entity, frame);
       }
     }
   }
@@ -649,7 +725,29 @@ export class ThreeGameRenderer implements GameRenderer {
     this.entityGroup.add(root);
   }
 
-  private addUnit(entity: EntityState): void {
+  private getDeployEntryAnimation(entity: Extract<EntityState, { kind: "unit" }>, frame: RuntimeFrame): UnitEntryAnimation | null {
+    let activeAnimation: Extract<CanvasAnimation, { kind: "deploy" }> | null = null;
+    for (const animation of frame.transients.animations) {
+      if (
+        animation.kind === "deploy" &&
+        animation.playerId === entity.ownerId &&
+        animation.coord.q === entity.coord.q &&
+        animation.coord.r === entity.coord.r
+      ) {
+        activeAnimation = animation;
+      }
+    }
+
+    if (!activeAnimation) {
+      return null;
+    }
+
+    return {
+      progress: Math.max(0, Math.min(1, activeAnimation.ageSeconds / activeAnimation.durationSeconds)),
+    };
+  }
+
+  private addUnit(entity: EntityState, frame: RuntimeFrame): void {
     if (entity.kind !== "unit") {
       return;
     }
@@ -657,14 +755,16 @@ export class ThreeGameRenderer implements GameRenderer {
     const theme = getPlayerTheme(entity.ownerId);
     const root = new THREE.Group();
     root.position.copy(hexToWorld(entity.coord, 0.34));
+    const entryAnimation = this.getDeployEntryAnimation(entity, frame);
+    const uiProgress = entryAnimation ? easeOutCubic((entryAnimation.progress - 0.46) / 0.44) : 1;
 
     let body: THREE.Object3D;
     if (entity.role === "combat") {
-      body = makeCombatUnitBody(theme.primary, theme.secondary);
+      body = makeCombatUnitBody(theme.primary, theme.secondary, entryAnimation);
     } else if (entity.role === "resource") {
-      body = makeResourceUnitBody(theme.primary, theme.secondary);
+      body = makeResourceUnitBody(theme.primary, theme.secondary, entryAnimation);
     } else {
-      body = makeUtilityUnitBody(theme.primary, theme.secondary);
+      body = makeUtilityUnitBody(theme.primary, theme.secondary, entryAnimation);
     }
     root.add(body);
 
@@ -674,13 +774,14 @@ export class ThreeGameRenderer implements GameRenderer {
       fontSize: 32,
       scale: 0.44,
     });
-    hp.position.set(0, 1.08, 0);
+    hp.material.opacity = uiProgress;
+    hp.position.set(0, 1.08 - (1 - uiProgress) * 0.18, 0);
     root.add(hp);
 
     if (entity.hasSummoningSickness) {
       const ring = new THREE.Line(
         createHexLineGeometry(0.46),
-        new THREE.LineBasicMaterial({ color: 0xffc276, transparent: true, opacity: 0.9 })
+        new THREE.LineBasicMaterial({ color: 0xffc276, transparent: true, opacity: 0.9 * uiProgress })
       );
       ring.position.y = -0.18;
       root.add(ring);
@@ -694,7 +795,8 @@ export class ThreeGameRenderer implements GameRenderer {
         fontSize: 30,
         scale: 0.34,
       });
-      badge.position.set(0.56, 0.74, 0);
+      badge.material.opacity = uiProgress;
+      badge.position.set(0.56, 0.74 - (1 - uiProgress) * 0.12, 0);
       root.add(badge);
     }
 
@@ -985,10 +1087,9 @@ export class ThreeGameRenderer implements GameRenderer {
 
   private addDeployAnimation(animation: Extract<CanvasAnimation, { kind: "deploy" }>, progress: number): void {
     const theme = getPlayerTheme(animation.playerId);
-    const top = hexToWorld(animation.coord, 2.2 - progress * 1.2);
-    const bottom = hexToWorld(animation.coord, 0.52);
-    this.addLine(top, bottom, theme.primary, 0.7 - progress * 0.36);
-    this.addRing(animation.coord, 0.5 + progress * 0.62, theme.line, 0.86 - progress * 0.52, 0.22);
+    const eased = easeOutCubic(progress);
+    this.addRing(animation.coord, 0.44 + progress * 0.38, theme.line, 0.78 - progress * 0.5, 0.16 + eased * 0.14);
+    this.addRing(animation.coord, 0.26 + progress * 0.28, theme.primary, 0.48 - progress * 0.3, 0.28 + eased * 0.34);
   }
 
   private addBaseHitAnimation(animation: Extract<CanvasAnimation, { kind: "base_hit" }>, progress: number): void {

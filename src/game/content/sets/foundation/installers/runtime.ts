@@ -453,7 +453,7 @@ function registerFoundationStackResolveAnimations(): void {
       kind: "deploy",
       playerId: resolvedUnit.ownerId,
       ageSeconds: 0,
-      durationSeconds: 0.66,
+      durationSeconds: 0.92,
       coord: resolvedUnit.coord,
     };
   });
