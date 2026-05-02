@@ -1,4 +1,4 @@
-import type { ResourceType } from "./model/enums";
+import type { ResourceType, UnitRole } from "./model/enums";
 import type { PlayerId } from "./model/ids";
 import type { GameState, HexCoord } from "./model/state";
 import type { DerivedState } from "./derived";
@@ -112,6 +112,7 @@ export type CanvasAnimation =
       ageSeconds: number;
       durationSeconds: number;
       coord: HexCoord;
+      role: UnitRole;
     }
   | {
       id: string;

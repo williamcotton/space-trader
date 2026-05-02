@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { getPlayableHexes, hexDistance, isWithinMapBounds, pixelToAxial } from "../model/hex";
 import type { PlayerId } from "../model/ids";
+import type { UnitRole } from "../model/enums";
 import type { EntityState, GameState, HexCoord } from "../model/state";
 import { findEntityAtHex } from "../model/queries";
 import { getPlayerTheme, getResourceTheme } from "../presentation";
@@ -15,6 +16,8 @@ const VICTORY_CAMERA_DURATION_SECONDS = 2.35;
 const UNIT_ENTRY_DROP = 0.78;
 const UNIT_ENTRY_LAYER_STAGGER = 0.095;
 const UNIT_ENTRY_LAYER_WINDOW = 0.56;
+const UNIT_DEATH_COLLAPSE_END = 0.68;
+const UNIT_DEATH_PULSE_START = UNIT_DEATH_COLLAPSE_END * 0.8;
 
 type DisposableObject = THREE.Object3D & {
   geometry?: THREE.BufferGeometry;
@@ -414,6 +417,21 @@ function makeUtilityUnitBody(color: string, accentColor: string, entryAnimation:
   return group;
 }
 
+function makeUnitBody(
+  role: UnitRole,
+  color: string,
+  accentColor: string,
+  entryAnimation: UnitEntryAnimation | null = null
+): THREE.Object3D {
+  if (role === "combat") {
+    return makeCombatUnitBody(color, accentColor, entryAnimation);
+  }
+  if (role === "resource") {
+    return makeResourceUnitBody(color, accentColor, entryAnimation);
+  }
+  return makeUtilityUnitBody(color, accentColor, entryAnimation);
+}
+
 function makeBaseBody(color: string, accentColor: string): THREE.Group {
   const group = new THREE.Group();
   const primaryMaterial = makeThickLineMaterial(color, 0.94);
@@ -758,14 +776,7 @@ export class ThreeGameRenderer implements GameRenderer {
     const entryAnimation = this.getDeployEntryAnimation(entity, frame);
     const uiProgress = entryAnimation ? easeOutCubic((entryAnimation.progress - 0.46) / 0.44) : 1;
 
-    let body: THREE.Object3D;
-    if (entity.role === "combat") {
-      body = makeCombatUnitBody(theme.primary, theme.secondary, entryAnimation);
-    } else if (entity.role === "resource") {
-      body = makeResourceUnitBody(theme.primary, theme.secondary, entryAnimation);
-    } else {
-      body = makeUtilityUnitBody(theme.primary, theme.secondary, entryAnimation);
-    }
+    const body = makeUnitBody(entity.role, theme.primary, theme.secondary, entryAnimation);
     root.add(body);
 
     const hp = makeCanvasTextSprite(`${entity.hp}/${entity.maxHp}`, {
@@ -1184,8 +1195,20 @@ export class ThreeGameRenderer implements GameRenderer {
   }
 
   private addDeathBurstAnimation(animation: Extract<CanvasAnimation, { kind: "death_burst" }>, progress: number): void {
-    this.addRing(animation.coord, 0.48 + progress * 0.16, 0xffaaaa, 0.82 - progress * 0.46, 0.3);
-    this.addRing(animation.coord, 0.18 + progress * 0.26, 0xffd2d2, 0.72 - progress * 0.42, 0.42);
+    const theme = getPlayerTheme(animation.playerId);
+    const collapseProgress = Math.max(0, Math.min(1, progress / UNIT_DEATH_COLLAPSE_END));
+    if (collapseProgress < 1) {
+      const root = new THREE.Group();
+      root.position.copy(hexToWorld(animation.coord, 0.34));
+      root.add(makeUnitBody(animation.role, theme.primary, theme.secondary, { progress: 1 - collapseProgress }));
+      this.animationGroup.add(root);
+    }
+
+    const burstProgress = Math.max(0, Math.min(1, (progress - UNIT_DEATH_PULSE_START) / (1 - UNIT_DEATH_PULSE_START)));
+    if (burstProgress > 0) {
+      this.addRing(animation.coord, 0.48 + burstProgress * 0.16, 0xffaaaa, 0.82 - burstProgress * 0.46, 0.3);
+      this.addRing(animation.coord, 0.18 + burstProgress * 0.26, 0xffd2d2, 0.72 - burstProgress * 0.42, 0.42);
+    }
   }
 
   private addTitleAnimation(center: HexCoord, label: string, subtitle: string, playerId: string, progress: number): void {

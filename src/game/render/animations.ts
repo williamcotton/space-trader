@@ -6,6 +6,7 @@ import {
 import { getStackEffectDefinition } from "../content/stackEffects";
 import "../presentation";
 import { DRAW_RESULT_ID, type PlayerId } from "../model/ids";
+import type { UnitRole } from "../model/enums";
 import type { EntityState, GameState, HexCoord } from "../model/state";
 import type { CanvasAnimation } from "../types";
 import { getCascadeAffectedHexes } from "../systems/cascade";
@@ -20,6 +21,7 @@ type EntitySnapshot = {
   kind: EntityState["kind"];
   ownerId: PlayerId;
   coord: HexCoord;
+  role?: UnitRole;
 };
 
 type StackItemSnapshot = {
@@ -45,6 +47,7 @@ export function captureAnimationSnapshot(state: GameState): AnimationCapture {
         kind: entity.kind,
         ownerId: entity.ownerId,
         coord: { ...entity.coord },
+        role: entity.kind === "unit" ? entity.role : undefined,
       } satisfies EntitySnapshot,
     ])
   );
@@ -472,8 +475,9 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
       kind: "death_burst",
       playerId: entity.ownerId,
       ageSeconds: 0,
-      durationSeconds: 0.72,
+      durationSeconds: 1.12,
       coord: entity.coord,
+      role: entity.role ?? "combat",
     });
   }
 
