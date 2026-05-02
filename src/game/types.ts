@@ -1,5 +1,5 @@
 import type { ResourceType, UnitRole } from "./model/enums";
-import type { PlayerId } from "./model/ids";
+import type { EntityId, PlayerId } from "./model/ids";
 import type { GameState, HexCoord } from "./model/state";
 import type { DerivedState } from "./derived";
 
@@ -8,6 +8,8 @@ export type CanvasAnimation =
       id: string;
       kind: "move";
       playerId: PlayerId;
+      entityId: EntityId;
+      role: UnitRole;
       ageSeconds: number;
       durationSeconds: number;
       from: HexCoord;

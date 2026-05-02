@@ -35,6 +35,7 @@ type CameraSnapshot = {
 
 type UnitEntryAnimation = {
   progress: number;
+  mode?: "enter" | "exit";
 };
 
 type UnitLayerSpec = {
@@ -266,7 +267,8 @@ function getUnitEntryLayerProgress(animation: UnitEntryAnimation | null, layerIn
   }
 
   const start = layerIndex * UNIT_ENTRY_LAYER_STAGGER;
-  return easeOutCubic((animation.progress - start) / UNIT_ENTRY_LAYER_WINDOW);
+  const layerProgress = easeOutCubic((animation.progress - start) / UNIT_ENTRY_LAYER_WINDOW);
+  return animation.mode === "exit" ? 1 - layerProgress : layerProgress;
 }
 
 function getUnitEntryLayerLift(layerProgress: number): number {
@@ -743,14 +745,18 @@ export class ThreeGameRenderer implements GameRenderer {
     this.entityGroup.add(root);
   }
 
-  private getDeployEntryAnimation(entity: Extract<EntityState, { kind: "unit" }>, frame: RuntimeFrame): UnitEntryAnimation | null {
-    let activeAnimation: Extract<CanvasAnimation, { kind: "deploy" }> | null = null;
+  private getUnitEntryAnimation(entity: Extract<EntityState, { kind: "unit" }>, frame: RuntimeFrame): UnitEntryAnimation | null {
+    let activeAnimation: Extract<CanvasAnimation, { kind: "deploy" | "move" }> | null = null;
     for (const animation of frame.transients.animations) {
       if (
-        animation.kind === "deploy" &&
-        animation.playerId === entity.ownerId &&
-        animation.coord.q === entity.coord.q &&
-        animation.coord.r === entity.coord.r
+        (animation.kind === "deploy" &&
+          animation.playerId === entity.ownerId &&
+          animation.coord.q === entity.coord.q &&
+          animation.coord.r === entity.coord.r) ||
+        (animation.kind === "move" &&
+          animation.entityId === entity.id &&
+          animation.to.q === entity.coord.q &&
+          animation.to.r === entity.coord.r)
       ) {
         activeAnimation = animation;
       }
@@ -773,7 +779,7 @@ export class ThreeGameRenderer implements GameRenderer {
     const theme = getPlayerTheme(entity.ownerId);
     const root = new THREE.Group();
     root.position.copy(hexToWorld(entity.coord, 0.34));
-    const entryAnimation = this.getDeployEntryAnimation(entity, frame);
+    const entryAnimation = this.getUnitEntryAnimation(entity, frame);
     const uiProgress = entryAnimation ? easeOutCubic((entryAnimation.progress - 0.46) / 0.44) : 1;
 
     const body = makeUnitBody(entity.role, theme.primary, theme.secondary, entryAnimation);
@@ -1058,27 +1064,22 @@ export class ThreeGameRenderer implements GameRenderer {
   }
 
   private addMoveAnimation(animation: Extract<CanvasAnimation, { kind: "move" }>, progress: number): void {
-    const from = hexToWorld(animation.from, 0.58);
-    const to = hexToWorld(animation.to, 0.58);
-    const current = from.clone().lerp(to, progress);
     const theme = getPlayerTheme(animation.playerId);
-    if (from.distanceToSquared(current) > 0.001) {
-      this.animationGroup.add(
-        makeThickSegment(
-          from,
-          current,
-          0.028,
-          makeThickLineMaterial(theme.primary, 0.7 - progress * 0.45)
-        )
+    const origin = new THREE.Group();
+    origin.position.copy(hexToWorld(animation.from, 0.34));
+    origin.add(makeUnitBody(animation.role, theme.primary, theme.secondary, { progress, mode: "exit" }));
+    this.animationGroup.add(origin);
+
+    const pathPulse = Math.sin(progress * Math.PI);
+    if (pathPulse > 0.01) {
+      this.addLine(
+        hexToWorld(animation.from, 0.24),
+        hexToWorld(animation.to, 0.24),
+        theme.primary,
+        pathPulse * 0.22,
+        0
       );
     }
-
-    const spark = new THREE.Mesh(
-      new THREE.SphereGeometry(0.14, 16, 10),
-      new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.5 - progress * 0.24 })
-    );
-    spark.position.copy(current);
-    this.animationGroup.add(spark);
   }
 
   private addAttackAnimation(animation: Extract<CanvasAnimation, { kind: "attack" }>, progress: number): void {

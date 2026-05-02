@@ -360,12 +360,16 @@ export function buildAnimationsFromEvents(events: GameEvent[], before: Animation
 
     switch (event.type) {
       case "UNIT_MOVED":
+        const movedUnit = before.entities[event.entityId] ?? state.entities[event.entityId];
+        const movedUnitRole = movedUnit?.kind === "unit" && movedUnit.role ? movedUnit.role : "combat";
         animations.push({
           id: baseId,
           kind: "move",
           playerId: event.playerId,
+          entityId: event.entityId,
+          role: movedUnitRole,
           ageSeconds: 0,
-          durationSeconds: 0.36,
+          durationSeconds: 0.68,
           from: event.from,
           to: event.to,
         });
