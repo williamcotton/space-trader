@@ -86,7 +86,8 @@ describe("starter decks", () => {
     expect(countCopies(alloyCards, "patchwork_barrier")).toBe(3);
     expect(countCopies(alloyCards, "scrapline_charge")).toBe(3);
     expect(countCopies(alloyCards, "bulwark_refit")).toBe(2);
-    expect(countCopies(alloyCards, "scorched_protocol")).toBe(3);
+    expect(countCopies(alloyCards, "market_exit_mandate")).toBe(2);
+    expect(countCopies(alloyCards, "scorched_protocol")).toBe(2);
     expect(countCopies(alloyCards, "war_protocol")).toBe(2);
     expect(countCopies(alloyCards, "iron_formation")).toBe(1);
     expect(countCopies(alloyCards, "scrap_dividend")).toBe(2);
@@ -94,7 +95,8 @@ describe("starter decks", () => {
     expect(countCopies(alloyCards, "scrap_quartermaster_card")).toBe(2);
     expect(countCopies(fluxCards, "emergency_war_chest")).toBe(2);
     expect(countCopies(fluxCards, "meteor_chain")).toBe(2);
-    expect(countCopies(fluxCards, "ion_surge_archive")).toBe(4);
+    expect(countCopies(fluxCards, "ion_surge_archive")).toBe(3);
+    expect(countCopies(fluxCards, "foldline_cutter_card")).toBe(2);
     expect(countCopies(fluxCards, "vector_lens")).toBe(2);
     expect(countCopies(fluxCards, "signal_fork")).toBe(2);
     expect(countCopies(fluxCards, "static_insight")).toBe(2);
@@ -108,8 +110,9 @@ describe("starter decks", () => {
     expect(countCopies(biomassCards, "bloom_archivist_card")).toBe(2);
     expect(countCopies(biomassCards, "compost_broker_card")).toBe(2);
     expect(countCopies(biomassCards, "feeding_frenzy")).toBe(2);
-    expect(countCopies(biomassCards, "spore_veil")).toBe(3);
-    expect(countCopies(biomassCards, "overgrowth_wave")).toBe(4);
+    expect(countCopies(biomassCards, "spore_veil")).toBe(2);
+    expect(countCopies(biomassCards, "overgrowth_wave")).toBe(3);
+    expect(countCopies(biomassCards, "worldroot_colossus_card")).toBe(2);
     expect(countCopies(biomassCards, "spore_harvest")).toBe(2);
     expect(countCopies(biomassCards, "canopy_dividend")).toBe(2);
     expect(countCopies(biomassCards, "orbital_purge")).toBe(1);

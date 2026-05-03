@@ -61,13 +61,15 @@ Current live packages:
   - `alloy_guard_card`
   - `forge_hauler_card`
   - `scorched_protocol`
+- signature finisher
+  - `market_exit_mandate`
 - salvage shell
   - `frontline_scout_card`
   - `scrap_dividend`
   - `scrap_quartermaster_card`
 
 Current gap:
-- Alloy now has real hooks, but it still wants one louder signature payoff tying formation, siege, and salvage into a single exciting turn.
+- Alloy now has a loud siege payoff in `market_exit_mandate`; the next gap is making sure the finisher creates exciting closing turns without making early formation play feel optional.
 
 ### Flux Collective
 
@@ -107,6 +109,7 @@ Current live packages:
   - `phase_coil`
   - `relay_savant_card`
   - `arc_repeater_card`
+  - `foldline_cutter_card`
   - `meteor_chain`
 - surge
   - `static_insight`
@@ -117,7 +120,7 @@ Current live packages:
   - `ion_surge_archive`
 
 Current gap:
-- Flux is the clearest faction right now. Its next natural step is a louder top-end Relay payoff or a `resonance` layer, not basic identity cleanup.
+- Flux is the clearest faction right now and now has a top-end Relay payoff in `foldline_cutter_card`. Its next natural step is a `resonance` layer, not basic identity cleanup.
 
 ### Biomass Swarm
 
@@ -159,6 +162,7 @@ Current live packages:
   - `spore_bloom`
   - `neural_echo`
   - `overgrowth_wave`
+  - `worldroot_colossus_card`
 - bloom engine
   - `bloom_archivist_card`
   - `compost_broker_card`

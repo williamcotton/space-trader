@@ -11,6 +11,7 @@
     "build": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p server/tsconfig.json && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p server/tsconfig.json --noEmit",
+    "deck:curves": "vite-node scripts/print-deck-curves.ts",
     "server:build": "tsc -p server/tsconfig.json",
     "server:start": "tsc -p server/tsconfig.json && node server/dist/server/src/index.js",
     "test": "vitest run",

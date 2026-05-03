@@ -39,7 +39,15 @@ import type {
   HexTargetPredicate,
   TargetPredicate,
 } from "../../cards/types";
-import { EMPLACED_KEYWORD, PREDATION_KEYWORD, RELAY_KEYWORD, STEALTH_KEYWORD } from "./mechanics/keywordIds";
+import {
+  BASTION_KEYWORD,
+  BLOOM_KEYWORD,
+  EMPLACED_KEYWORD,
+  PREDATION_KEYWORD,
+  RELAY_KEYWORD,
+  SPROUT_KEYWORD,
+  STEALTH_KEYWORD,
+} from "./mechanics/keywordIds";
 
 function getStartOfControllersNextTurn(state: Readonly<GameState>, controllerId: PlayerId): number {
   return state.activePlayerId === controllerId ? state.turn + 2 : state.turn + 1;
@@ -1138,6 +1146,29 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
       },
     },
   },
+  market_exit_mandate: {
+    id: "market_exit_mandate",
+    name: "Market Exit Mandate",
+    faction: "alloy_clan",
+    kind: "tactic",
+    speed: "main",
+    cost: { credits: 6, alloy: 6 },
+    text: "Target allied combat unit gets +5 SG, +2 ARM, and gains Bastion permanently.",
+    play: modifyTargetUnitTacticPlay({
+      isValidTarget: (_state, target, pid) => target.kind === "unit" && target.ownerId === pid && target.role === "combat",
+      siegeBonus: 5,
+      armorBonus: 2,
+      grantedKeywords: [BASTION_KEYWORD],
+      duration: "permanent",
+    }),
+    animation: {
+      resolve: {
+        kind: "board_blast",
+        label: "Market Exit Mandate",
+        accent: "alloy",
+      },
+    },
+  },
   overgrowth_wave: {
     id: "overgrowth_wave",
     name: "Overgrowth Wave",
@@ -1488,6 +1519,33 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
       autoTarget: "weakest_enemy_unit_in_range_2",
     }],
   },
+  foldline_cutter_card: {
+    id: "foldline_cutter_card",
+    name: "Foldline Cutter",
+    faction: "flux_collective",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 6, flux: 6 },
+    text: "Relay (The first time this unit is cascaded each resolution, repeat that cascade from this hex.) Whenever Foldline Cutter is cascaded, it deals 1 damage to the weakest enemy base.",
+    play: unitPlay(),
+    onResolve: deployUnit("foldline_cutter_card"),
+    unit: {
+      role: "combat",
+      hp: 7,
+      attackDamage: 3,
+      siegeDamageBonus: 3,
+      armor: 0,
+      moveRange: 6,
+      attackRange: 2,
+      attackActionsPerTurn: 1,
+      keywords: [RELAY_KEYWORD],
+    },
+    triggers: [{
+      condition: { type: "on_cascaded" },
+      effectId: "damage_enemy_base_1_uncounterable",
+      labelSuffix: "Cut",
+    }],
+  },
   forkline_adept_card: {
     id: "forkline_adept_card",
     name: "Forkline Adept",
@@ -1754,6 +1812,28 @@ export const ALPHA_CARD_DEFINITIONS: Record<string, CardDefinition> = {
       attackRange: 1,
       attackActionsPerTurn: 1,
       keywords: ["sprout", "bloom"],
+    },
+  },
+  worldroot_colossus_card: {
+    id: "worldroot_colossus_card",
+    name: "Worldroot Colossus",
+    faction: "biomass_swarm",
+    kind: "unit",
+    speed: "main",
+    cost: { credits: 6, biomass: 6 },
+    text: "Sprout (can move and attack the turn it enters). Bloom (The first time this unit is buffed each turn, gain 1 biomass.) Deploy a fast bio-siege finisher near your base.",
+    play: unitPlay(),
+    onResolve: deployUnit("worldroot_colossus_card"),
+    unit: {
+      role: "combat",
+      hp: 10,
+      attackDamage: 3,
+      siegeDamageBonus: 4,
+      armor: 1,
+      moveRange: 6,
+      attackRange: 1,
+      attackActionsPerTurn: 1,
+      keywords: [SPROUT_KEYWORD, BLOOM_KEYWORD],
     },
   },
   escort_drone_card: {

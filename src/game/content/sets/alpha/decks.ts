@@ -32,6 +32,7 @@ const ALLOY_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["war_protocol", 2],
   ["iron_formation", 1],
   ["scrap_dividend", 2],
+  ["market_exit_mandate", 2],
   ["forge_hauler_card", 4],
   ["salvage_hauler_card", 4],
   ["frontline_scout_card", 4],
@@ -40,8 +41,8 @@ const ALLOY_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["scrap_quartermaster_card", 2],
   ["shrapnel_relay", 4],
   ["alloy_guard_card", 4],
-  ["scorched_protocol", 3],
-  ["orbital_purge", 2],
+  ["scorched_protocol", 2],
+  ["orbital_purge", 1],
 ];
 
 const FLUX_STARTER_ENTRIES: readonly DeckEntry[] = [
@@ -63,10 +64,11 @@ const FLUX_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["arc_bloom", 2],
   ["phase_coil", 2],
   ["signal_hijack", 2],
-  ["overload_finish", 4],
+  ["overload_finish", 3],
   ["arc_repeater_card", 2],
   ["relay_savant_card", 2],
-  ["ion_surge_archive", 4],
+  ["foldline_cutter_card", 2],
+  ["ion_surge_archive", 3],
   ["meteor_chain", 2],
 ];
 
@@ -77,7 +79,7 @@ const BIOMASS_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["emergency_thrust", 1],
   ["escort_drone_card", 2],
   ["feeding_frenzy", 2],
-  ["spore_veil", 3],
+  ["spore_veil", 2],
   ["spore_tender_card", 4],
   ["bloom_archivist_card", 2],
   ["compost_broker_card", 2],
@@ -90,7 +92,8 @@ const BIOMASS_STARTER_ENTRIES: readonly DeckEntry[] = [
   ["canopy_dividend", 2],
   ["chain_beacon", 2],
   ["holdfast_protocol", 1],
-  ["overgrowth_wave", 4],
+  ["worldroot_colossus_card", 2],
+  ["overgrowth_wave", 3],
   ["orbital_purge", 1],
 ];
 

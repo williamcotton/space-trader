@@ -84,4 +84,27 @@ describe("card catalog balance guardrails", () => {
     expect(cards.bulwark_refit.text).toContain("Emplaced");
     expect(cards.bulwark_refit.text).toContain("Move Range becomes 0");
   });
+
+  it("defines faction top-end cards that can close stalled midgames", () => {
+    const cards = getCardCatalog();
+    expect(cards.market_exit_mandate.cost).toEqual({ credits: 6, alloy: 6 });
+    expect(cards.market_exit_mandate.play.stackEffectId).toBe("modify_target_unit");
+    expect(cards.market_exit_mandate.text).toContain("+5 SG");
+
+    const foldlineCutter = cards.foldline_cutter_card;
+    const worldrootColossus = cards.worldroot_colossus_card;
+    if (foldlineCutter.kind !== "unit" || worldrootColossus.kind !== "unit") {
+      throw new Error("Expected top-end finishers to be unit cards.");
+    }
+
+    expect(foldlineCutter.cost).toEqual({ credits: 6, flux: 6 });
+    expect(foldlineCutter.unit.moveRange).toBe(6);
+    expect(foldlineCutter.unit.keywords).toContain("relay");
+    expect(foldlineCutter.triggers?.[0]?.effectId).toBe("damage_enemy_base_1_uncounterable");
+
+    expect(worldrootColossus.cost).toEqual({ credits: 6, biomass: 6 });
+    expect(worldrootColossus.unit.moveRange).toBe(6);
+    expect(worldrootColossus.unit.siegeDamageBonus).toBe(4);
+    expect(worldrootColossus.unit.keywords).toEqual(expect.arrayContaining(["sprout", "bloom"]));
+  });
 });
